@@ -1,0 +1,106 @@
+openapi: 3.0.3
+info:
+  title: County Integration Platform API
+  version: 0.1.0
+  description: >-
+    Internal management API baseline. Business interfaces may be implemented only
+    after their formal contracts, de-identified samples, network access and owners are confirmed.
+servers:
+  - url: /api/v1
+security:
+  - hospitalIdentity: []
+paths:
+  /system/info:
+    get:
+      operationId: getPlatformInfo
+      summary: Read the running platform baseline
+      responses:
+        '200':
+          description: Platform information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformInfoResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /exchange-records:
+    get:
+      operationId: findRecentExchangeRecords
+      summary: List recent exchange records for an authorized organization
+      parameters:
+        - name: organizationCode
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Exchange records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeRecordListResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization or data scope is not authorized
+components:
+  securitySchemes:
+    hospitalIdentity:
+      type: http
+      scheme: basic
+      description: >-
+        Engineering baseline only. No local user is enabled; the approved hospital
+        identity mechanism must replace this scheme before production access.
+  responses:
+    InvalidRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Unauthorized:
+      description: Authentication is required
+  schemas:
+    PlatformInfoResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data:
+          type: object
+          additionalProperties: { type: string }
+    ExchangeRecordListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ExchangeRecordSummary' }
+    ExchangeRecordSummary:
+      type: object
+      required: [id, requestId, interfaceCode, organizationCode, sourceRecordId, status, receivedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        requestId: { type: string }
+        interfaceCode: { type: string }
+        organizationCode: { type: string }
+        sourceRecordId: { type: string }
+        status: { type: string }
+        receivedAt: { type: string, format: date-time }
+        processedAt: { type: string, format: date-time, nullable: true }
+    ApiError:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string, nullable: true }
+        timestamp: { type: string, format: date-time }

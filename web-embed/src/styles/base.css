@@ -1,0 +1,10 @@
+:root { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; color: #20262e; background: #f4f6f8; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 300px; }
+.embed-shell { min-height: 100vh; background: white; }
+header { min-height: 52px; padding: 0 16px; display: flex; align-items: center; gap: 9px; color: white; background: #17365d; }
+header strong { font-size: 14px; }
+header span { margin-left: auto; padding: 3px 7px; color: #344657; background: white; border-radius: 3px; font-size: 11px; }
+section { min-height: calc(100vh - 52px); padding: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #3c607a; }
+h1 { margin: 12px 0 7px; font-size: 19px; letter-spacing: 0; }
+p { max-width: 520px; margin: 0; color: #6a7680; font-size: 13px; line-height: 1.8; }

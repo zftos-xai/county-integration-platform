@@ -1,0 +1,20 @@
+{
+  "name": "county-integration-platform",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "web-admin",
+    "web-embed"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace web-admin && npm run build --workspace web-embed",
+    "typecheck": "npm run typecheck --workspace web-admin && npm run typecheck --workspace web-embed"
+  },
+  "devDependencies": {
+    "docx": "9.7.1",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "typescript": "5.9.3"
+  }
+}
