@@ -20,7 +20,8 @@ const navigation = [
 </script>
 
 <template>
-  <div class="app-shell">
+  <RouterView v-if="route.path === '/prototype'" />
+  <div v-else class="app-shell">
     <aside class="sidebar" :class="{ open: mobileOpen }">
       <div class="brand">
         <span class="brand-mark"><Database :size="20" /></span>

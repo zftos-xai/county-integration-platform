@@ -3,9 +3,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import DashboardView from './views/DashboardView.vue'
 import PlaceholderView from './views/PlaceholderView.vue'
+import PrototypeView from './views/PrototypeView.vue'
 import './styles/base.css'
+import './styles/prototype.css'
 
 const routes = [
+  { path: '/prototype', component: PrototypeView, meta: { title: '业务原型' } },
   { path: '/', component: DashboardView, meta: { title: '运行总览' } },
   { path: '/organizations', component: PlaceholderView, meta: { title: '机构与权限' } },
   { path: '/interfaces', component: PlaceholderView, meta: { title: '接口与映射' } },
