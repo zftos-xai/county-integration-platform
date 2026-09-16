@@ -10,6 +10,105 @@ servers:
 security:
   - hospitalIdentity: []
 paths:
+  /bootstrap/status:
+    get:
+      security: []
+      operationId: getBootstrapStatus
+      summary: Read whether one-time platform bootstrap is available
+      responses:
+        '200':
+          description: Bootstrap status without credential content
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BootstrapStatusResponse' }
+  /bootstrap:
+    post:
+      security: []
+      operationId: bootstrapPlatform
+      summary: Create the first organization and local administrator exactly once
+      parameters:
+        - name: X-Platform-Bootstrap-Secret
+          in: header
+          required: true
+          description: One-time secret supplied only through the approved deployment channel
+          schema: { type: string, minLength: 32 }
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BootstrapRequest' }
+      responses:
+        '201': { description: Initial organization and administrator created }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: Bootstrap is unavailable or the one-time secret is invalid }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /session/csrf:
+    get:
+      security: []
+      operationId: getCsrfToken
+      summary: Obtain the CSRF token required for state-changing management requests
+      responses:
+        '200':
+          description: CSRF token and request header name
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CsrfTokenResponse' }
+  /session/login:
+    post:
+      security: []
+      operationId: login
+      summary: Establish a server-side local-management session
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUserResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { description: Login name or password is invalid }
+  /session/current:
+    get:
+      operationId: getCurrentUser
+      summary: Read the current authenticated management user
+      responses:
+        '200':
+          description: Current user without password or session identifier
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUserResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /session/logout:
+    post:
+      operationId: logout
+      summary: Invalidate the current management session
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '200': { description: Session invalidated }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /session/password:
+    post:
+      operationId: changeCurrentPassword
+      summary: Change the current local password and invalidate the current session
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '200': { description: Password changed; the user must log in again }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /system/info:
     get:
       operationId: getPlatformInfo
@@ -174,6 +273,13 @@ paths:
         '404': { $ref: '#/components/responses/ResourceNotFound' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
 components:
+  parameters:
+    CsrfHeader:
+      name: X-XSRF-TOKEN
+      in: header
+      required: true
+      description: Token returned by GET /session/csrf and paired with the XSRF-TOKEN cookie
+      schema: { type: string }
   securitySchemes:
     hospitalIdentity:
       type: apiKey
@@ -202,6 +308,73 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
   schemas:
+    BootstrapStatusResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data:
+          type: object
+          required: [initialized, bootstrapAvailable]
+          properties:
+            initialized: { type: boolean }
+            bootstrapAvailable: { type: boolean }
+    BootstrapRequest:
+      type: object
+      required: [organizationCode, organizationName, organizationType, loginName, displayName, initialPassword]
+      properties:
+        organizationCode: { type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9._-]+$' }
+        organizationName: { type: string, minLength: 1, maxLength: 200 }
+        organizationType: { type: string, minLength: 1, maxLength: 32 }
+        loginName: { type: string, minLength: 3, maxLength: 64, pattern: '^[A-Za-z0-9._-]+$' }
+        displayName: { type: string, minLength: 1, maxLength: 100 }
+        initialPassword: { type: string, minLength: 12, maxLength: 128, format: password, writeOnly: true }
+    LoginRequest:
+      type: object
+      required: [loginName, password]
+      properties:
+        loginName: { type: string, minLength: 1, maxLength: 64 }
+        password: { type: string, minLength: 1, maxLength: 128, format: password, writeOnly: true }
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 128, format: password, writeOnly: true }
+        newPassword: { type: string, minLength: 12, maxLength: 128, format: password, writeOnly: true }
+    CurrentUserResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/CurrentUser' }
+    CurrentUser:
+      type: object
+      required: [userId, loginName, displayName, primaryOrganizationId, organizationCode, mustChangePassword, permissions]
+      properties:
+        userId: { type: integer, format: int64 }
+        loginName: { type: string }
+        displayName: { type: string }
+        primaryOrganizationId: { type: integer, format: int64 }
+        organizationCode: { type: string }
+        mustChangePassword: { type: boolean }
+        permissions:
+          type: array
+          items: { type: string }
+    CsrfTokenResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data:
+          type: object
+          required: [headerName, parameterName, token]
+          properties:
+            headerName: { type: string, example: X-XSRF-TOKEN }
+            parameterName: { type: string, example: _csrf }
+            token: { type: string }
     PlatformInfoResponse:
       type: object
       required: [code, message, data]

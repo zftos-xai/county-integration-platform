@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.system.identity.infrastructure.persistence.IdentityMapper">
+    <resultMap id="userAccount" type="cn.zqkj.platform.system.identity.application.UserAccount">
+        <constructor>
+            <arg column="id" javaType="long"/>
+            <arg column="login_name" javaType="java.lang.String"/>
+            <arg column="display_name" javaType="java.lang.String"/>
+            <arg column="password_hash" javaType="java.lang.String"/>
+            <arg column="primary_organization_id" javaType="long"/>
+            <arg column="organization_code" javaType="java.lang.String"/>
+            <arg column="account_enabled" javaType="boolean"/>
+            <arg column="must_change_password" javaType="boolean"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="userAccountColumns">
+        users.id,
+        users.login_name,
+        users.display_name,
+        users.password_hash,
+        users.primary_organization_id,
+        organizations.organization_code,
+        CASE WHEN users.is_enabled = 1 AND organizations.is_enabled = 1 THEN 1 ELSE 0 END AS account_enabled,
+        users.must_change_password
+    </sql>
+
+    <select id="lockAndCountUsers" resultType="int">
+        SELECT COUNT(1)
+        FROM sys_user WITH (UPDLOCK, HOLDLOCK)
+    </select>
+
+    <select id="countUsers" resultType="int">
+        SELECT COUNT(1)
+        FROM sys_user
+    </select>
+
+    <select id="findByLoginName" resultMap="userAccount">
+        SELECT <include refid="userAccountColumns"/>
+        FROM sys_user AS users
+        INNER JOIN org_organization AS organizations
+            ON organizations.id = users.primary_organization_id
+        WHERE users.login_name = #{loginName}
+    </select>
+
+    <select id="findById" resultMap="userAccount">
+        SELECT <include refid="userAccountColumns"/>
+        FROM sys_user AS users
+        INNER JOIN org_organization AS organizations
+            ON organizations.id = users.primary_organization_id
+        WHERE users.id = #{userId}
+    </select>
+
+    <select id="findPermissionCodes" resultType="java.lang.String">
+        SELECT DISTINCT role_permissions.permission_code
+        FROM sys_user_role AS user_roles
+        INNER JOIN sys_role AS roles
+            ON roles.id = user_roles.role_id
+           AND roles.is_enabled = 1
+        INNER JOIN sys_role_permission AS role_permissions
+            ON role_permissions.role_id = roles.id
+        WHERE user_roles.user_id = #{userId}
+        ORDER BY role_permissions.permission_code
+    </select>
+
+    <update id="upsertPermission">
+        IF EXISTS (SELECT 1 FROM sys_permission WHERE permission_code = #{permissionCode})
+            UPDATE sys_permission
+            SET permission_name = #{permissionName}
+            WHERE permission_code = #{permissionCode};
+        ELSE
+            INSERT INTO sys_permission (permission_code, permission_name)
+            VALUES (#{permissionCode}, #{permissionName});
+    </update>
+
+    <select id="insertRole" resultType="long">
+        INSERT INTO sys_role (
+            role_code, role_name, is_enabled, is_system_managed, created_by, updated_by
+        ) VALUES (
+            #{roleCode}, #{roleName}, 1, 1, #{actor}, #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <select id="insertUser" resultType="long">
+        INSERT INTO sys_user (
+            login_name, display_name, password_hash, primary_organization_id,
+            is_enabled, must_change_password, created_by, updated_by
+        ) VALUES (
+            #{command.loginName}, #{command.displayName}, #{passwordHash}, #{organizationId},
+            1, 1, #{actor}, #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <insert id="insertRolePermission">
+        INSERT INTO sys_role_permission (role_id, permission_code, granted_by)
+        VALUES (#{roleId}, #{permissionCode}, #{actor})
+    </insert>
+
+    <insert id="insertUserRole">
+        INSERT INTO sys_user_role (user_id, role_id, granted_by)
+        VALUES (#{userId}, #{roleId}, #{actor})
+    </insert>
+
+    <insert id="insertOrganizationScope">
+        INSERT INTO sys_user_organization_scope (user_id, organization_id, granted_by)
+        VALUES (#{userId}, #{organizationId}, #{actor})
+    </insert>
+
+    <update id="updatePassword">
+        UPDATE sys_user
+        SET password_hash = #{passwordHash},
+            must_change_password = 0,
+            password_changed_at = SYSUTCDATETIME(),
+            updated_by = #{actor},
+            updated_at = SYSUTCDATETIME()
+        WHERE id = #{userId}
+          AND is_enabled = 1
+    </update>
+</mapper>

@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -35,7 +36,7 @@ public class GlobalExceptionHandler {
             InvalidRequestException.class
     })
     ResponseEntity<ApiError> handleValidation(Exception exception, HttpServletRequest request) {
-        LOGGER.warn("Request validation failed: {}", exception.getMessage());
+        LOGGER.warn("Request validation failed");
         return response(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "请求参数不符合接口要求", request);
     }
 
@@ -49,7 +50,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException exception, HttpServletRequest request) {
         LOGGER.warn("Organization access denied");
-        return response(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "无权访问该机构数据", request);
+        return response(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "无权执行该操作", request);
+    }
+
+    /**
+     * 处理本地登录失败且不泄露账号是否存在或失败细节。
+     *
+     * @param exception 原始认证异常
+     * @param request 当前HTTP请求
+     * @return HTTP 401错误响应
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<ApiError> handleAuthentication(AuthenticationException exception, HttpServletRequest request) {
+        LOGGER.warn("Platform authentication failed");
+        return response(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_FAILED", "登录名或密码错误", request);
     }
 
     /**

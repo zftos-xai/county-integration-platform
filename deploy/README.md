@@ -51,3 +51,9 @@ docker compose --env-file ./deploy/.env -f ./deploy/docker-compose.yml up --buil
 ```
 
 首次启用 Flyway 前，应在 SQL Server 2012 SP4 测试实例上验证空库迁移和从上一版本升级。生产执行迁移前必须完成备份并保留执行记录。
+
+## 首次安全引导
+
+平台本地管理身份不提供固定默认账号或密码。首次启动前生成至少32个字符的一次性随机值，通过`PLATFORM_BOOTSTRAP_SECRET`交付。管理端应先调用`GET /api/v1/session/csrf`取得CSRF令牌，再调用一次`POST /api/v1/bootstrap`创建首个机构和管理员。
+
+安全引导成功后必须从部署环境删除`PLATFORM_BOOTSTRAP_SECRET`并重启应用。初始管理员首次登录只能修改密码；修改成功后当前会话失效，重新登录后才取得管理权限。生产环境必须设置`PLATFORM_SESSION_COOKIE_SECURE=true`并通过HTTPS访问。
