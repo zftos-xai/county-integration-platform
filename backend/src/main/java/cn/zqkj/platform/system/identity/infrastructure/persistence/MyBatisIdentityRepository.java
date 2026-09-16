@@ -57,6 +57,12 @@ public class MyBatisIdentityRepository implements IdentityRepository {
 
     /** {@inheritDoc} */
     @Override
+    public List<String> findOrganizationCodes(long userId) {
+        return mapper.findOrganizationCodes(userId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public void upsertPermission(String permissionCode, String permissionName) {
         mapper.upsertPermission(permissionCode, permissionName);
     }

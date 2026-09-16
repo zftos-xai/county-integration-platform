@@ -35,11 +35,19 @@ public class PlatformUserDetailsService implements UserDetailsService {
         }
         UserAccount account = repository.findByLoginName(username.trim().toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new UsernameNotFoundException("Platform user was not found"));
-        List<SimpleGrantedAuthority> authorities = account.mustChangePassword()
-                ? List.of(new SimpleGrantedAuthority("password:change"))
-                : repository.findPermissionCodes(account.id()).stream()
-                        .map(SimpleGrantedAuthority::new)
-                        .toList();
+        List<SimpleGrantedAuthority> authorities;
+        if (account.mustChangePassword()) {
+            authorities = List.of(new SimpleGrantedAuthority("password:change"));
+        } else {
+            authorities = java.util.stream.Stream.concat(
+                            repository.findPermissionCodes(account.id()).stream(),
+                            repository.findOrganizationCodes(account.id()).stream().map(code -> "ORG:" + code)
+                    )
+                    .distinct()
+                    .sorted()
+                    .map(SimpleGrantedAuthority::new)
+                    .toList();
+        }
         return new PlatformUserPrincipal(
                 account.id(), account.loginName(), account.displayName(), account.passwordHash(),
                 account.primaryOrganizationId(), account.organizationCode(), account.enabled(),

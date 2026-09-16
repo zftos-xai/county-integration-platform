@@ -1,16 +1,18 @@
 package cn.zqkj.platform.modules.organization.api;
 
 import cn.zqkj.platform.foundation.web.ApiResponse;
+import cn.zqkj.platform.foundation.security.PlatformUserPrincipal;
 import cn.zqkj.platform.foundation.web.error.InvalidRequestException;
 import cn.zqkj.platform.modules.organization.application.CreateOrganizationCommand;
-import cn.zqkj.platform.modules.organization.application.OrganizationService;
 import cn.zqkj.platform.modules.organization.application.OrganizationView;
 import cn.zqkj.platform.modules.organization.application.UpdateOrganizationCommand;
+import cn.zqkj.platform.system.access.application.AccessActor;
+import cn.zqkj.platform.system.access.application.OrganizationAdministrationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -36,14 +38,14 @@ import java.util.List;
 @RequestMapping("/api/v1/organizations")
 public class OrganizationController {
 
-    private final OrganizationService service;
+    private final OrganizationAdministrationService service;
 
     /**
      * 创建机构管理控制器。
      *
-     * @param service 机构应用服务
+     * @param service 机构授权协调服务
      */
-    public OrganizationController(OrganizationService service) {
+    public OrganizationController(OrganizationAdministrationService service) {
         this.service = service;
     }
 
@@ -51,33 +53,39 @@ public class OrganizationController {
      * 查询机构列表。
      *
      * @param enabled 可选启用状态
+     * @param principal 当前认证主体
      * @return 机构快照列表
      */
     @GetMapping
     @PreAuthorize("hasAuthority('organization:read')")
     public ApiResponse<List<OrganizationView>> findAll(
-            @RequestParam(required = false) Boolean enabled
+            @RequestParam(required = false) Boolean enabled,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.findAll(enabled));
+        return ApiResponse.success(service.findAll(enabled, actor(principal)));
     }
 
     /**
      * 查询指定机构。
      *
      * @param id 机构主键
+     * @param principal 当前认证主体
      * @return 机构快照
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('organization:read')")
-    public ApiResponse<OrganizationView> get(@PathVariable @Positive long id) {
-        return ApiResponse.success(service.get(id));
+    public ApiResponse<OrganizationView> get(
+            @PathVariable @Positive long id,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        return ApiResponse.success(service.get(id, actor(principal)));
     }
 
     /**
      * 创建平台机构。
      *
      * @param request 创建请求
-     * @param authentication 当前已认证主体
+     * @param principal 当前已认证主体
      * @return 新建机构快照
      */
     @PostMapping
@@ -85,7 +93,7 @@ public class OrganizationController {
     @PreAuthorize("hasAuthority('organization:write')")
     public ApiResponse<OrganizationView> create(
             @Valid @RequestBody CreateOrganizationRequest request,
-            Authentication authentication
+            @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         CreateOrganizationCommand command = new CreateOrganizationCommand(
                 request.organizationCode(),
@@ -95,7 +103,7 @@ public class OrganizationController {
                 toUtc(request.validFrom()),
                 toUtc(request.validTo())
         );
-        return ApiResponse.success(service.create(command, authentication.getName()));
+        return ApiResponse.success(service.create(command, actor(principal)));
     }
 
     /**
@@ -103,7 +111,7 @@ public class OrganizationController {
      *
      * @param id 机构主键
      * @param request 修改请求
-     * @param authentication 当前已认证主体
+     * @param principal 当前已认证主体
      * @return 修改后机构快照
      */
     @PutMapping("/{id}")
@@ -111,7 +119,7 @@ public class OrganizationController {
     public ApiResponse<OrganizationView> update(
             @PathVariable @Positive long id,
             @Valid @RequestBody UpdateOrganizationRequest request,
-            Authentication authentication
+            @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         UpdateOrganizationCommand command = new UpdateOrganizationCommand(
                 request.organizationName(),
@@ -121,7 +129,7 @@ public class OrganizationController {
                 toUtc(request.validTo()),
                 decodeVersion(request.version())
         );
-        return ApiResponse.success(service.update(id, command, authentication.getName()));
+        return ApiResponse.success(service.update(id, command, actor(principal)));
     }
 
     /**
@@ -129,7 +137,7 @@ public class OrganizationController {
      *
      * @param id 机构主键
      * @param request 状态修改请求
-     * @param authentication 当前已认证主体
+     * @param principal 当前已认证主体
      * @return 修改后机构快照
      */
     @PatchMapping("/{id}/enabled")
@@ -137,14 +145,19 @@ public class OrganizationController {
     public ApiResponse<OrganizationView> setEnabled(
             @PathVariable @Positive long id,
             @Valid @RequestBody ChangeOrganizationEnabledRequest request,
-            Authentication authentication
+            @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.setEnabled(
                 id,
                 request.enabled(),
                 decodeVersion(request.version()),
-                authentication.getName()
+                actor(principal)
         ));
+    }
+
+    /** @param principal 当前主体 @return 应用服务操作人上下文 */
+    private AccessActor actor(PlatformUserPrincipal principal) {
+        return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
 
     /**

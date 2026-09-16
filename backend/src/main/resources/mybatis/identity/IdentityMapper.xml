@@ -63,6 +63,19 @@
         ORDER BY role_permissions.permission_code
     </select>
 
+    <select id="findOrganizationCodes" resultType="java.lang.String">
+        <!-- 用户获批且当前启用的机构范围代码 -->
+        SELECT organizations.organization_code
+        FROM sys_user_organization_scope AS scopes
+        INNER JOIN org_organization AS organizations
+            ON organizations.id = scopes.organization_id
+           AND organizations.is_enabled = 1
+        <!-- 限定当前平台用户 -->
+        WHERE scopes.user_id = #{userId}
+        <!-- 稳定输出机构代码顺序 -->
+        ORDER BY organizations.organization_code
+    </select>
+
     <update id="upsertPermission">
         IF EXISTS (SELECT 1 FROM sys_permission WHERE permission_code = #{permissionCode})
             UPDATE sys_permission

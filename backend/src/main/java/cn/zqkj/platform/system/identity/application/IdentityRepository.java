@@ -47,6 +47,14 @@ public interface IdentityRepository {
     List<String> findPermissionCodes(long userId);
 
     /**
+     * 读取用户当前获批且已启用的机构范围代码。
+     *
+     * @param userId 用户主键
+     * @return 稳定排序的机构代码
+     */
+    List<String> findOrganizationCodes(long userId);
+
+    /**
      * 注册或更新代码定义的权限名称。
      *
      * @param permissionCode 权限代码

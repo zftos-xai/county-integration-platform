@@ -14,6 +14,7 @@ import java.util.List;
  * @param organizationCode 主机构代码
  * @param mustChangePassword 是否必须先修改密码
  * @param permissions 当前有效权限代码
+ * @param organizationCodes 当前显式机构范围代码
  */
 public record CurrentUserView(
         long userId,
@@ -22,7 +23,8 @@ public record CurrentUserView(
         long primaryOrganizationId,
         String organizationCode,
         boolean mustChangePassword,
-        List<String> permissions
+        List<String> permissions,
+        List<String> organizationCodes
 ) {
 
     /**
@@ -39,7 +41,12 @@ public record CurrentUserView(
                 principal.primaryOrganizationId(),
                 principal.organizationCode(),
                 principal.mustChangePassword(),
-                principal.getAuthorities().stream().map(authority -> authority.getAuthority()).sorted().toList()
+                principal.getAuthorities().stream()
+                        .map(authority -> authority.getAuthority())
+                        .filter(authority -> !authority.startsWith("ORG:"))
+                        .sorted()
+                        .toList(),
+                principal.organizationCodes().stream().sorted().toList()
         );
     }
 
@@ -48,5 +55,6 @@ public record CurrentUserView(
      */
     public CurrentUserView {
         permissions = List.copyOf(permissions);
+        organizationCodes = List.copyOf(organizationCodes);
     }
 }

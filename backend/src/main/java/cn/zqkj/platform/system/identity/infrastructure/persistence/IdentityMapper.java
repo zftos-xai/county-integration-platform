@@ -38,6 +38,12 @@ public interface IdentityMapper {
     List<String> findPermissionCodes(long userId);
 
     /**
+     * @param userId 用户主键
+     * @return 已启用机构范围代码
+     */
+    List<String> findOrganizationCodes(long userId);
+
+    /**
      * @param permissionCode 权限代码
      * @param permissionName 权限名称
      * @return 实际影响行数

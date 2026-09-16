@@ -49,7 +49,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException exception, HttpServletRequest request) {
-        LOGGER.warn("Organization access denied");
+        LOGGER.warn("Access denied");
         return response(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "无权执行该操作", request);
     }
 

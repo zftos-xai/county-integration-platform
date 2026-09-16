@@ -7,6 +7,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.io.Serial;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 表示保存于服务端会话中的平台已认证主体。
@@ -83,6 +85,19 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
     /** @return 是否必须先修改密码 */
     public boolean mustChangePassword() {
         return mustChangePassword;
+    }
+
+    /**
+     * 从服务端装载的机构权限标识解析当前机构范围代码。
+     *
+     * @return 不可变机构代码集合
+     */
+    public Set<String> organizationCodes() {
+        return authorities.stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(authority -> authority.startsWith("ORG:"))
+                .map(authority -> authority.substring("ORG:".length()))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /** {@inheritDoc} */

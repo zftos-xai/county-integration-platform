@@ -41,11 +41,12 @@ class PlatformUserDetailsServiceTest {
         IdentityRepository repository = mock(IdentityRepository.class);
         when(repository.findByLoginName("admin")).thenReturn(Optional.of(account(false)));
         when(repository.findPermissionCodes(30L)).thenReturn(List.of("organization:read", "organization:write"));
+        when(repository.findOrganizationCodes(30L)).thenReturn(List.of("ORG001"));
         PlatformUserDetailsService service = new PlatformUserDetailsService(repository);
 
         PlatformUserPrincipal principal = (PlatformUserPrincipal) service.loadUserByUsername("admin");
 
-        assertEquals(2, principal.getAuthorities().size());
+        assertEquals(3, principal.getAuthorities().size());
     }
 
     /**
