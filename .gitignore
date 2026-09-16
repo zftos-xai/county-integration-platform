@@ -1,5 +1,7 @@
 .idea/
 .vscode/
+.codex/
+.DS_Store
 *.iml
 .env
 backend/target/
