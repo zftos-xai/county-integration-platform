@@ -16,7 +16,7 @@ spring:
     baseline-on-migrate: false
 
 mybatis:
-  mapper-locations: classpath*:mapper/**/*.xml
+  mapper-locations: classpath*:mybatis/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
     default-fetch-size: 100
@@ -42,4 +42,4 @@ logging:
     level: "%5p [requestId:%X{requestId:-}]"
   level:
     root: INFO
-    cn.zqkj: INFO
+    cn.zqkj.platform: INFO

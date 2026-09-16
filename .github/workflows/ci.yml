@@ -17,6 +17,15 @@ jobs:
       - run: mvn -B verify
         working-directory: backend
 
+  sql-migrations:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tools/verify-sql-migrations.mjs
+
   frontend:
     runs-on: ubuntu-24.04
     steps:

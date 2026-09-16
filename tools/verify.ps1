@@ -12,6 +12,8 @@ try {
 Write-Host 'Checking Vue applications...'
 Push-Location $projectRoot
 try {
+    Write-Host 'Checking SQL migration structure...'
+    node ./tools/verify-sql-migrations.mjs
     npm run typecheck
     npm run build
 } finally {
