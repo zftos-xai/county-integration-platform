@@ -8,10 +8,10 @@
   ],
   "scripts": {
     "build": "npm run build --workspace web-admin && npm run build --workspace web-embed",
-    "typecheck": "npm run typecheck --workspace web-admin && npm run typecheck --workspace web-embed"
+    "typecheck": "npm run typecheck --workspace web-admin && npm run typecheck --workspace web-embed",
+    "verify:sql": "node tools/verify-sql-migrations.mjs"
   },
   "devDependencies": {
-    "docx": "9.7.1",
     "typescript": "5.9.3"
   },
   "overrides": {

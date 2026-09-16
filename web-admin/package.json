@@ -9,6 +9,8 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@tabler/core": "^1.5.1",
+    "@tabler/icons-vue": "^3.46.0",
     "@vitejs/plugin-vue": "6.0.8",
     "lucide-vue-next": "1.0.0",
     "vite": "8.3.0",

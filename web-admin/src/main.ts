@@ -4,6 +4,7 @@ import App from './App.vue'
 import DashboardView from './views/DashboardView.vue'
 import PlaceholderView from './views/PlaceholderView.vue'
 import PrototypeView from './views/PrototypeView.vue'
+import '@tabler/core/dist/css/tabler.min.css'
 import './styles/base.css'
 import './styles/prototype.css'
 
@@ -14,7 +15,7 @@ const routes = [
   { path: '/interfaces', component: PlaceholderView, meta: { title: '接口与映射' } },
   { path: '/exchanges', component: PlaceholderView, meta: { title: '交换记录' } },
   { path: '/exceptions', component: PlaceholderView, meta: { title: '异常与处理' } },
-  { path: '/reconciliation', component: PlaceholderView, meta: { title: '数据对账' } },
+  { path: '/data-review', component: PlaceholderView, meta: { title: '数据核查' } },
   { path: '/audit', component: PlaceholderView, meta: { title: '审计记录' } },
 ]
 

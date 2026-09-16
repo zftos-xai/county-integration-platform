@@ -14,7 +14,7 @@ const navigation = [
   { to: '/interfaces', label: '接口与映射', icon: Settings2 },
   { to: '/exchanges', label: '交换记录', icon: ArrowLeftRight },
   { to: '/exceptions', label: '异常与处理', icon: AlertTriangle },
-  { to: '/reconciliation', label: '数据对账', icon: ClipboardCheck },
+  { to: '/data-review', label: '数据核查', icon: ClipboardCheck },
   { to: '/audit', label: '审计记录', icon: ScrollText },
 ]
 </script>

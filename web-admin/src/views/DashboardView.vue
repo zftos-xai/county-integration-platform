@@ -35,7 +35,7 @@ onMounted(checkHealth)
     <div class="metric-grid">
       <article><span>今日交换</span><strong>—</strong><small>连接数据库后显示</small></article>
       <article><span>待处理异常</span><strong>—</strong><small>连接数据库后显示</small></article>
-      <article><span>对账差异</span><strong>—</strong><small>连接数据库后显示</small></article>
+      <article><span>数据差异</span><strong>—</strong><small>连接数据库后显示</small></article>
       <article><span>已启用接口</span><strong>—</strong><small>完成接口登记后显示</small></article>
     </div>
 

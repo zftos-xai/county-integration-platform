@@ -9,7 +9,7 @@ const route = useRoute()
     <div class="empty-page">
       <FileClock :size="34" />
       <h2>{{ route.meta.title }}</h2>
-      <p>工程结构已建立，业务字段和操作将在正式接口合同确认后实现。</p>
+      <p>工程结构已建立，业务字段和操作将在正式接口规则确认后实现。</p>
     </div>
   </section>
 </template>
