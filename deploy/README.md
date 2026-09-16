@@ -11,7 +11,7 @@ SQL Server 2012 不支持 Microsoft SQL Server Linux 容器。`docker-compose.ym
 上线或联调前由医院 DBA 完成以下事项：
 
 1. 核对数据库引擎为 SQL Server 2012 SP4，并记录 `SERVERPROPERTY('ProductVersion')`、`SERVERPROPERTY('ProductLevel')` 和已安装安全更新。
-2. 创建独立的 `county_integration` 数据库，将兼容级别设置为 110；不得在 HIS 业务库中创建平台表。
+2. 按[`sqlserver/README.md`](sqlserver/README.md)创建独立的 `county_integration` 数据库，将兼容级别设置为 110；不得在 HIS 业务库中创建平台表。
 3. 创建独立登录名和数据库用户，通过安全渠道交付凭证。应用账号只能访问平台数据库，结构迁移权限与日常运行权限应按医院制度审批。
 4. 启用 TCP/IP，固定监听端口，并仅向获批的平台服务器开放网络访问。
 5. 配置 SQL Server 2012 所在 Windows Server 的 TLS 1.2 能力与证书。联调可以临时使用 `trustServerCertificate=true`，生产环境应使用医院信任的证书并改为 `trustServerCertificate=false`。
@@ -44,7 +44,7 @@ WHERE name = N'county_integration';
 
 ## 后台连接
 
-复制 `.env.example` 为 `.env`，把主机名、账号和密码替换为医院实际配置，再运行：
+复制 `.env.example` 为 `.env`，把主机名、迁移账号、运行账号和密码替换为医院实际配置，再运行：
 
 ```powershell
 docker compose --env-file ./deploy/.env -f ./deploy/docker-compose.yml up --build

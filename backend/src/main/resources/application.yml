@@ -12,6 +12,8 @@ spring:
       connection-timeout: 10000
   flyway:
     enabled: ${PLATFORM_DB_MIGRATION_ENABLED:true}
+    user: ${PLATFORM_DB_MIGRATION_USERNAME:${PLATFORM_DB_USERNAME}}
+    password: ${PLATFORM_DB_MIGRATION_PASSWORD:${PLATFORM_DB_PASSWORD}}
     locations: classpath:db/migration
     baseline-on-migrate: false
 
