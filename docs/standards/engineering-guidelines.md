@@ -85,12 +85,12 @@ county-integration-platform/
 |   `-- src/
 |       |-- main/java/cn/zqkj/platform/
 |       |   |-- PlatformApplication.java   应用启动入口
-|       |   |-- bootstrap/                 启动与Spring装配，按需创建
-|       |   |-- foundation/                Web、安全、追踪等基础能力
-|       |   |-- system/                    平台自身管理能力
-|       |   `-- modules/                   按业务边界组织的模块
+|       |   |-- common/                    统一响应和异常等明确公共类型
+|       |   |-- framework/                 Spring、安全和Web技术装配
+|       |   |-- system/                    机构、身份、权限和平台配置管理
+|       |   `-- exchange/                  接口交换和运行追踪
 |       |-- main/resources/
-|       |   |-- mybatis/<模块>/       MyBatis XML
+|       |   |-- mapper/<业务域>/      MyBatis XML
 |       |   |-- db/migration/        SQL Server变更脚本
 |       |   `-- application.yml      非敏感默认配置
 |       `-- test/                    镜像主代码包结构的测试
@@ -103,29 +103,32 @@ county-integration-platform/
 `-- README.md
 ```
 
-目录应在有实际内容时创建，不通过空目录或仅含`package-info.java`的包提前表示未来模块。不得使用`temp`、`misc`、`other`、`shared`、`common`、`utils`等边界不清的包；跨模块技术能力按职责放入`foundation`的明确子包。
+目录应在有实际内容时创建，不通过空目录或仅含`package-info.java`的包提前表示未来模块。不得使用`temp`、`misc`、`other`、`shared`、`utils`等边界不清的包。`common`只允许统一响应、异常等职责明确且不包含业务规则的类型；Spring和安全技术能力放入`framework`的明确子包。
 
 ### 3.2 后台模块内部结构
 
-每个业务模块按实际需要采用以下结构，不要求没有领域逻辑的小模块创建所有层：
+系统管理域和交换域按实际需要采用以下结构，不要求没有实际代码的目录提前创建：
 
 ```text
-modules/<module>/
-|-- api/              HTTP入口、参数校验和响应转换
-|-- application/      用例编排、事务范围和外部能力边界
-|-- domain/           业务实体、值对象、状态和规则
-`-- infrastructure/   MyBatis、外部客户端、调度等技术实现
-    |-- persistence/
-    `-- client/
+<业务域>/
+|-- controller/       仅存放HTTP控制器
+|-- domain/
+|   |-- dto/          HTTP请求DTO和服务输入命令
+|   |-- model/        内部业务及持久化模型
+|   `-- vo/           API输出VO，类名使用VO后缀
+|-- mapper/           仅存放MyBatis Mapper接口
+`-- service/          业务服务接口
+    `-- impl/         业务规则、用例编排和事务实现
 ```
 
-- `api`不得直接调用MyBatis Mapper，不得编写SQL或核心业务判断。
-- 依赖方向为`api -> application -> domain`；`infrastructure`实现应用层或领域层声明的边界，领域层不依赖Spring、MyBatis或厂商SDK。
+- `controller`不得存放Request、DTO或VO，不得直接调用MyBatis Mapper，不得编写SQL或核心业务判断。
+- `mapper`不得存放Repository接口、`MyBatis...Repository`实现或业务规则；Mapper XML统一放在`resources/mapper/<业务域>`。
+- 常规依赖方向为`controller -> service接口 -> service.impl -> mapper`，`domain`保存各层共同使用且不依赖Spring、MyBatis或厂商SDK的业务类型。
 - 一个数据库表只由一个业务模块负责写入；其他模块通过该模块的服务访问。
-- 外部系统调用集中在对应模块的`infrastructure/client`中，不得散落在定时任务、页面控制器或工具类中。
+- 外部系统调用集中在对应业务域内职责明确的`client`子包中，不得散落在定时任务、页面控制器或工具类中。
 - HIS、基层系统、LIS、PACS等厂商差异应由接口配置、字段映射或独立适配类处理，不得污染所有业务代码。
-- 统一异常、响应格式、安全上下文和追踪能力可以放入`foundation`，具体业务状态不得放入平台基础包。
-- 模块之间通过应用层稳定边界协作，不得直接引用其他模块的Mapper或访问其负责写入的表。
+- 统一异常和响应格式放入`common`，安全上下文和追踪能力放入`framework`；具体业务状态不得放入这两个包。
+- 业务域之间通过Service稳定边界协作，不得直接引用其他业务域的Mapper或访问其负责写入的表。
 
 ### 3.3 页面职责
 

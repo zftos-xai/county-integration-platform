@@ -87,13 +87,13 @@ public List<ExchangeRecordSummary> findRecent(String organizationCode, int limit
 
 ## 4. 命名、结构与可读性
 
-- 基础包统一为`cn.zqkj.platform`。业务代码按`modules.<业务模块>`划分，平台基础能力分别归入`foundation`和`system`；包名全小写，类用PascalCase，方法和变量用camelCase，常量用`UPPER_SNAKE_CASE`。
+- 基础包统一为`cn.zqkj.platform`。系统管理归入`system`，交换能力归入`exchange`，内部统一使用`controller / domain / mapper / service / service.impl`分包；Service接口使用业务名称，默认实现使用`Impl`后缀。`domain`固定按`dto / model / vo`区分输入、内部模型和输出，输出类使用`VO`后缀。包名全小写，类用PascalCase，方法和变量用camelCase，常量用`UPPER_SNAKE_CASE`。
 - 使用统一业务术语，避免拼音、不明确缩写及缺少上下文的 `data`、`info`、`handle`、`process`。
-- Controller 负责协议转换和输入校验；Service 负责业务规则与事务；Repository/Mapper 负责数据库访问；Client 负责获批外部调用。
+- `controller`包只允许Controller；Controller负责协议转换和输入校验并只依赖Service接口。`service.impl`负责业务规则与事务；`mapper`包只允许MyBatis Mapper接口，不增加Repository和`MyBatis...Repository`适配层；Client负责获批外部调用。
 - 请求和响应对象不得直接暴露数据库实体。外部合同、领域和持久化模型不一致时应明确转换边界。
 - 方法保持单一目的；复杂条件提取为有业务含义的方法，避免深层嵌套、超长参数列表和用布尔值控制多条流程。
 - 优先使用构造器注入和不可变对象；只读传输结果可用 `record`。禁止通过静态可变状态共享请求数据。
-- 跨模块技术能力按职责放入`foundation`的明确子包，不创建无边界的`shared`、`common`或`utils`包。
+- Spring、安全和Web技术装配按职责放入`framework`；`common`仅允许统一响应、异常等边界明确且不含业务规则的类型，不创建无边界的`shared`或`utils`包。
 
 ## 5. Java 基础实践
 
@@ -128,11 +128,31 @@ public List<ExchangeRecordSummary> findRecent(String organizationCode, int limit
 - 数据库统一为 Microsoft SQL Server 2012 SP4，兼容级别 110；SQL、驱动、Flyway、事务和锁行为必须在同版本验证。
 - 不使用 SQL Server 2012 之后才提供的语法和功能；函数、分页语法和索引选项必须核对兼容性。
 - MyBatis 值参数使用 `#{}`；`${}` 仅用于固定白名单转换后的标识符，禁止直接拼接外部输入。
+- MyBatis Mapper XML中凡是能够安全添加字段注释的位置都必须添加准确注释，不限定于`<constructor>`。包括但不限于`<id>`、`<result>`、`<idArg>`、`<arg>`、`<association>`、`<collection>`内的字段映射，可复用列清单，以及`SELECT`、`INSERT`、`UPDATE`和条件语句中的业务字段。注释应紧邻字段定义、映射项或明确列清单，说明字段的业务含义、时间口径、敏感边界或特殊空值语义；不得只依赖列名、Java属性名、Java类型或Java记录注释推断含义。相同字段集中定义并复用时可在定义处统一注释，不要求在每个引用点机械重复；字段增删、来源变化或语义变化时必须同步更新注释。
 - 查询明确列名、机构过滤和稳定排序；列表必须分页或限量，避免 `SELECT *`、无边界查询和逐行重复查询。
 - SQL迁移必须遵守[SQL Server建设与迁移脚本规范](sql-coding-guidelines.md)：一个业务一个主版本，未进入共享环境的修改合并回主版本，已进入共享环境后才允许增加引用该主版本的补丁。
 - 主版本和补丁必须说明需求依据、数据边界、时间口径、回退方案以及表、字段、约束和索引用途；不得用无注释的DDL或连续小脚本掩盖未稳定设计。
 - 唯一约束、检查约束和索引应与幂等规则及实际访问路径一致。
 - 生产迁移前备份并验证恢复；DDL、大批量更新和索引操作应评估锁、日志空间、窗口及对 HIS 的影响。
+
+Mapper XML字段注释示例：
+
+```xml
+<resultMap id="managedUser" type="cn.zqkj.platform.system.domain.vo.ManagedUserVO">
+    <constructor>
+        <!-- 平台用户内部主键 -->
+        <idArg column="id" javaType="java.lang.Long"/>
+        <!-- 平台本地登录名 -->
+        <arg column="login_name" javaType="java.lang.String"/>
+    </constructor>
+</resultMap>
+
+<sql id="userColumns">
+    id,                  /* 平台用户内部主键 */
+    login_name,          /* 平台本地登录名 */
+    password_changed_at  /* 最近一次完成密码修改的UTC时间 */
+</sql>
+```
 
 ## 9. 安全、隐私与日志
 
@@ -169,6 +189,7 @@ public List<ExchangeRecordSummary> findRecent(String organizationCode, int limit
 - [ ] 输入校验、身份认证、机构隔离和敏感数据处理完整。
 - [ ] 写操作定义幂等、事务、并发、重试、结果未知和审计行为。
 - [ ] SQL 与迁移符合 SQL Server 2012 SP4 和兼容级别 110。
+- [ ] MyBatis Mapper XML中可注释的字段定义、映射、列清单、写入项和业务条件均有准确字段注释，且注释与当前字段语义一致。
 - [ ] 每个业务只有一个主版本，补丁归属、编号、数量和注释通过SQL迁移静态门禁。
 - [ ] 没有硬编码凭证、真实患者数据、调试输出、伪造结果或无负责人 TODO。
 - [ ] 测试覆盖主要正常和高风险失败路径，适用的构建及静态检查通过。
@@ -182,4 +203,4 @@ public List<ExchangeRecordSummary> findRecent(String organizationCode, int limit
 
 `backend/checkstyle.xml`通过Maven `validate`执行，当前覆盖制表符、文件结尾、通配符导入、Java标识符命名、空`catch`以及类和方法缺少Javadoc。`tools/verify-sql-migrations.mjs`检查SQL主版本、补丁、命名、注释和脚本膨胀；`tools/verify.sh`、`tools/verify.ps1`和CI均会执行。
 
-静态门禁不能验证注释是否准确，也不能证明SQL Server 2012实际兼容。提交者和评审者仍须检查需求依据、数据边界和DDL语义，并在条件具备后执行真实数据库验证；扩展自动规则时必须先修复存量内容，不能用大量豁免让检查名存实亡。
+当前静态门禁尚未自动检查Mapper XML字段注释的覆盖率和准确性，该项必须由提交者和评审者按完成定义逐项核对。静态门禁不能验证注释是否准确，也不能证明SQL Server 2012实际兼容。提交者和评审者仍须检查需求依据、数据边界和DDL语义，并在条件具备后执行真实数据库验证；扩展自动规则时必须先修复存量内容，不能用大量豁免让检查名存实亡。

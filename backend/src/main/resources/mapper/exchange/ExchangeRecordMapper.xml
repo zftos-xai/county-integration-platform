@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.exchange.mapper.ExchangeRecordMapper">
+    <select id="findRecentByOrganization"
+            resultType="cn.zqkj.platform.exchange.domain.vo.ExchangeRecordVO">
+        SELECT TOP (#{limit})
+            /* 交换记录内部主键 */
+            id,
+            /* 贯穿调用链的请求编号 */
+            request_id,
+            /* 接口交易代码 */
+            interface_code,
+            /* 平台统一机构代码 */
+            organization_code,
+            /* 不含医疗正文的来源业务记录标识 */
+            source_record_id,
+            /* 调用方系统代码，对外映射为callerSystemCode */
+            source_system_code AS caller_system_code,
+            /* 目标系统代码 */
+            target_system_code,
+            /* 最终交换事实，对外映射为result */
+            exchange_result AS result,
+            /* 目标系统原始结果代码 */
+            result_code AS target_result_code,
+            /* 不含敏感正文的结果说明 */
+            result_message,
+            /* 调用处理耗时，单位毫秒 */
+            duration_ms,
+            /* 已脱敏且不含完整报文的请求摘要 */
+            request_summary,
+            /* 不含凭证和内部地址的通信错误摘要 */
+            communication_error_summary,
+            /* 平台接收请求的UTC时间 */
+            received_at,
+            /* 平台完成处理的UTC时间 */
+            processed_at
+        FROM exch_exchange_record
+        <!-- 强制按当前获批机构范围查询 -->
+        WHERE organization_code = #{organizationCode}
+        <if test="receivedFrom != null">
+            <!-- 可选接收时间UTC下界，包含边界 -->
+            AND received_at &gt;= #{receivedFrom}
+        </if>
+        <if test="receivedTo != null">
+            <!-- 可选接收时间UTC上界，包含边界 -->
+            AND received_at &lt;= #{receivedTo}
+        </if>
+        <if test="interfaceCode != null and interfaceCode != ''">
+            <!-- 可选接口交易代码精确过滤 -->
+            AND interface_code = #{interfaceCode}
+        </if>
+        <if test="sourceRecordId != null and sourceRecordId != ''">
+            <!-- 可选来源业务记录标识精确过滤 -->
+            AND source_record_id = #{sourceRecordId}
+        </if>
+        <if test="requestId != null and requestId != ''">
+            <!-- 可选请求编号精确过滤 -->
+            AND request_id = #{requestId}
+        </if>
+        <if test="result != null">
+            <!-- 可选最终交换事实过滤 -->
+            AND exchange_result = #{result}
+        </if>
+        <!-- 最新接收记录优先，同一时刻按内部主键倒序稳定排列 -->
+        ORDER BY received_at DESC, id DESC
+    </select>
+
+    <insert id="insertRuntimeRecord">
+        INSERT INTO exch_exchange_record (
+            <!-- 贯穿调用链的请求编号 -->
+            request_id,
+            <!-- 接口交易代码 -->
+            interface_code,
+            <!-- 调用方系统代码 -->
+            source_system_code,
+            <!-- 目标系统代码 -->
+            target_system_code,
+            <!-- 平台统一机构代码 -->
+            organization_code,
+            <!-- 不含医疗正文的来源业务记录标识 -->
+            source_record_id,
+            <!-- 目标系统原始结果代码 -->
+            result_code,
+            <!-- 不含敏感正文的结果说明 -->
+            result_message,
+            <!-- 平台接收请求的UTC时间 -->
+            received_at,
+            <!-- 平台完成处理的UTC时间 -->
+            processed_at,
+            <!-- 最终交换事实 -->
+            exchange_result,
+            <!-- 调用处理耗时，单位毫秒 -->
+            duration_ms,
+            <!-- 已脱敏且不含完整报文的请求摘要 -->
+            request_summary,
+            <!-- 不含凭证和内部地址的通信错误摘要 -->
+            communication_error_summary
+        ) VALUES (
+            #{requestId},
+            #{interfaceCode},
+            #{callerSystemCode},
+            #{targetSystemCode},
+            #{organizationCode},
+            #{sourceRecordId},
+            #{targetResultCode},
+            #{resultMessage},
+            #{receivedAt},
+            #{processedAt},
+            #{result},
+            #{durationMs},
+            #{requestSummary},
+            #{communicationErrorSummary}
+        )
+    </insert>
+</mapper>

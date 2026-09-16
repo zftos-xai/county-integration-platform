@@ -27,37 +27,41 @@
 │     ├─ main/
 │     │  ├─ java/cn/zqkj/platform/               Java基础包
 │     │  │  ├─ PlatformApplication.java          应用启动和组件扫描入口
-│     │  │  ├─ bootstrap/                        Spring装配及启动配置（按需创建）
-│     │  │  ├─ foundation/                       不包含业务规则的平台基础能力
-│     │  │  │  ├─ web/                          统一API响应及Web公共处理
-│     │  │  │  │  └─ error/                     全局异常转换和错误响应
-│     │  │  │  ├─ security/                     安全配置及机构数据范围守卫
-│     │  │  │  ├─ observability/                请求编号、日志和可观测能力
-│     │  │  │  └─ persistence/                  MyBatis公共配置（按需创建）
-│     │  │  ├─ system/                           平台自身管理能力
-│     │  │  │  └─ api/                          平台信息等只读系统接口
-│     │  │  └─ modules/                          业务模块容器
-│     │  │     ├─ organization/                 机构、人员和科室归属（按需创建）
-│     │  │     ├─ patientidentity/              患者标识及跨系统关联（按需创建）
-│     │  │     ├─ registry/                     接口登记、版本、字典和编码映射（按需创建）
-│     │  │     ├─ exchange/                     接收、发送、交换状态及追踪
-│     │  │     │  ├─ api/                       HTTP入口、校验、授权和响应转换
-│     │  │     │  ├─ application/               查询用例、事务及持久化边界
-│     │  │     │  ├─ domain/                    交换实体、状态和业务规则（按需创建）
-│     │  │     │  └─ infrastructure/            交换模块的技术实现
-│     │  │     │     ├─ persistence/            MyBatis Mapper及查询实现
-│     │  │     │     └─ client/                 获批外部系统适配器（按需创建）
-│     │  │     ├─ reconciliation/               数据核对和差异处理（按需创建）
-│     │  │     ├─ alert/                        运行告警及处置（按需创建）
-│     │  │     └─ audit/                        访问、配置和操作审计（按需创建）
+│     │  │  ├─ common/                           跨业务且职责明确的公共类型
+│     │  │  │  ├─ core/                         统一API响应等核心传输类型
+│     │  │  │  └─ exception/                    业务异常及全局异常转换
+│     │  │  ├─ framework/                        Spring、安全和Web技术装配
+│     │  │  │  ├─ config/                       安全等框架配置
+│     │  │  │  ├─ security/                     登录主体、数据范围守卫及过滤器
+│     │  │  │  └─ web/filter/                   请求编号等Web过滤器
+│     │  │  ├─ system/                           机构、用户、角色和平台配置管理
+│     │  │  │  ├─ controller/                   仅存放HTTP控制器
+│     │  │  │  ├─ domain/
+│     │  │  │  │  ├─ dto/                      请求DTO和服务命令
+│     │  │  │  │  ├─ model/                    内部业务及持久化模型
+│     │  │  │  │  └─ vo/                       API输出VO
+│     │  │  │  ├─ mapper/                       仅存放MyBatis Mapper接口
+│     │  │  │  └─ service/                      系统管理服务接口
+│     │  │  │     └─ impl/                      系统管理规则和事务实现
+│     │  │  └─ exchange/                         交换运行记录和后续接口交换能力
+│     │  │     ├─ controller/                   交换HTTP入口
+│     │  │     ├─ domain/
+│     │  │     │  ├─ dto/                      交换查询DTO
+│     │  │     │  ├─ model/                    交换内部运行事实
+│     │  │     │  └─ vo/                       交换查询输出VO
+│     │  │     ├─ mapper/                       仅存放交换MyBatis Mapper接口
+│     │  │     └─ service/                      交换服务接口
+│     │  │        └─ impl/                      交换规则和事务实现
 │     │  └─ resources/
 │     │     ├─ application.yml                  数据源、Flyway、MyBatis、服务及监控配置
 │     │     ├─ db/migration/                    SQL Server版本化迁移脚本
-│     │     └─ mybatis/
-│     │        └─ exchange/                     交换模块MyBatis XML
+│     │     └─ mapper/
+│     │        ├─ system/                       系统管理MyBatis XML
+│     │        └─ exchange/                     交换MyBatis XML
 │     └─ test/java/cn/zqkj/platform/             镜像主代码包结构的后端测试
-│        ├─ foundation/security/                 机构权限边界测试
-│        └─ modules/exchange/application/        交换查询用例测试
+│        ├─ system/                              系统管理接口、服务和Mapper测试
+│        ├─ framework/security/                  机构权限边界测试
+│        └─ exchange/service/                    交换服务测试
 ├─ web-admin/                                    Vue 3 / TypeScript / Vite运行管理端
 │  ├─ package.json                               管理端依赖和开发、构建命令
 │  ├─ vite.config.ts                             Vite构建与开发服务配置
@@ -107,9 +111,9 @@
 └─ README.md                                     项目入口和开发说明
 ```
 
-Java基础包统一为`cn.zqkj.platform`。`foundation`只承载跨模块技术能力，`system`承载平台自身接口，`modules`按业务边界组织代码。业务模块内部依赖方向为`api -> application -> domain`，`infrastructure`实现应用层或领域层声明的技术边界；模块之间通过应用层协作，不直接调用其他模块的Mapper或写入其数据表。详细约束见[平台架构决策](docs/decisions/架构决策.md)。
+Java基础包统一为`cn.zqkj.platform`。包结构参考RuoYi-Vue的直观分层并结合本项目规模，采用`controller / domain / mapper / service / service.impl`；`controller`只放Controller，`domain/dto`放输入对象，`domain/vo`放以`VO`结尾的输出对象，`domain/model`放内部模型，`mapper`只放MyBatis Mapper接口，XML统一位于`resources/mapper/<业务域>`。Service包定义业务接口，`service.impl`保存事务和规则实现，不再叠加Repository及MyBatis适配实现。详细约束见[平台架构决策](docs/decisions/架构决策.md)。
 
-当前已经落地`foundation`、`system`和`exchange`查询链路。机构、患者标识、接口登记、对账、告警和审计模块保留为目标边界，待正式需求、接口合同和实际代码明确后再创建。管理端除运行总览的后台健康检查和双角色交互原型外，其他业务视图仍不代表真实接口已经接入。
+当前已经落地`common`、`framework`、`system`和`exchange`。患者标识、接口登记、对账、告警和审计能力待正式需求、接口合同和实际代码明确后再创建，不使用空包预占。管理端除运行总览的后台健康检查和双角色交互原型外，其他业务视图仍不代表真实接口已经接入。
 
 ## 开始开发
 

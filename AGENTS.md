@@ -17,7 +17,7 @@
 ## Java 与 AI Coding
 
 - Java、MyBatis 和数据库修改必须遵守 `docs/standards/java-coding-guidelines.md`。
-- Java基础包统一为`cn.zqkj.platform`；平台基础能力放入`foundation`和`system`，业务代码放入`modules/<业务模块>`。
-- 业务模块按需使用`api`、`application`、`domain`和`infrastructure`分层，不创建空包占位，不引入无边界的`shared`、`common`或`utils`包。
+- Java基础包统一为`cn.zqkj.platform`；采用易于定位的`controller / domain / mapper / service / service.impl`分包。`controller`只放Controller，输入对象放`domain/dto`，API输出对象放`domain/vo`并使用`VO`后缀，内部模型放`domain/model`。`mapper`只放MyBatis Mapper接口，不增加Repository或MyBatis适配实现，XML放`resources/mapper/<业务域>`。Controller依赖Service接口，事务和业务规则由`service.impl`实现。
+- 不再使用`modules/<模块>/api/application/infrastructure`多重目录。`common`只能包含跨业务且边界明确的基础类型，不得演变为通用工具或业务规则堆放区；不创建空包占位，不引入无边界的`shared`或`utils`包。
 - 所有新增或修改的类、接口、枚举、`record` 和方法必须添加准确的 Javadoc，并随实现同步更新。
 - AI 生成内容必须经过需求、权限、数据安全、兼容性、测试和实际差异检查；不得编造接口合同、环境条件或验证结果。

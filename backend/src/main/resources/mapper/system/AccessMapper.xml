@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.system.mapper.AccessMapper">
+    <resultMap id="userSummary" type="cn.zqkj.platform.system.domain.model.ManagedUserSummary">
+        <constructor>
+            <!-- 平台用户内部主键 -->
+            <arg column="id" javaType="long"/>
+            <!-- 平台本地登录名 -->
+            <arg column="login_name" javaType="java.lang.String"/>
+            <!-- 用户显示名称 -->
+            <arg column="display_name" javaType="java.lang.String"/>
+            <!-- 用户主归属机构主键 -->
+            <arg column="primary_organization_id" javaType="long"/>
+            <!-- 用户主归属机构编码 -->
+            <arg column="organization_code" javaType="java.lang.String"/>
+            <!-- 用户是否启用 -->
+            <arg column="is_enabled" javaType="boolean"/>
+            <!-- 是否必须先修改初始或重置密码 -->
+            <arg column="must_change_password" javaType="boolean"/>
+            <!-- 用户创建UTC时间 -->
+            <arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <!-- 用户最后修改UTC时间 -->
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/>
+            <!-- SQL Server并发版本 -->
+            <arg column="row_version" javaType="byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="roleSummary" type="cn.zqkj.platform.system.domain.model.RoleSummary">
+        <constructor>
+            <!-- 平台角色内部主键 -->
+            <arg column="id" javaType="long"/>
+            <!-- 稳定角色代码 -->
+            <arg column="role_code" javaType="java.lang.String"/>
+            <!-- 角色展示名称 -->
+            <arg column="role_name" javaType="java.lang.String"/>
+            <!-- 角色是否参与授权判定 -->
+            <arg column="is_enabled" javaType="boolean"/>
+            <!-- 是否为平台保护的系统角色 -->
+            <arg column="is_system_managed" javaType="boolean"/>
+            <!-- 角色创建UTC时间 -->
+            <arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <!-- 角色最后修改UTC时间 -->
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/>
+            <!-- SQL Server并发版本 -->
+            <arg column="row_version" javaType="byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="userColumns">
+        <!-- 平台用户内部主键 -->
+        users.id,
+        <!-- 平台本地登录名 -->
+        users.login_name,
+        <!-- 用户显示名称 -->
+        users.display_name,
+        <!-- 用户主归属机构主键 -->
+        users.primary_organization_id,
+        <!-- 用户主归属机构编码 -->
+        organizations.organization_code,
+        <!-- 用户是否启用 -->
+        users.is_enabled,
+        <!-- 是否必须先修改密码 -->
+        users.must_change_password,
+        <!-- 用户创建UTC时间 -->
+        users.created_at,
+        <!-- 用户最后修改UTC时间 -->
+        users.updated_at,
+        <!-- SQL Server并发版本 -->
+        users.row_version
+    </sql>
+
+    <sql id="roleColumns">
+        <!-- 平台角色内部主键 -->
+        id,
+        <!-- 稳定角色代码 -->
+        role_code,
+        <!-- 角色展示名称 -->
+        role_name,
+        <!-- 角色是否参与授权判定 -->
+        is_enabled,
+        <!-- 是否为平台保护的系统角色 -->
+        is_system_managed,
+        <!-- 角色创建UTC时间 -->
+        created_at,
+        <!-- 角色最后修改UTC时间 -->
+        updated_at,
+        <!-- SQL Server并发版本 -->
+        row_version
+    </sql>
+
+    <select id="findUsers" resultMap="userSummary">
+        SELECT <include refid="userColumns"/>
+        FROM sys_user AS users
+        INNER JOIN org_organization AS organizations ON organizations.id = users.primary_organization_id
+        <!-- 按登录名及内部主键稳定排序 -->
+        ORDER BY users.login_name, users.id
+    </select>
+
+    <select id="findUser" resultMap="userSummary">
+        SELECT <include refid="userColumns"/>
+        FROM sys_user AS users
+        INNER JOIN org_organization AS organizations ON organizations.id = users.primary_organization_id
+        <!-- 按平台用户内部主键精确查询 -->
+        WHERE users.id = #{userId}
+    </select>
+
+    <select id="userLoginExists" resultType="boolean">
+        <!-- 使用平台本地登录名检查唯一性 -->
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM sys_user WHERE login_name = #{loginName}) THEN 1 ELSE 0 END
+    </select>
+
+    <select id="createUser" resultType="long" affectData="true">
+        INSERT INTO sys_user (
+            <!-- 本地登录名、显示名称、密码强哈希和主机构 -->
+            login_name, display_name, password_hash, primary_organization_id,
+            <!-- 初始启用状态、强制改密标识和创建/修改主体 -->
+            is_enabled, must_change_password, created_by, updated_by
+        ) VALUES (
+            #{command.loginName}, #{command.displayName}, #{passwordHash}, #{command.primaryOrganizationId},
+            1, 1, #{actor}, #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <update id="updateUser">
+        UPDATE sys_user
+        <!-- 用户显示名称 -->
+        SET display_name = #{command.displayName},
+            <!-- 用户主归属机构主键 -->
+            primary_organization_id = #{command.primaryOrganizationId},
+            <!-- 最后修改主体标识 -->
+            updated_by = #{actor},
+            <!-- 最后修改UTC时间 -->
+            updated_at = SYSUTCDATETIME()
+        <!-- 内部主键确定目标，rowversion防止并发覆盖 -->
+        WHERE id = #{userId}
+          AND row_version = #{command.expectedVersion}
+    </update>
+
+    <update id="setUserEnabled">
+        UPDATE sys_user
+        <!-- 用户目标启用状态、最后修改主体和UTC时间 -->
+        SET is_enabled = #{enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        <!-- 内部主键确定目标，rowversion防止并发覆盖 -->
+        WHERE id = #{userId}
+          AND row_version = #{expectedVersion}
+    </update>
+
+    <update id="resetPassword">
+        UPDATE sys_user
+        <!-- 新临时密码强哈希，并重新要求用户改密 -->
+        SET password_hash = #{passwordHash}, must_change_password = 1,
+            <!-- 重置后尚未完成密码修改，清空密码修改时间 -->
+            password_changed_at = NULL, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        <!-- 按平台用户内部主键精确修改 -->
+        WHERE id = #{userId}
+    </update>
+
+    <select id="findUserRoleIds" resultType="long">
+        <!-- 用户已获授权的角色主键，按角色主键稳定排序 -->
+        SELECT role_id FROM sys_user_role WHERE user_id = #{userId} ORDER BY role_id
+    </select>
+
+    <select id="findUserOrganizationIds" resultType="long">
+        <!-- 用户已获授权的机构范围主键，按机构主键稳定排序 -->
+        SELECT organization_id FROM sys_user_organization_scope WHERE user_id = #{userId} ORDER BY organization_id
+    </select>
+
+    <select id="isEnabledPlatformAdministrator" resultType="boolean">
+        <!-- 使用锁核对目标是否为启用的平台管理员 -->
+        SELECT CASE WHEN EXISTS (
+            SELECT 1
+            FROM sys_user AS users WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN sys_user_role AS user_roles ON user_roles.user_id = users.id
+            INNER JOIN sys_role AS roles ON roles.id = user_roles.role_id
+            WHERE users.id = #{userId} AND users.is_enabled = 1
+              AND roles.is_enabled = 1 AND roles.role_code = N'PLATFORM_ADMIN'
+        ) THEN 1 ELSE 0 END
+    </select>
+
+    <select id="countOtherEnabledPlatformAdministrators" resultType="int">
+        <!-- 使用锁统计目标用户之外的启用平台管理员数量 -->
+        SELECT COUNT(DISTINCT users.id)
+        FROM sys_user AS users WITH (UPDLOCK, HOLDLOCK)
+        INNER JOIN sys_user_role AS user_roles ON user_roles.user_id = users.id
+        INNER JOIN sys_role AS roles ON roles.id = user_roles.role_id
+        WHERE users.id &lt;&gt; #{excludedUserId} AND users.is_enabled = 1
+          AND roles.is_enabled = 1 AND roles.role_code = N'PLATFORM_ADMIN'
+    </select>
+
+    <update id="replaceUserRoles">
+        <!-- 用户内部主键限定要被整体替换的角色关系 -->
+        DELETE FROM sys_user_role WHERE user_id = #{userId};
+        <if test="roleIds != null and roleIds.size() > 0">
+            <!-- 用户主键、角色主键和授权主体组成新角色关系 -->
+            INSERT INTO sys_user_role (user_id, role_id, granted_by)
+            VALUES
+            <foreach collection="roleIds" item="roleId" separator=",">
+                (#{userId}, #{roleId}, #{actor})
+            </foreach>;
+        </if>
+    </update>
+
+    <update id="replaceUserOrganizations">
+        <!-- 用户内部主键限定要被整体替换的机构范围关系 -->
+        DELETE FROM sys_user_organization_scope WHERE user_id = #{userId};
+        <if test="organizationIds != null and organizationIds.size() > 0">
+            <!-- 用户主键、机构主键和授权主体组成新范围关系 -->
+            INSERT INTO sys_user_organization_scope (user_id, organization_id, granted_by)
+            VALUES
+            <foreach collection="organizationIds" item="organizationId" separator=",">
+                (#{userId}, #{organizationId}, #{actor})
+            </foreach>;
+        </if>
+    </update>
+
+    <select id="findRoles" resultMap="roleSummary">
+        SELECT <include refid="roleColumns"/>
+        FROM sys_role
+        <!-- 按角色代码及内部主键稳定排序 -->
+        ORDER BY role_code, id
+    </select>
+
+    <select id="findRole" resultMap="roleSummary">
+        SELECT <include refid="roleColumns"/>
+        FROM sys_role
+        <!-- 按平台角色内部主键精确查询 -->
+        WHERE id = #{roleId}
+    </select>
+
+    <select id="roleCodeExists" resultType="boolean">
+        <!-- 使用稳定角色代码检查唯一性 -->
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM sys_role WHERE role_code = #{roleCode}) THEN 1 ELSE 0 END
+    </select>
+
+    <select id="createRole" resultType="long" affectData="true">
+        <!-- 角色代码、名称、初始状态、保护标识和创建/修改主体 -->
+        INSERT INTO sys_role (role_code, role_name, is_enabled, is_system_managed, created_by, updated_by)
+        VALUES (#{command.roleCode}, #{command.roleName}, 1, 0, #{actor}, #{actor});
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <update id="updateRole">
+        UPDATE sys_role
+        <!-- 非系统角色可修改的名称和启用状态 -->
+        SET role_name = #{command.roleName}, is_enabled = #{command.enabled},
+            <!-- 最后修改主体和UTC时间 -->
+            updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        <!-- 仅修改非系统角色，并用rowversion防止并发覆盖 -->
+        WHERE id = #{roleId}
+          AND is_system_managed = 0
+          AND row_version = #{command.expectedVersion}
+    </update>
+
+    <select id="findRolePermissionCodes" resultType="java.lang.String">
+        <!-- 角色已获授权的功能权限代码，按代码稳定排序 -->
+        SELECT permission_code FROM sys_role_permission WHERE role_id = #{roleId} ORDER BY permission_code
+    </select>
+
+    <update id="replaceRolePermissions">
+        <!-- 角色内部主键限定要被整体替换的权限关系 -->
+        DELETE FROM sys_role_permission WHERE role_id = #{roleId};
+        <if test="permissionCodes != null and permissionCodes.size() > 0">
+            <!-- 角色主键、权限代码和授权主体组成新权限关系 -->
+            INSERT INTO sys_role_permission (role_id, permission_code, granted_by)
+            VALUES
+            <foreach collection="permissionCodes" item="permissionCode" separator=",">
+                (#{roleId}, #{permissionCode}, #{actor})
+            </foreach>;
+        </if>
+    </update>
+
+    <select id="findPermissions" resultType="cn.zqkj.platform.system.domain.vo.PermissionVO">
+        <!-- 后端注册权限代码及其展示名称，按权限代码稳定排序 -->
+        SELECT permission_code, permission_name FROM sys_permission ORDER BY permission_code
+    </select>
+
+    <select id="countEnabledRoles" resultType="int">
+        <!-- 统计给定角色主键中当前启用且真实存在的数量 -->
+        SELECT COUNT(1) FROM sys_role WHERE is_enabled = 1 AND id IN
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">#{roleId}</foreach>
+    </select>
+
+    <select id="countPermissions" resultType="int">
+        <!-- 统计给定权限代码中已由后端注册的数量 -->
+        SELECT COUNT(1) FROM sys_permission WHERE permission_code IN
+        <foreach collection="permissionCodes" item="permissionCode" open="(" separator="," close=")">
+            #{permissionCode}
+        </foreach>
+    </select>
+
+    <select id="hasEnabledPrimaryUsers" resultType="boolean">
+        <!-- 核对指定机构是否仍是任一启用用户的主归属机构 -->
+        SELECT CASE WHEN EXISTS (
+            <!-- 用户主归属机构主键限定目标机构，启用状态限定当前有效依赖 -->
+            SELECT 1 FROM sys_user
+            WHERE primary_organization_id = #{organizationId} AND is_enabled = 1
+        ) THEN 1 ELSE 0 END
+    </select>
+</mapper>
