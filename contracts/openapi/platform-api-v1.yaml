@@ -76,14 +76,113 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: Organization or data scope is not authorized
+  /organizations:
+    get:
+      operationId: listOrganizations
+      summary: List platform-managed organizations
+      parameters:
+        - name: enabled
+          in: query
+          required: false
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Organizations visible to the authenticated administrator
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'organization:read permission is required' }
+    post:
+      operationId: createOrganization
+      summary: Create a platform-managed organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrganizationRequest' }
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'organization:write permission is required' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /organizations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    get:
+      operationId: getOrganization
+      summary: Read a platform-managed organization
+      responses:
+        '200':
+          description: Organization found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'organization:read permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+    put:
+      operationId: updateOrganization
+      summary: Update a platform-managed organization using optimistic concurrency
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrganizationRequest' }
+      responses:
+        '200':
+          description: Organization updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'organization:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /organizations/{id}/enabled:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    patch:
+      operationId: changeOrganizationEnabled
+      summary: Enable or disable a platform-managed organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeOrganizationEnabledRequest' }
+      responses:
+        '200':
+          description: Organization state changed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 'organization:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
 components:
   securitySchemes:
     hospitalIdentity:
-      type: http
-      scheme: basic
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
       description: >-
-        Engineering baseline only. No local user is enabled; the approved hospital
-        identity mechanism must replace this scheme before production access.
+        Contract marker for an authenticated management session. The first development
+        phase uses a server-side local-management session and secure HttpOnly cookie;
+        production identity must be reviewed by the hospital before activation.
   responses:
     InvalidRequest:
       description: Request validation failed
@@ -92,6 +191,16 @@ components:
           schema: { $ref: '#/components/schemas/ApiError' }
     Unauthorized:
       description: Authentication is required
+    ResourceNotFound:
+      description: The requested platform resource does not exist or is not visible
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    ResourceConflict:
+      description: Unique data, current state, or optimistic concurrency version conflicts
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
   schemas:
     PlatformInfoResponse:
       type: object
@@ -152,6 +261,77 @@ components:
       type: string
       description: Final exchange fact; never a transport-process state
       enum: [SUCCESS, FAILURE, NO_RESPONSE]
+    OrganizationListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Organization' }
+    OrganizationResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/Organization' }
+    Organization:
+      type: object
+      required:
+        - id
+        - organizationCode
+        - organizationName
+        - organizationType
+        - enabled
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id: { type: integer, format: int64 }
+        organizationCode: { type: string, maxLength: 64 }
+        organizationName: { type: string, maxLength: 200 }
+        organizationType:
+          type: string
+          maxLength: 32
+          description: Project-confirmed organization type code; values are not invented by this contract
+        parentId: { type: integer, format: int64, nullable: true }
+        enabled: { type: boolean }
+        validFrom: { type: string, format: date-time, nullable: true, description: UTC }
+        validTo: { type: string, format: date-time, nullable: true, description: UTC }
+        createdAt: { type: string, format: date-time, description: UTC }
+        updatedAt: { type: string, format: date-time, description: UTC }
+        version:
+          type: string
+          format: byte
+          description: Base64-encoded 8-byte SQL Server rowversion
+    CreateOrganizationRequest:
+      type: object
+      required: [organizationCode, organizationName, organizationType]
+      properties:
+        organizationCode: { type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9._-]+$' }
+        organizationName: { type: string, minLength: 1, maxLength: 200 }
+        organizationType: { type: string, minLength: 1, maxLength: 32 }
+        parentId: { type: integer, format: int64, minimum: 1, nullable: true }
+        validFrom: { type: string, format: date-time, nullable: true }
+        validTo: { type: string, format: date-time, nullable: true }
+    UpdateOrganizationRequest:
+      type: object
+      required: [organizationName, organizationType, version]
+      properties:
+        organizationName: { type: string, minLength: 1, maxLength: 200 }
+        organizationType: { type: string, minLength: 1, maxLength: 32 }
+        parentId: { type: integer, format: int64, minimum: 1, nullable: true }
+        validFrom: { type: string, format: date-time, nullable: true }
+        validTo: { type: string, format: date-time, nullable: true }
+        version: { type: string, format: byte, description: Base64-encoded 8-byte SQL Server rowversion }
+    ChangeOrganizationEnabledRequest:
+      type: object
+      required: [enabled, version]
+      properties:
+        enabled: { type: boolean }
+        version: { type: string, format: byte, description: Base64-encoded 8-byte SQL Server rowversion }
     ApiError:
       type: object
       required: [code, message, timestamp]

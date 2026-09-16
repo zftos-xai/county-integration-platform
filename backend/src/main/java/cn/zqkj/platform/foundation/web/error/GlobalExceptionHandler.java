@@ -53,6 +53,32 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 处理已被删除、不存在或对当前用例不可见的资源。
+     *
+     * @param exception 资源不存在异常
+     * @param request 当前 HTTP 请求
+     * @return HTTP 404 错误响应
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException exception, HttpServletRequest request) {
+        LOGGER.warn("Requested resource was not found: {}", exception.getMessage());
+        return response(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "请求的资源不存在", request);
+    }
+
+    /**
+     * 处理唯一性、当前状态或并发版本冲突。
+     *
+     * @param exception 资源冲突异常
+     * @param request 当前 HTTP 请求
+     * @return HTTP 409 错误响应
+     */
+    @ExceptionHandler(ResourceConflictException.class)
+    ResponseEntity<ApiError> handleConflict(ResourceConflictException exception, HttpServletRequest request) {
+        LOGGER.warn("Resource state conflict: {}", exception.getMessage());
+        return response(HttpStatus.CONFLICT, "RESOURCE_CONFLICT", "资源状态已变更，请刷新后重试", request);
+    }
+
+    /**
      * 处理没有专用映射的系统异常并保留受控服务端日志。
      *
      * @param exception 原始系统异常
