@@ -10,6 +10,9 @@ const NotFoundView = () => import('@/views/error/NotFoundView.vue')
 const ChangePasswordView = () => import('@/views/login/ChangePasswordView.vue')
 const LoginView = () => import('@/views/login/LoginView.vue')
 const UsersView = () => import('@/views/system/user/UserView.vue')
+const RolesView = () => import('@/views/system/role/RoleView.vue')
+const ParametersView = () => import('@/views/configuration/parameter/ParameterView.vue')
+const DictionariesView = () => import('@/views/configuration/dictionary/DictionaryView.vue')
 
 /** 管理端路由表；正式业务页面统一挂载在登录后布局下。 */
 const router = createRouter({
@@ -27,9 +30,9 @@ const router = createRouter({
         { path: '', component: DashboardView, meta: { title: '运行总览', public: false } },
         { path: 'organizations', component: OrganizationsView, meta: { title: '机构管理', public: false, requiredPermission: 'organization:read' } },
         { path: 'users', component: UsersView, meta: { title: '用户管理', public: false, requiredPermission: 'identity:read' } },
-        { path: 'roles', component: PlaceholderView, meta: { title: '角色权限', public: false, requiredPermission: 'access:read' } },
-        { path: 'parameters', component: PlaceholderView, meta: { title: '参数配置', public: false, requiredPermission: 'configuration:read' } },
-        { path: 'dictionaries', component: PlaceholderView, meta: { title: '数据字典', public: false, requiredPermission: 'configuration:read' } },
+        { path: 'roles', component: RolesView, meta: { title: '角色权限', public: false, requiredPermission: 'access:read' } },
+        { path: 'parameters', component: ParametersView, meta: { title: '参数配置', public: false, requiredPermission: 'configuration:read' } },
+        { path: 'dictionaries', component: DictionariesView, meta: { title: '数据字典', public: false, requiredPermission: 'configuration:read' } },
         { path: 'external-systems', component: PlaceholderView, meta: { title: '外部系统', public: false, requiredPermission: 'configuration:read' } },
         { path: 'interfaces', component: PlaceholderView, meta: { title: '接口与映射', public: false } },
         { path: 'exchanges', component: PlaceholderView, meta: { title: '交换记录', public: false } },

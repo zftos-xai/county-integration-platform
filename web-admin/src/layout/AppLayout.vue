@@ -1,7 +1,7 @@
 <!-- 登录后管理端布局：统一承载导航、页面标题、主体信息和退出入口。 -->
 <script setup lang="ts">
 import {
-  Activity, Building2, Database, LogOut, Menu, Users,
+  Activity, BookOpen, Building2, Database, LogOut, Menu, Settings2, ShieldCheck, Users,
   PanelLeftClose, PanelLeftOpen, X,
 } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
@@ -34,7 +34,12 @@ const navigationGroups: NavigationGroup[] = [
   ] },
   { label: '系统管理', items: [
     { to: '/users', label: '用户管理', icon: Users, permission: 'identity:read' },
+    { to: '/roles', label: '角色权限', icon: ShieldCheck, permission: 'access:read' },
     { to: '/organizations', label: '机构管理', icon: Building2, permission: 'organization:read' },
+  ] },
+  { label: '基础配置', items: [
+    { to: '/parameters', label: '参数配置', icon: Settings2, permission: 'configuration:read' },
+    { to: '/dictionaries', label: '数据字典', icon: BookOpen, permission: 'configuration:read' },
   ] },
 ]
 
