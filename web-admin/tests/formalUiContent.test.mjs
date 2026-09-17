@@ -35,3 +35,14 @@ test('配置保存成功后直接关闭编辑器而不受保存中保护拦截',
   assert.match(parameterSource, /notice\.value = `\$\{definition\.name\}已保存。`\s+selectedDefinition\.value = null\s+selectedValue\.value = null/)
   assert.match(dictionarySource, /notice\.value = `\$\{updated\.itemLabel\}已保存。`\s+}\s+editorKind\.value = null/)
 })
+
+test('登录与强制改密页的品牌区在所有视口与表单对齐并保留间距', async () => {
+  const source = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8')
+  const baseRule = source.match(/\.prototype-login-mobile-brand \{([^}]*)\}/)?.[1] ?? ''
+
+  assert.match(baseRule, /width:\s*100%/)
+  assert.match(baseRule, /max-width:\s*430px/)
+  assert.match(baseRule, /margin-bottom:\s*18px/)
+  assert.match(baseRule, /align-items:\s*center/)
+  assert.match(baseRule, /gap:\s*9px/)
+})
