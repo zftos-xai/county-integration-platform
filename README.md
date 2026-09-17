@@ -68,11 +68,18 @@
 │  ├─ tsconfig.json                              TypeScript编译配置
 │  ├─ index.html                                 管理端HTML入口
 │  └─ src/
+│     ├─ api/                                    会话及各业务域API请求
+│     ├─ assets/                                 全局样式和静态资源
+│     ├─ components/                             跨页面公共组件
+│     ├─ layout/                                 登录后管理端应用外壳
+│     ├─ router/                                 集中路由表
+│     ├─ store/modules/                          会话等跨页面状态
+│     ├─ utils/                                  请求和路由判定基础能力
+│     ├─ views/                                  按业务域组织的正式页面与独立原型
+│     ├─ App.vue                                 顶层路由出口
 │     ├─ main.ts                                 管理端启动入口
-│     ├─ App.vue                                 路由和应用外壳
-│     ├─ views/                                  运行总览、双角色原型和占位视图
-│     ├─ styles/                                 基础样式和原型样式
-│     └─ prototypeData.ts                        仅供原型使用的合成演示数据
+│     ├─ permission.ts                           全局路由权限守卫
+│     └─ settings.ts                             非敏感界面配置
 ├─ web-embed/                                    Vue 3 / TypeScript / Vite工作站嵌入端
 │  ├─ package.json                               嵌入端依赖和开发、构建命令
 │  ├─ vite.config.ts                             Vite构建与开发服务配置
@@ -113,6 +120,8 @@
 
 Java基础包统一为`cn.zqkj.platform`。包结构参考RuoYi-Vue的直观分层并结合本项目规模，采用`controller / domain / mapper / service / service.impl`；`controller`只放Controller，`domain/dto`放输入对象，`domain/vo`放以`VO`结尾的输出对象，`domain/model`放内部模型，`mapper`只放MyBatis Mapper接口，XML统一位于`resources/mapper/<业务域>`。Service包定义业务接口，`service.impl`保存事务和规则实现，不再叠加Repository及MyBatis适配实现。详细约束见[平台架构决策](docs/decisions/架构决策.md)。
 
+管理端同样参考 RuoYi-Vue 的直观职责分层，并按 Vue 3 与本项目实际范围裁剪；目录与注释要求见[前端编码与注释规范](docs/standards/frontend-coding-guidelines.md)。Vue 组件职责注释和 TypeScript 导出契约由 `node tools/verify-frontend-comments.mjs` 执行静态门禁。
+
 当前已经落地`common`、`framework`、`system`和`exchange`。患者标识、接口登记、对账、告警和审计能力待正式需求、接口合同和实际代码明确后再创建，不使用空包预占。管理端除运行总览的后台健康检查和双角色交互原型外，其他业务视图仍不代表真实接口已经接入。
 
 ## 开始开发
@@ -130,7 +139,7 @@ npm install
 export PLATFORM_DB_URL='jdbc:sqlserver://127.0.0.1:1433;databaseName=county_integration;encrypt=true;trustServerCertificate=true'
 export PLATFORM_DB_USERNAME='platform_app'
 export PLATFORM_DB_PASSWORD='<由安全渠道提供>'
-mvn -f ./backend/pom.xml spring-boot:run
+mvn -f ./backend/pom.xml spring-boot:run -Dspring-boot.run.arguments=--server.port=18080
 ```
 
 SQL Server 2012 只能部署在受支持的 Windows Server 环境，不能使用本项目原有的 SQL Server Linux 容器。平台库可以与HIS库位于同一台服务器或同一实例，但必须使用独立数据库、读写账号、备份和维护计划；县医院HIS读取平台库视图使用独立只读账号。数据库实例、`county_integration` 数据库、兼容级别 110、TLS及备份恢复策略须由医院 DBA 按 [部署说明](deploy/README.md) 准备；Compose 只启动后台并连接外部数据库。
@@ -138,9 +147,11 @@ SQL Server 2012 只能部署在受支持的 Windows Server 环境，不能使用
 管理端和嵌入端分别启动：
 
 ```bash
-npm run dev --workspace web-admin
+VITE_BACKEND_TARGET=http://127.0.0.1:18080 npm run dev --workspace web-admin
 npm run dev --workspace web-embed
 ```
+
+管理后端本地开发端口默认使用`18080`，避免与机器上常见的`8080`服务冲突；管理端开发代理也默认指向`http://127.0.0.1:18080`，仅在环境不同时通过`VITE_BACKEND_TARGET`覆盖。
 
 ## 当前实现范围
 
@@ -155,7 +166,7 @@ npm run dev --workspace web-embed
 
 每项接口必须先具备正式文件、脱敏样例、网络条件、凭证、双方负责人和验收场景。条件不足时不得进入具体适配，不得猜测字段或使用演示结果代替联调证据。接口确认和推进台账由项目管理材料统一维护，不纳入工程仓库。
 
-项目范围、接口准入、实施顺序和放行依据见[总体方案](docs/plans/总体方案.md)，原型页面及启动前验证见[原型设计与验证](docs/design/原型设计与验证.md)。工程执行遵守[工程建设规范](docs/standards/engineering-guidelines.md)、[Java 与 AI Coding 规范](docs/standards/java-coding-guidelines.md)和[SQL Server 建设与迁移脚本规范](docs/standards/sql-coding-guidelines.md)。统一验证会执行Java静态规则、SQL主版本与补丁门禁、前端类型检查和构建。
+项目范围、接口准入、实施顺序和放行依据见[总体方案](docs/plans/总体方案.md)，原型页面及启动前验证见[原型设计与验证](docs/design/原型设计与验证.md)。工程执行遵守[工程建设规范](docs/standards/engineering-guidelines.md)、[Java 与 AI Coding 规范](docs/standards/java-coding-guidelines.md)、[前端工程与 AI Coding 规范](docs/standards/frontend-coding-guidelines.md)和[SQL Server 建设与迁移脚本规范](docs/standards/sql-coding-guidelines.md)。统一验证会执行Java静态规则、SQL主版本与补丁门禁、前端类型检查和构建。
 
 ## 项目资料
 
