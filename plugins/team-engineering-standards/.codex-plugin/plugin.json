@@ -1,0 +1,31 @@
+{
+  "name": "team-engineering-standards",
+  "version": "0.1.0",
+  "description": "Reusable engineering standards, repository audits, and CI rollout guidance for delivery teams.",
+  "author": {
+    "name": "County Integration Platform Team",
+    "url": "https://github.com/zftos-xai/county-integration-platform"
+  },
+  "homepage": "https://github.com/zftos-xai/county-integration-platform/tree/main/plugins/team-engineering-standards",
+  "repository": "https://github.com/zftos-xai/county-integration-platform",
+  "license": "UNLICENSED",
+  "keywords": [
+    "engineering-standards",
+    "repository-audit",
+    "ci-guardrails"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "团队工程规范",
+    "shortDescription": "审计工程规范并落地可执行的 CI 门禁。",
+    "longDescription": "提供分层工程规范、仓库基线审计和跨项目推广流程，帮助团队把文档规则转化为可追溯的自动化门禁。",
+    "developerName": "County Integration Platform Team",
+    "category": "Productivity",
+    "capabilities": [
+      "Repository audit",
+      "Standards governance",
+      "CI guardrails"
+    ],
+    "defaultPrompt": "审计当前项目的工程规范和 CI 门禁，区分通用规则、技术栈规则与项目覆盖项。"
+  }
+}

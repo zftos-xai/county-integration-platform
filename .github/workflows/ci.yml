@@ -5,6 +5,12 @@ on:
   pull_request:
 
 jobs:
+  governance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 plugins/team-engineering-standards/skills/project-engineering-guardrails/scripts/audit_repository.py . --strict
+
   backend:
     runs-on: ubuntu-24.04
     steps:
@@ -35,5 +41,4 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build
+      - run: npm run verify:frontend

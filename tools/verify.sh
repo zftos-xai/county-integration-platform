@@ -17,6 +17,9 @@ if [ ! -x "$maven_command" ]; then
     exit 1
 fi
 
+echo "Checking repository engineering guardrails..."
+python3 "$project_root/plugins/team-engineering-standards/skills/project-engineering-guardrails/scripts/audit_repository.py" "$project_root" --strict
+
 echo "Checking Java 17 backend..."
 "$maven_command" -B -f "$project_root/backend/pom.xml" verify
 
@@ -25,9 +28,6 @@ node "$project_root/tools/verify-sql-migrations.mjs"
 
 echo "Checking Vue applications..."
 cd "$project_root"
-node tools/verify-frontend-comments.mjs
-npm run typecheck
-npm run build
-node --test web-admin/tests/*.test.mjs
+npm run verify:frontend
 
 echo "All project checks passed."

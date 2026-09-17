@@ -178,7 +178,9 @@ npm run dev --workspace web-embed
 
 每项接口必须先具备正式文件、脱敏样例、网络条件、凭证、双方负责人和验收场景。条件不足时不得进入具体适配，不得猜测字段或使用演示结果代替联调证据。接口确认和推进台账由项目管理材料统一维护，不纳入工程仓库。
 
-项目范围、接口准入、实施顺序和放行依据见[总体方案](docs/plans/总体方案.md)，原型页面及启动前验证见[原型设计与验证](docs/design/原型设计与验证.md)。工程执行遵守[工程建设规范](docs/standards/engineering-guidelines.md)、[Java 与 AI Coding 规范](docs/standards/java-coding-guidelines.md)、[前端工程与 AI Coding 规范](docs/standards/frontend-coding-guidelines.md)和[SQL Server 建设与迁移脚本规范](docs/standards/sql-coding-guidelines.md)。统一验证会执行Java静态规则、SQL主版本与补丁门禁、前端类型检查和构建。
+项目范围、接口准入、实施顺序和放行依据见[总体方案](docs/plans/总体方案.md)，原型页面及启动前验证见[原型设计与验证](docs/design/原型设计与验证.md)。工程执行遵守[工程建设规范](docs/standards/engineering-guidelines.md)、[Java 与 AI Coding 规范](docs/standards/java-coding-guidelines.md)、[前端工程与 AI Coding 规范](docs/standards/frontend-coding-guidelines.md)、[SQL Server 建设与迁移脚本规范](docs/standards/sql-coding-guidelines.md)和[团队工程规范治理办法](docs/standards/team-engineering-governance.md)。统一验证会执行 Java 静态规则、SQL 主版本与补丁门禁、前端注释契约、类型检查、构建和自动测试。
+
+跨项目复用通过仓库内的 [`team-engineering-standards`](plugins/team-engineering-standards/README.md) Codex 插件提供。插件用于审计和推广，真正的强制执行仍由项目配置、CI、评审所有权和分支保护共同完成。
 
 ## 项目资料
 
