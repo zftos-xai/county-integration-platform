@@ -35,6 +35,19 @@ CREATE INDEX ix_sys_parameter_value_organization
     ON sys_parameter_value (organization_id, environment_code)
     INCLUDE (parameter_key, value_type, is_enabled, updated_at);
 
+-- 默认参数用途: 为管理端列表和审计查询提供各环境一致、可显式调整的安全起始值
+INSERT INTO sys_parameter_value (
+    parameter_key, value_type, environment_code, organization_id, parameter_value,
+    is_enabled, created_by, updated_by
+)
+VALUES
+    (N'management.list.default-page-size', N'INTEGER', N'DEVELOPMENT', NULL, N'10', 1, N'SYSTEM', N'SYSTEM'),
+    (N'management.list.default-page-size', N'INTEGER', N'TEST', NULL, N'10', 1, N'SYSTEM', N'SYSTEM'),
+    (N'management.list.default-page-size', N'INTEGER', N'PRODUCTION', NULL, N'10', 1, N'SYSTEM', N'SYSTEM'),
+    (N'management.audit.default-query-limit', N'INTEGER', N'DEVELOPMENT', NULL, N'100', 1, N'SYSTEM', N'SYSTEM'),
+    (N'management.audit.default-query-limit', N'INTEGER', N'TEST', NULL, N'100', 1, N'SYSTEM', N'SYSTEM'),
+    (N'management.audit.default-query-limit', N'INTEGER', N'PRODUCTION', NULL, N'100', 1, N'SYSTEM', N'SYSTEM');
+
 -- 表中文名称: 系统字典类型表
 -- 表用途: 保存平台自身展示和分类使用的字典类型；不收纳药品、诊疗、耗材、诊断等医疗业务目录
 CREATE TABLE sys_dictionary_type (
@@ -79,6 +92,46 @@ CREATE TABLE sys_dictionary_item (
 CREATE INDEX ix_sys_dictionary_item_type_enabled_sort
     ON sys_dictionary_item (dictionary_type_id, is_enabled, sort_order, item_code)
     INCLUDE (item_label, updated_at);
+
+-- 默认字典用途: 提供平台现有页面和API已采用的交换方向、交换结果与告警级别展示基线
+DECLARE @exchange_direction_type_id BIGINT;
+DECLARE @exchange_result_type_id BIGINT;
+DECLARE @alert_level_type_id BIGINT;
+
+INSERT INTO sys_dictionary_type (type_code, type_name, description, is_enabled, created_by, updated_by)
+VALUES (N'EXCHANGE_DIRECTION', N'交换方向', N'用于接口登记和交换记录的上行、下行方向展示', 1, N'SYSTEM', N'SYSTEM');
+SET @exchange_direction_type_id = SCOPE_IDENTITY();
+
+INSERT INTO sys_dictionary_item (
+    dictionary_type_id, item_code, item_label, sort_order, is_enabled, created_by, updated_by
+)
+VALUES
+    (@exchange_direction_type_id, N'UPSTREAM', N'上行', 10, 1, N'SYSTEM', N'SYSTEM'),
+    (@exchange_direction_type_id, N'DOWNSTREAM', N'下行', 20, 1, N'SYSTEM', N'SYSTEM');
+
+INSERT INTO sys_dictionary_type (type_code, type_name, description, is_enabled, created_by, updated_by)
+VALUES (N'EXCHANGE_RESULT', N'交换结果', N'用于交换记录最终业务结果的统一展示', 1, N'SYSTEM', N'SYSTEM');
+SET @exchange_result_type_id = SCOPE_IDENTITY();
+
+INSERT INTO sys_dictionary_item (
+    dictionary_type_id, item_code, item_label, sort_order, is_enabled, created_by, updated_by
+)
+VALUES
+    (@exchange_result_type_id, N'SUCCESS', N'成功', 10, 1, N'SYSTEM', N'SYSTEM'),
+    (@exchange_result_type_id, N'FAILURE', N'失败', 20, 1, N'SYSTEM', N'SYSTEM'),
+    (@exchange_result_type_id, N'NO_RESPONSE', N'无响应', 30, 1, N'SYSTEM', N'SYSTEM');
+
+INSERT INTO sys_dictionary_type (type_code, type_name, description, is_enabled, created_by, updated_by)
+VALUES (N'ALERT_LEVEL', N'告警级别', N'用于告警工作队列的优先级展示和排序', 1, N'SYSTEM', N'SYSTEM');
+SET @alert_level_type_id = SCOPE_IDENTITY();
+
+INSERT INTO sys_dictionary_item (
+    dictionary_type_id, item_code, item_label, sort_order, is_enabled, created_by, updated_by
+)
+VALUES
+    (@alert_level_type_id, N'HIGH', N'高', 10, 1, N'SYSTEM', N'SYSTEM'),
+    (@alert_level_type_id, N'MEDIUM', N'中', 20, 1, N'SYSTEM', N'SYSTEM'),
+    (@alert_level_type_id, N'LOW', N'低', 30, 1, N'SYSTEM', N'SYSTEM');
 
 -- 表中文名称: 外部系统表
 -- 表用途: 保存经确认的外部系统身份和启停状态；不承担业务接口注册，不保存地址或凭证
