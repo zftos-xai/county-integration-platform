@@ -1,3 +1,4 @@
+/* 正式管理端的全局基础样式、应用外壳和业务工作区组件。 */
 :root { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; color: #20262e; background: #f4f6f8; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
@@ -15,6 +16,14 @@ nav a { height: 42px; padding: 0 12px; display: flex; align-items: center; gap: 
 nav a:hover { background: rgba(255,255,255,.08); color: white; }
 nav a.router-link-active { background: white; color: #17365d; font-weight: 700; }
 .sidebar-footer { margin-top: auto; padding: 18px 20px; display: flex; align-items: center; gap: 9px; color: #b9c9dc; font-size: 12px; }
+.sidebar-session { margin-top: auto; padding: 13px 14px; border-top: 1px solid rgba(255,255,255,.12); border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 10px; }
+.sidebar-session > span { min-width: 0; display: grid; gap: 3px; }
+.sidebar-session strong, .sidebar-session small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-session strong { font-size: 12px; }
+.sidebar-session small { color: #aebfd0; font-size: 10px; }
+.sidebar-session .icon-button { margin-left: auto; flex: none; border-color: rgba(255,255,255,.18); background: transparent; color: #d7e2ec; }
+.sidebar-session .icon-button:hover { background: rgba(255,255,255,.09); }
+.sidebar-session + .sidebar-footer { margin-top: 0; }
 .main-area { min-width: 0; }
 .topbar { min-height: 72px; padding: 11px 28px; background: white; border-bottom: 1px solid #dce2e8; display: flex; align-items: center; gap: 14px; }
 .topbar h1 { margin: 1px 0 0; font-size: 20px; letter-spacing: 0; }
@@ -48,6 +57,16 @@ nav a.router-link-active { background: white; color: #17365d; font-weight: 700; 
 .empty-page { min-height: calc(100vh - 150px); background: white; border: 1px solid #d8dee5; color: #395975; }
 .empty-page p { max-width: 520px; margin: 0; padding: 0 20px; }
 .scrim { display: none; }
+.real-content > .content { max-width: none; padding: 0; }
+.prototype-nav a { position: relative; height: 42px; padding: 0 11px; display: flex; align-items: center; gap: 11px; border-radius: 6px; color: #4a5867; font-size: 13px; text-align: left; text-decoration: none; }
+.prototype-nav a:hover { background: #f1f5f4; color: #115f53; }
+.prototype-nav a.router-link-active { background: #e9f4f1; color: #12695d; font-weight: 700; }
+.prototype-nav a.router-link-active::before { content: ""; position: absolute; left: -8px; top: 7px; bottom: 7px; width: 4px; border-radius: 0 3px 3px 0; background: #1a8173; }
+.prototype-sidebar.collapsed .prototype-nav a { padding: 0; justify-content: center; }
+.prototype-sidebar.collapsed .prototype-nav a span { display: none; }
+.overview-commandbar > .overview-commandbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.overview-commandbar .overview-health-tag { min-height: 28px; padding: 0 9px; display: inline-flex; align-items: center; font-size: 11px; }
+.overview-commandbar .overview-refresh { min-height: 28px; padding: 0 9px; font-size: 11px; }
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { position: fixed; left: -245px; width: 232px; transition: left .18s ease; }
@@ -58,6 +77,8 @@ nav a.router-link-active { background: white; color: #17365d; font-weight: 700; 
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .metric-grid article:nth-child(2) { border-right: 0; }
   .metric-grid article:nth-child(-n+2) { border-bottom: 1px solid #e1e6ea; }
+  .prototype-sidebar.collapsed .prototype-nav a { padding: 0 11px; justify-content: flex-start; }
+  .prototype-sidebar.collapsed .prototype-nav a span { display: initial; }
 }
 @media (max-width: 560px) {
   .topbar { padding: 10px 14px; }
@@ -66,4 +87,6 @@ nav a.router-link-active { background: white; color: #17365d; font-weight: 700; 
   .metric-grid { grid-template-columns: 1fr; }
   .metric-grid article { border-right: 0; border-bottom: 1px solid #e1e6ea; }
   .metric-grid article:last-child { border-bottom: 0; }
+  .overview-commandbar { align-items: center; gap: 8px; }
+  .overview-commandbar > .overview-commandbar-actions { width: auto; }
 }

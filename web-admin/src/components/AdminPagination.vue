@@ -1,3 +1,4 @@
+<!-- 通用受控分页组件：页码和每页数量均由父页面持有。 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-vue'
@@ -10,6 +11,7 @@ const pages = computed(() => {
   const end = Math.min(pageCount.value, start + 4)
   return Array.from({ length: end - start + 1 }, (_, index) => start + index)
 })
+// 数据量缩小时将父页面页码拉回有效范围，避免出现空白的越界页。
 watch(pageCount, count => { if (props.page > count) emit('update:page', count) })
 function changePage(value: number) { emit('update:page', Math.max(1, Math.min(value, pageCount.value))) }
 function changePageSize(event: Event) {

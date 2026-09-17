@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createRecoveryTasks, recoveryBlock, transitionRecovery } from '../src/recoveryWorkflow.ts'
+import { createRecoveryTasks, recoveryBlock, transitionRecovery } from '../src/views/prototype/model/recoveryWorkflow.ts'
 
 const initial = kind => createRecoveryTasks().find(task => task.kind === kind)
 const details = { assignee: '当前运维', nextCheckAt: '2026-09-15 16:00', externalOwner: '源系统李工', externalDueAt: '2026-09-16 12:00', cleanupScope: '本次请求暂存正文', linkedRequestId: 'REQ-NEW-001' }

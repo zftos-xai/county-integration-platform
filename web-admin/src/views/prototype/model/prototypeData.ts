@@ -1,5 +1,7 @@
+/** 原型场景允许展示的业务结果状态。 */
 export type CaseStatus = '结果未知' | '明确未写入' | '校验未通过' | '越权拒绝' | '已受理' | '处理成功' | '重复已识别' | '待发送' | '查询失败'
 
+/** 单个原型验收场景及其交互步骤。 */
 export type Scenario = {
   id: string
   domain: string
@@ -26,6 +28,7 @@ export type Scenario = {
 }
 
 // All values are invented for the prototype. Codes and field concepts follow the reference interface material.
+/** 原型使用的合成场景集合；不得解释为正式环境数据。 */
 export const scenarios: Scenario[] = [
   {
     id: 'DESIGN-13', domain: '检查报告', title: '同一报告两端版本不一致', status: '结果未知',

@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm run build --workspace web-admin && npm run build --workspace web-embed",
     "typecheck": "npm run typecheck --workspace web-admin && npm run typecheck --workspace web-embed",
+    "verify:frontend-comments": "node tools/verify-frontend-comments.mjs",
     "verify:sql": "node tools/verify-sql-migrations.mjs"
   },
   "devDependencies": {

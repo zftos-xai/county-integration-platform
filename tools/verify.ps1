@@ -14,6 +14,8 @@ Push-Location $projectRoot
 try {
     Write-Host 'Checking SQL migration structure...'
     node ./tools/verify-sql-migrations.mjs
+    Write-Host 'Checking frontend documentation comments...'
+    node ./tools/verify-frontend-comments.mjs
     npm run typecheck
     npm run build
 } finally {

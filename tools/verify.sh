@@ -25,6 +25,7 @@ node "$project_root/tools/verify-sql-migrations.mjs"
 
 echo "Checking Vue applications..."
 cd "$project_root"
+node tools/verify-frontend-comments.mjs
 npm run typecheck
 npm run build
 node --test web-admin/tests/*.test.mjs

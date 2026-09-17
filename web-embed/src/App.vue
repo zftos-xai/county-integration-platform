@@ -1,3 +1,4 @@
+<!-- 工作站嵌入端入口：在安全上下文合同明确前不接收业务数据。 -->
 <script setup lang="ts">
 import { Link2, ShieldCheck } from 'lucide-vue-next'
 </script>

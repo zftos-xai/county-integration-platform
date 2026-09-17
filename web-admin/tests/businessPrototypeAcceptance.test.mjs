@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { scenarios } from '../src/prototypeData.ts'
-import { createRecoveryTasks, recoveryBlock } from '../src/recoveryWorkflow.ts'
+import { scenarios } from '../src/views/prototype/model/prototypeData.ts'
+import { createRecoveryTasks, recoveryBlock } from '../src/views/prototype/model/recoveryWorkflow.ts'
 
 const scenario = id => scenarios.find(item => item.id === id)
 const recovery = id => createRecoveryTasks().find(item => item.scenarioId === id)

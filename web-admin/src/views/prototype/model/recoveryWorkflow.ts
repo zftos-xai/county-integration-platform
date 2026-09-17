@@ -1,10 +1,14 @@
 /** Prototype-only workflow facts. No payload, real sending, deletion or vendor query occurs here. */
+/** 原型异常恢复场景类别。 */
 export type RecoveryKind = 'restart' | 'unknown' | 'version' | 'expiry'
+/** 原型恢复流程支持的用户动作。 */
 export type RecoveryAction = 'claim' | 'check' | 'resume' | 'written' | 'not-written' | 'uncertain' | 'hold-version' | 'request-version' | 'link-request' | 'stop' | 'confirm-cleanup' | 'clean-failed' | 'clean' | 'handoff'
+/** 执行原型恢复动作时可补充的办理信息。 */
 export type RecoveryDetails = {
   assignee?: string; nextCheckAt?: string; externalOwner?: string; externalDueAt?: string
   cleanupScope?: string; linkedRequestId?: string
 }
+/** 原型恢复事项的完整内存状态。 */
 export type RecoveryTask = {
   id: string; scenarioId: string; kind: RecoveryKind; title: string; owner: string
   status: string; dataStatus: string; target: string; originalVersion: string; latestVersion: string
@@ -16,15 +20,18 @@ export type RecoveryTask = {
   cleanupScope: string; cleanupScopeConfirmed: boolean; linkedRequestId: string
   history: { time: string; action: string; evidence: string; note: string }[]
 }
+/** 恢复场景类别的界面名称。 */
 export const recoveryKinds: Record<RecoveryKind, string> = {
   restart: '重启恢复', unknown: '结果未知', version: '报告版本变化', expiry: '数据到期',
 }
+/** 恢复动作的审计展示名称。 */
 export const recoveryActions: Record<RecoveryAction, string> = {
   claim: '领取核查', check: '检查恢复条件', resume: '恢复到待发送', written: '登记目标已写入',
   'not-written': '登记明确未写入', uncertain: '登记仍无法确认',
   'hold-version': '保持版本拦截', 'request-version': '登记外部处理', 'link-request': '关联新请求',
   stop: '停止后续发送', 'confirm-cleanup': '确认清理范围', 'clean-failed': '登记清理失败', clean: '执行到期清理', handoff: '登记后续责任',
 }
+/** 创建一组相互隔离的合成恢复事项。 */
 export function createRecoveryTasks(): RecoveryTask[] {
   const base = { owner: '平台运维', assignee: '', nextCheckAt: '', externalOwner: '', externalDueAt: '', cleanupScope: '', cleanupScopeConfirmed: false, linkedRequestId: '', originalVersion: '1', latestVersion: '1', checked: false, stopped: false,
     cleanupFailed: false, handoff: false, evidence: '', revision: 0, history: [], policy: 'SIM-POLICY-01（演示规则）' }
