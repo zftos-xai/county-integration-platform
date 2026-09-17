@@ -6,11 +6,12 @@ import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.system.domain.dto.CreateRoleCommand;
 import cn.zqkj.platform.system.domain.dto.CreateRoleRequest;
 import cn.zqkj.platform.system.domain.dto.ReplacePermissionCodesRequest;
-import cn.zqkj.platform.system.domain.vo.PermissionVO;
-import cn.zqkj.platform.system.service.RoleAdministrationService;
-import cn.zqkj.platform.system.domain.vo.RoleVO;
 import cn.zqkj.platform.system.domain.dto.UpdateRoleCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateRoleRequest;
+import cn.zqkj.platform.system.domain.model.AccessActor;
+import cn.zqkj.platform.system.domain.vo.PermissionVO;
+import cn.zqkj.platform.system.domain.vo.RoleVO;
+import cn.zqkj.platform.system.service.RoleAdministrationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
@@ -67,7 +68,7 @@ public class RoleAdministrationController {
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.create(
-                new CreateRoleCommand(request.roleCode(), request.roleName()), principal.getUsername()
+                new CreateRoleCommand(request.roleCode(), request.roleName()), actor(principal)
         ));
     }
 
@@ -81,7 +82,7 @@ public class RoleAdministrationController {
     ) {
         return ApiResponse.success(service.update(roleId, new UpdateRoleCommand(
                 request.roleName(), request.enabled(), decodeVersion(request.version())
-        ), principal.getUsername()));
+        ), actor(principal)));
     }
 
     /** @param roleId 角色主键 @param request 权限请求 @param principal 当前主体 @return 修改后角色 */
@@ -93,7 +94,7 @@ public class RoleAdministrationController {
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.replacePermissions(
-                roleId, request.permissionCodes(), principal.getUsername()
+                roleId, request.permissionCodes(), actor(principal)
         ));
     }
 
@@ -102,6 +103,11 @@ public class RoleAdministrationController {
     @PreAuthorize("hasAuthority('access:read')")
     public ApiResponse<List<PermissionVO>> findPermissions() {
         return ApiResponse.success(service.findPermissions());
+    }
+
+    /** @param principal 当前主体 @return 审计操作人 */
+    private AccessActor actor(PlatformUserPrincipal principal) {
+        return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
 
     /** @param value Base64版本 @return 8字节并发版本 */

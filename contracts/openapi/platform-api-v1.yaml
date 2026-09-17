@@ -477,6 +477,249 @@ paths:
         '403': { description: 'organization:write permission is required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/parameter-definitions:
+    get:
+      operationId: listParameterDefinitions
+      summary: List code-registered platform parameter metadata
+      responses:
+        '200':
+          description: Registered metadata used to build explicit management forms
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParameterDefinitionListResponse' }
+        '403': { description: 'configuration:read permission is required' }
+  /configuration/parameters:
+    get:
+      operationId: listParameterValues
+      summary: List global and authorized organization-scoped parameter values
+      responses:
+        '200':
+          description: Parameter values visible to the authenticated administrator
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParameterValueListResponse' }
+        '403': { description: 'configuration:read permission is required' }
+  /configuration/parameters/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_.-]*$' }
+    put:
+      operationId: upsertParameterValue
+      summary: Create or concurrently update a value for a code-registered parameter
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpsertParameterRequest' }
+      responses:
+        '200':
+          description: Parameter value saved; sensitive values are masked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParameterValueResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission and organization scope are required' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/dictionaries:
+    get:
+      operationId: listDictionaryTypes
+      summary: List platform system dictionary types
+      responses:
+        '200':
+          description: Platform system dictionary types
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DictionaryTypeListResponse' }
+        '403': { description: 'configuration:read permission is required' }
+    post:
+      operationId: createDictionaryType
+      summary: Create a platform system dictionary type
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDictionaryTypeRequest' }
+      responses:
+        '201':
+          description: Dictionary type created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DictionaryTypeResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission is required' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/dictionaries/{typeId}:
+    parameters:
+      - name: typeId
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    put:
+      operationId: updateDictionaryType
+      summary: Concurrently update or disable a platform system dictionary type
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateDictionaryTypeRequest' }
+      responses:
+        '200':
+          description: Dictionary type updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DictionaryTypeResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/dictionaries/{typeId}/items:
+    parameters:
+      - name: typeId
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    get:
+      operationId: listDictionaryItems
+      summary: List items in a platform system dictionary type
+      parameters:
+        - name: includeDisabled
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Dictionary items ordered by sort order and item code
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DictionaryItemListResponse' }
+        '403': { description: 'configuration:read permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+    post:
+      operationId: createDictionaryItem
+      summary: Add an item to an enabled platform system dictionary type
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDictionaryItemRequest' }
+      responses:
+        '201':
+          description: Dictionary item created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DictionaryItemResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/dictionary-items/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    put:
+      operationId: updateDictionaryItem
+      summary: Concurrently update or disable a platform system dictionary item
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateDictionaryItemRequest' }
+      responses:
+        '200':
+          description: Dictionary item updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DictionaryItemResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/external-systems:
+    get:
+      operationId: listExternalSystems
+      summary: List confirmed external systems
+      responses:
+        '200': { description: External systems, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemListResponse' } } } }
+        '403': { description: 'configuration:read permission is required' }
+    post:
+      operationId: createExternalSystem
+      summary: Register a confirmed external system
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateExternalSystemRequest' } } } }
+      responses:
+        '201': { description: External system created, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission is required' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/external-systems/{systemId}:
+    parameters:
+      - { name: systemId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    put:
+      operationId: updateExternalSystem
+      summary: Concurrently update or disable an external system
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateExternalSystemRequest' } } } }
+      responses:
+        '200': { description: External system updated, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/external-systems/{systemId}/endpoints:
+    parameters:
+      - { name: systemId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    get:
+      operationId: listExternalEndpoints
+      summary: List global and authorized organization-scoped endpoints
+      responses:
+        '200': { description: Safe endpoint metadata without credential references, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointListResponse' } } } }
+        '403': { description: 'configuration:read permission and organization scope are required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+    post:
+      operationId: createExternalEndpoint
+      summary: Create a disabled endpoint for later review and enablement
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateExternalEndpointRequest' } } } }
+      responses:
+        '201': { description: Disabled endpoint created, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission and organization scope are required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/external-endpoints/{endpointId}:
+    parameters:
+      - { name: endpointId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    put:
+      operationId: updateExternalEndpoint
+      summary: Concurrently update or enable an authorized endpoint
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateExternalEndpointRequest' } } } }
+      responses:
+        '200': { description: Safe endpoint metadata without credential reference, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission and organization scope are required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+  /audit/events:
+    get:
+      operationId: listManagementAuditEvents
+      summary: List management audit events visible in the current organization scope
+      parameters:
+        - { name: targetType, in: query, required: false, schema: { type: string, maxLength: 64 } }
+        - { name: targetId, in: query, required: false, schema: { type: string, maxLength: 128 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        '200': { description: Time-descending, redacted audit events, content: { application/json: { schema: { $ref: '#/components/schemas/ManagementAuditEventListResponse' } } } }
+        '403': { description: 'audit:read permission is required' }
 components:
   parameters:
     CsrfHeader:
@@ -824,6 +1067,274 @@ components:
       properties:
         enabled: { type: boolean }
         version: { type: string, format: byte, description: Base64-encoded 8-byte SQL Server rowversion }
+    ParameterDefinitionListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { type: array, items: { $ref: '#/components/schemas/ParameterDefinition' } }
+    ParameterDefinition:
+      type: object
+      required: [key, name, valueType, environments, organizationScoped, sensitive]
+      properties:
+        key: { type: string, maxLength: 64 }
+        name: { type: string }
+        valueType: { type: string, enum: [STRING, INTEGER, DECIMAL, BOOLEAN] }
+        environments:
+          type: array
+          uniqueItems: true
+          items: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
+        organizationScoped: { type: boolean }
+        sensitive: { type: boolean }
+        maximumLength: { type: integer, nullable: true }
+        minimumNumber: { type: number, nullable: true }
+        maximumNumber: { type: number, nullable: true }
+        pattern: { type: string, nullable: true }
+    UpsertParameterRequest:
+      type: object
+      required: [environment, value, enabled]
+      properties:
+        environment: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
+        organizationId: { type: integer, format: int64, minimum: 1, nullable: true }
+        value:
+          type: string
+          maxLength: 1000
+          writeOnly: true
+          description: Validated against code-registered metadata; must never contain an external-system plaintext credential
+        enabled: { type: boolean }
+        version:
+          type: string
+          format: byte
+          nullable: true
+          description: Omit only when creating a previously absent scope value
+    ParameterValueListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { type: array, items: { $ref: '#/components/schemas/ParameterValue' } }
+    ParameterValueResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/ParameterValue' }
+    ParameterValue:
+      type: object
+      required: [id, parameterKey, valueType, environment, value, configured, enabled, updatedAt, version]
+      properties:
+        id: { type: integer, format: int64 }
+        parameterKey: { type: string }
+        valueType: { type: string, enum: [STRING, INTEGER, DECIMAL, BOOLEAN] }
+        environment: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
+        organizationId: { type: integer, format: int64, nullable: true }
+        organizationCode: { type: string, nullable: true }
+        value:
+          type: string
+          description: Fixed mask for sensitive definitions; never use this field to recover a secret
+        configured: { type: boolean }
+        enabled: { type: boolean }
+        updatedAt: { type: string, format: date-time, description: UTC }
+        version: { type: string, format: byte }
+    DictionaryTypeListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { type: array, items: { $ref: '#/components/schemas/DictionaryType' } }
+    DictionaryTypeResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/DictionaryType' }
+    DictionaryType:
+      type: object
+      required: [id, typeCode, typeName, description, enabled, createdAt, updatedAt, version]
+      properties:
+        id: { type: integer, format: int64 }
+        typeCode: { type: string, maxLength: 64 }
+        typeName: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time, description: UTC }
+        updatedAt: { type: string, format: date-time, description: UTC }
+        version: { type: string, format: byte }
+    CreateDictionaryTypeRequest:
+      type: object
+      required: [typeCode, typeName, description]
+      properties:
+        typeCode: { type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z][A-Za-z0-9_.-]*$' }
+        typeName: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, minLength: 1, maxLength: 500 }
+    UpdateDictionaryTypeRequest:
+      type: object
+      required: [typeName, description, enabled, version]
+      properties:
+        typeName: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, minLength: 1, maxLength: 500 }
+        enabled: { type: boolean }
+        version: { type: string, format: byte }
+    DictionaryItemListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { type: array, items: { $ref: '#/components/schemas/DictionaryItem' } }
+    DictionaryItemResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/DictionaryItem' }
+    DictionaryItem:
+      type: object
+      required: [id, dictionaryTypeId, itemCode, itemLabel, sortOrder, enabled, createdAt, updatedAt, version]
+      properties:
+        id: { type: integer, format: int64 }
+        dictionaryTypeId: { type: integer, format: int64 }
+        itemCode: { type: string, maxLength: 64 }
+        itemLabel: { type: string, maxLength: 200 }
+        sortOrder: { type: integer, minimum: 0, maximum: 999999 }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time, description: UTC }
+        updatedAt: { type: string, format: date-time, description: UTC }
+        version: { type: string, format: byte }
+    CreateDictionaryItemRequest:
+      type: object
+      required: [itemCode, itemLabel, sortOrder]
+      properties:
+        itemCode: { type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z][A-Za-z0-9_.-]*$' }
+        itemLabel: { type: string, minLength: 1, maxLength: 200 }
+        sortOrder: { type: integer, minimum: 0, maximum: 999999 }
+    UpdateDictionaryItemRequest:
+      type: object
+      required: [itemLabel, sortOrder, enabled, version]
+      properties:
+        itemLabel: { type: string, minLength: 1, maxLength: 200 }
+        sortOrder: { type: integer, minimum: 0, maximum: 999999 }
+        enabled: { type: boolean }
+        version: { type: string, format: byte }
+    ExternalSystemListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { type: array, items: { $ref: '#/components/schemas/ExternalSystem' } }
+    ExternalSystemResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/ExternalSystem' }
+    ExternalSystem:
+      type: object
+      required: [id, systemCode, systemName, description, enabled, createdAt, updatedAt, version]
+      properties:
+        id: { type: integer, format: int64 }
+        systemCode: { type: string, maxLength: 64 }
+        systemName: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time, description: UTC }
+        updatedAt: { type: string, format: date-time, description: UTC }
+        version: { type: string, format: byte }
+    CreateExternalSystemRequest:
+      type: object
+      required: [systemCode, systemName, description]
+      properties:
+        systemCode: { type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z][A-Za-z0-9_.-]*$' }
+        systemName: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, minLength: 1, maxLength: 500 }
+    UpdateExternalSystemRequest:
+      type: object
+      required: [systemName, description, enabled, version]
+      properties:
+        systemName: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, minLength: 1, maxLength: 500 }
+        enabled: { type: boolean }
+        version: { type: string, format: byte }
+    ExternalEndpointListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { type: array, items: { $ref: '#/components/schemas/ExternalEndpoint' } }
+    ExternalEndpointResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/ExternalEndpoint' }
+    ExternalEndpoint:
+      type: object
+      required: [id, externalSystemId, environment, baseUrl, connectTimeoutMs, readTimeoutMs, credentialConfigured, enabled, createdAt, updatedAt, version]
+      properties:
+        id: { type: integer, format: int64 }
+        externalSystemId: { type: integer, format: int64 }
+        environment: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
+        organizationId: { type: integer, format: int64, nullable: true }
+        organizationCode: { type: string, nullable: true }
+        baseUrl: { type: string, format: uri, pattern: '^https://' }
+        connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
+        readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
+        credentialConfigured: { type: boolean, description: The credential reference itself is never returned }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time, description: UTC }
+        updatedAt: { type: string, format: date-time, description: UTC }
+        version: { type: string, format: byte }
+    CreateExternalEndpointRequest:
+      type: object
+      required: [environment, baseUrl, connectTimeoutMs, readTimeoutMs, credentialReference]
+      properties:
+        environment: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
+        organizationId: { type: integer, format: int64, minimum: 1, nullable: true }
+        baseUrl: { type: string, format: uri, maxLength: 500, pattern: '^https://' }
+        connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
+        readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
+        credentialReference: { type: string, minLength: 1, maxLength: 200, writeOnly: true, description: Approved secret-store reference URI; never a plaintext credential }
+    UpdateExternalEndpointRequest:
+      type: object
+      required: [baseUrl, connectTimeoutMs, readTimeoutMs, credentialReference, enabled, version]
+      properties:
+        baseUrl: { type: string, format: uri, maxLength: 500, pattern: '^https://' }
+        connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
+        readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
+        credentialReference: { type: string, minLength: 1, maxLength: 200, writeOnly: true, description: Approved secret-store reference URI; never returned }
+        enabled: { type: boolean }
+        version: { type: string, format: byte }
+    ManagementAuditEventListResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data: { type: array, items: { $ref: '#/components/schemas/ManagementAuditEvent' } }
+    ManagementAuditEvent:
+      type: object
+      required: [id, occurredAt, actorLogin, actionCode, targetType, targetId, resultCode, changeSummary]
+      properties:
+        id: { type: integer, format: int64 }
+        occurredAt: { type: string, format: date-time, description: UTC }
+        actorLogin: { type: string, description: Trusted login snapshot or masked hint for an authentication failure }
+        organizationCode: { type: string, nullable: true }
+        actionCode: { type: string, maxLength: 64 }
+        targetType: { type: string, maxLength: 64 }
+        targetId: { type: string, maxLength: 128 }
+        resultCode: { type: string, enum: [SUCCESS, FAILURE] }
+        changeSummary: { type: string, maxLength: 1000, description: Redacted summary without credentials or business content }
+        requestId: { type: string, maxLength: 64, nullable: true }
     ApiError:
       type: object
       required: [code, message, timestamp]

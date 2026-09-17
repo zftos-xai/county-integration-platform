@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.system.mapper.ManagementAuditMapper">
+    <resultMap id="managementAuditEvent" type="cn.zqkj.platform.system.domain.model.ManagementAuditEvent">
+        <constructor>
+            <arg column="id" javaType="_long"/><arg column="occurred_at" javaType="java.time.LocalDateTime"/>
+            <arg column="actor_user_id" javaType="java.lang.Long"/><arg column="actor_login_snapshot" javaType="java.lang.String"/>
+            <arg column="organization_id" javaType="java.lang.Long"/><arg column="organization_code_snapshot" javaType="java.lang.String"/>
+            <arg column="action_code" javaType="java.lang.String"/><arg column="target_type" javaType="java.lang.String"/>
+            <arg column="target_id" javaType="java.lang.String"/><arg column="result_code" javaType="java.lang.String"/>
+            <arg column="change_summary" javaType="java.lang.String"/><arg column="request_id" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="insert" resultType="long" affectData="true">
+        INSERT INTO audit_management_event
+            (actor_user_id, actor_login_snapshot, organization_id, organization_code_snapshot,
+             action_code, target_type, target_id, result_code, change_summary, request_id)
+        VALUES
+            (<choose><when test="actor != null">#{actor.userId}</when><otherwise>NULL</otherwise></choose>,
+             <choose><when test="actor != null">#{actor.loginName}</when><otherwise>#{actorHint}</otherwise></choose>,
+             #{organizationId}, #{organizationCode}, #{actionCode}, #{targetType}, #{targetId},
+             #{resultCode}, #{changeSummary}, #{requestId});
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <select id="findVisible" resultMap="managementAuditEvent">
+        SELECT TOP (#{limit}) id, occurred_at, actor_user_id, actor_login_snapshot, organization_id,
+               organization_code_snapshot, action_code, target_type, target_id, result_code,
+               change_summary, request_id
+        FROM audit_management_event
+        WHERE (organization_code_snapshot IS NULL
+            <if test="organizationCodes != null and !organizationCodes.isEmpty()">
+                OR organization_code_snapshot IN
+                <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">#{code}</foreach>
+            </if>
+        )
+        <if test="targetType != null">AND target_type = #{targetType}</if>
+        <if test="targetId != null">AND target_id = #{targetId}</if>
+        ORDER BY occurred_at DESC, id DESC
+    </select>
+</mapper>

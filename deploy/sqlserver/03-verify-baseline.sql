@@ -59,3 +59,79 @@ BEGIN
     SELECT N'Flyway尚未执行，未发现dbo.flyway_schema_history。' AS flyway_status;
 END;
 GO
+
+-- 输出平台业务表的中文名称；MS_Description为空表示主版本不合格。
+SELECT
+    table_schema.[name] AS schema_name,
+    business_table.[name] AS table_name,
+    CONVERT(nvarchar(4000), table_description.[value]) AS table_description
+FROM sys.tables AS business_table
+INNER JOIN sys.schemas AS table_schema
+    ON table_schema.[schema_id] = business_table.[schema_id]
+LEFT JOIN sys.extended_properties AS table_description
+    ON table_description.[class] = 1
+   AND table_description.[major_id] = business_table.[object_id]
+   AND table_description.[minor_id] = 0
+   AND table_description.[name] = N'MS_Description'
+WHERE table_schema.[name] = N'dbo'
+  AND business_table.[name] <> N'flyway_schema_history'
+ORDER BY business_table.[name];
+
+-- 输出平台业务字段的中文名称，便于SSMS外的数据字典核对。
+SELECT
+    business_table.[name] AS table_name,
+    business_column.[column_id],
+    business_column.[name] AS column_name,
+    CONVERT(nvarchar(4000), column_description.[value]) AS column_description
+FROM sys.tables AS business_table
+INNER JOIN sys.schemas AS table_schema
+    ON table_schema.[schema_id] = business_table.[schema_id]
+INNER JOIN sys.columns AS business_column
+    ON business_column.[object_id] = business_table.[object_id]
+LEFT JOIN sys.extended_properties AS column_description
+    ON column_description.[class] = 1
+   AND column_description.[major_id] = business_column.[object_id]
+   AND column_description.[minor_id] = business_column.[column_id]
+   AND column_description.[name] = N'MS_Description'
+WHERE table_schema.[name] = N'dbo'
+  AND business_table.[name] <> N'flyway_schema_history'
+ORDER BY business_table.[name], business_column.[column_id];
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.tables AS business_table
+    INNER JOIN sys.schemas AS table_schema
+        ON table_schema.[schema_id] = business_table.[schema_id]
+    LEFT JOIN sys.extended_properties AS table_description
+        ON table_description.[class] = 1
+       AND table_description.[major_id] = business_table.[object_id]
+       AND table_description.[minor_id] = 0
+       AND table_description.[name] = N'MS_Description'
+    WHERE table_schema.[name] = N'dbo'
+      AND business_table.[name] <> N'flyway_schema_history'
+      AND table_description.[value] IS NULL
+)
+BEGIN
+    RAISERROR(N'存在缺少中文表注释的业务表。', 16, 1);
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.tables AS business_table
+    INNER JOIN sys.schemas AS table_schema
+        ON table_schema.[schema_id] = business_table.[schema_id]
+    INNER JOIN sys.columns AS business_column
+        ON business_column.[object_id] = business_table.[object_id]
+    LEFT JOIN sys.extended_properties AS column_description
+        ON column_description.[class] = 1
+       AND column_description.[major_id] = business_column.[object_id]
+       AND column_description.[minor_id] = business_column.[column_id]
+       AND column_description.[name] = N'MS_Description'
+    WHERE table_schema.[name] = N'dbo'
+      AND business_table.[name] <> N'flyway_schema_history'
+      AND column_description.[value] IS NULL
+)
+BEGIN
+    RAISERROR(N'存在缺少中文字段注释的业务字段。', 16, 1);
+END;
+GO

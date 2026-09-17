@@ -7,6 +7,7 @@ import cn.zqkj.platform.system.domain.vo.BootstrapResultVO;
 import cn.zqkj.platform.system.domain.vo.BootstrapStatusVO;
 import cn.zqkj.platform.system.mapper.IdentityMapper;
 import cn.zqkj.platform.system.service.IdentityService;
+import cn.zqkj.platform.system.service.ManagementAuditService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -45,6 +46,9 @@ class IdentitySecurityWebTest {
 
     @MockitoBean
     private IdentityService identityService;
+
+    @MockitoBean
+    private ManagementAuditService managementAuditService;
 
     @MockitoBean
     private IdentityMapper identityMapper;

@@ -3,14 +3,16 @@ package cn.zqkj.platform.system.service.impl;
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.common.exception.ResourceNotFoundException;
-import cn.zqkj.platform.system.domain.model.AccessActor;
 import cn.zqkj.platform.system.domain.dto.CreateUserCommand;
+import cn.zqkj.platform.system.domain.dto.ManagementAuditCommand;
+import cn.zqkj.platform.system.domain.dto.UpdateUserCommand;
+import cn.zqkj.platform.system.domain.model.AccessActor;
 import cn.zqkj.platform.system.domain.model.ManagedUserSummary;
+import cn.zqkj.platform.system.domain.model.RoleSummary;
 import cn.zqkj.platform.system.domain.vo.ManagedUserVO;
 import cn.zqkj.platform.system.domain.vo.OrganizationVO;
-import cn.zqkj.platform.system.domain.model.RoleSummary;
-import cn.zqkj.platform.system.domain.dto.UpdateUserCommand;
 import cn.zqkj.platform.system.mapper.AccessMapper;
+import cn.zqkj.platform.system.service.ManagementAuditService;
 import cn.zqkj.platform.system.service.OrganizationService;
 import cn.zqkj.platform.system.service.UserAdministrationService;
 import org.springframework.security.access.AccessDeniedException;
@@ -35,6 +37,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     private final AccessMapper mapper;
     private final OrganizationService organizationService;
     private final PasswordEncoder passwordEncoder;
+    private final ManagementAuditService auditService;
 
     /**
      * 创建用户管理服务。
@@ -42,15 +45,18 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
      * @param mapper 授权持久化边界
      * @param organizationService 机构应用服务
      * @param passwordEncoder 密码哈希器
+     * @param auditService 管理审计服务
      */
     public UserAdministrationServiceImpl(
             AccessMapper mapper,
             OrganizationService organizationService,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            ManagementAuditService auditService
     ) {
         this.mapper = mapper;
         this.organizationService = organizationService;
         this.passwordEncoder = passwordEncoder;
+        this.auditService = auditService;
     }
 
     /**
@@ -108,7 +114,9 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
                 normalized, passwordEncoder.encode(command.temporaryPassword()), actor.loginName()
         );
         mapper.replaceUserOrganizations(userId, List.of(organization.id()), actor.loginName());
-        return get(userId, actor);
+        ManagedUserVO created = get(userId, actor);
+        audit(actor, created, "USER_CREATED", "创建用户并授予主机构范围");
+        return created;
     }
 
     /**
@@ -139,7 +147,9 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
             updatedScopes.add(organization.id());
             mapper.replaceUserOrganizations(userId, distinctPositiveIds(updatedScopes), actor.loginName());
         }
-        return get(userId, actor);
+        ManagedUserVO updated = get(userId, actor);
+        audit(actor, updated, "USER_UPDATED", "修改用户基础信息和主机构");
+        return updated;
     }
 
     /**
@@ -164,7 +174,10 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         if (mapper.setUserEnabled(userId, enabled, expectedVersion, actor.loginName()) != 1) {
             throw new ResourceConflictException("User version no longer matches");
         }
-        return get(userId, actor);
+        ManagedUserVO updated = get(userId, actor);
+        audit(actor, updated, enabled ? "USER_ENABLED" : "USER_DISABLED",
+                enabled ? "启用用户" : "停用用户");
+        return updated;
     }
 
     /**
@@ -185,6 +198,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         ) != 1) {
             throw new ResourceConflictException("User password reset failed");
         }
+        audit(actor, current, "USER_PASSWORD_RESET", "重置临时密码并要求下次登录修改；未记录密码");
     }
 
     /**
@@ -215,7 +229,9 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
             throw new ResourceConflictException("The last enabled platform administrator must retain its role");
         }
         mapper.replaceUserRoles(userId, normalized, actor.loginName());
-        return get(userId, actor);
+        ManagedUserVO updated = get(userId, actor);
+        audit(actor, updated, "USER_ROLES_REPLACED", "替换用户角色；角色数量=" + normalized.size());
+        return updated;
     }
 
     /**
@@ -244,7 +260,24 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
             requireAccess(actor, organization.organizationCode());
         }
         mapper.replaceUserOrganizations(userId, normalized, actor.loginName());
-        return get(userId, actor);
+        ManagedUserVO updated = get(userId, actor);
+        audit(actor, updated, "USER_ORGANIZATION_SCOPES_REPLACED",
+                "替换用户机构范围；机构数量=" + normalized.size());
+        return updated;
+    }
+
+    /** @param actor 操作人 @param user 用户 @param action 动作 @param summary 脱敏摘要 */
+    private void audit(AccessActor actor, ManagedUserVO user, String action, String summary) {
+        auditService.recordSuccess(new ManagementAuditCommand(actor, null, user.primaryOrganizationId(),
+                user.organizationCode(), action, "USER", user.loginName(), "SUCCESS", summary,
+                ManagementAuditServiceImpl.currentRequestId()));
+    }
+
+    /** @param actor 操作人 @param user 用户 @param action 动作 @param summary 脱敏摘要 */
+    private void audit(AccessActor actor, ManagedUserSummary user, String action, String summary) {
+        auditService.recordSuccess(new ManagementAuditCommand(actor, null, user.primaryOrganizationId(),
+                user.organizationCode(), action, "USER", user.loginName(), "SUCCESS", summary,
+                ManagementAuditServiceImpl.currentRequestId()));
     }
 
     /**

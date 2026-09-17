@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.system.mapper.ConfigurationMapper">
+    <resultMap id="parameterValue" type="cn.zqkj.platform.system.domain.model.ParameterValue">
+        <constructor>
+            <!-- 参数值内部主键 -->
+            <arg column="id" javaType="_long"/>
+            <!-- 代码注册参数键 -->
+            <arg column="parameter_key" javaType="java.lang.String"/>
+            <!-- 保存时的代码注册值类型 -->
+            <arg column="value_type" javaType="cn.zqkj.platform.system.domain.model.ParameterValueType"/>
+            <!-- 参数部署环境 -->
+            <arg column="environment_code" javaType="cn.zqkj.platform.system.domain.model.ParameterEnvironment"/>
+            <!-- 可选机构作用域主键 -->
+            <arg column="organization_id" javaType="java.lang.Long"/>
+            <!-- 可选机构作用域代码 -->
+            <arg column="organization_code" javaType="java.lang.String"/>
+            <!-- 经类型校验的参数值 -->
+            <arg column="parameter_value" javaType="java.lang.String"/>
+            <!-- 参数值是否启用 -->
+            <arg column="is_enabled" javaType="_boolean"/>
+            <!-- 参数值创建UTC时间 -->
+            <arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <!-- 参数值最后修改UTC时间 -->
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/>
+            <!-- SQL Server并发版本 -->
+            <arg column="row_version" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="dictionaryType" type="cn.zqkj.platform.system.domain.model.DictionaryType">
+        <constructor>
+            <!-- 字典类型内部主键 -->
+            <arg column="id" javaType="_long"/>
+            <!-- 稳定字典类型代码 -->
+            <arg column="type_code" javaType="java.lang.String"/>
+            <!-- 字典类型展示名称 -->
+            <arg column="type_name" javaType="java.lang.String"/>
+            <!-- 字典类型用途说明 -->
+            <arg column="description" javaType="java.lang.String"/>
+            <!-- 字典类型是否启用 -->
+            <arg column="is_enabled" javaType="_boolean"/>
+            <!-- 字典类型创建UTC时间 -->
+            <arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <!-- 字典类型最后修改UTC时间 -->
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/>
+            <!-- SQL Server并发版本 -->
+            <arg column="row_version" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="dictionaryItem" type="cn.zqkj.platform.system.domain.model.DictionaryItem">
+        <constructor>
+            <!-- 字典项内部主键 -->
+            <arg column="id" javaType="_long"/>
+            <!-- 所属字典类型主键 -->
+            <arg column="dictionary_type_id" javaType="_long"/>
+            <!-- 类型内稳定项代码 -->
+            <arg column="item_code" javaType="java.lang.String"/>
+            <!-- 字典项展示文本 -->
+            <arg column="item_label" javaType="java.lang.String"/>
+            <!-- 字典项展示顺序 -->
+            <arg column="sort_order" javaType="_int"/>
+            <!-- 字典项是否启用 -->
+            <arg column="is_enabled" javaType="_boolean"/>
+            <!-- 字典项创建UTC时间 -->
+            <arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <!-- 字典项最后修改UTC时间 -->
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/>
+            <!-- SQL Server并发版本 -->
+            <arg column="row_version" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="externalSystem" type="cn.zqkj.platform.system.domain.model.ExternalSystem">
+        <constructor>
+            <arg column="id" javaType="_long"/><arg column="system_code" javaType="java.lang.String"/>
+            <arg column="system_name" javaType="java.lang.String"/><arg column="description" javaType="java.lang.String"/>
+            <arg column="is_enabled" javaType="_boolean"/><arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/><arg column="row_version" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="externalEndpoint" type="cn.zqkj.platform.system.domain.model.ExternalEndpoint">
+        <constructor>
+            <arg column="id" javaType="_long"/><arg column="external_system_id" javaType="_long"/>
+            <arg column="environment_code" javaType="cn.zqkj.platform.system.domain.model.ParameterEnvironment"/>
+            <arg column="organization_id" javaType="java.lang.Long"/><arg column="organization_code" javaType="java.lang.String"/>
+            <arg column="base_url" javaType="java.lang.String"/><arg column="connect_timeout_ms" javaType="_int"/>
+            <arg column="read_timeout_ms" javaType="_int"/><arg column="credential_reference" javaType="java.lang.String"/>
+            <arg column="is_enabled" javaType="_boolean"/><arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/><arg column="row_version" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="parameterValueColumns">
+        values_table.id,                  <!-- 参数值内部主键 -->
+        values_table.parameter_key,       <!-- 代码注册参数键 -->
+        values_table.value_type,          <!-- 保存时的注册值类型 -->
+        values_table.environment_code,    <!-- 部署环境代码 -->
+        values_table.organization_id,     <!-- 可选机构作用域主键 -->
+        organizations.organization_code, <!-- 可选机构作用域代码 -->
+        values_table.parameter_value,     <!-- 经类型和范围校验的参数值 -->
+        values_table.is_enabled,          <!-- 参数值是否启用 -->
+        values_table.created_at,          <!-- 创建UTC时间 -->
+        values_table.updated_at,          <!-- 最后修改UTC时间 -->
+        values_table.row_version          <!-- SQL Server并发版本 -->
+    </sql>
+
+    <sql id="dictionaryTypeColumns">
+        id,          <!-- 字典类型内部主键 -->
+        type_code,   <!-- 稳定类型代码 -->
+        type_name,   <!-- 展示名称 -->
+        description,<!-- 平台用途说明 -->
+        is_enabled,  <!-- 是否启用 -->
+        created_at,  <!-- 创建UTC时间 -->
+        updated_at,  <!-- 最后修改UTC时间 -->
+        row_version  <!-- SQL Server并发版本 -->
+    </sql>
+
+    <sql id="dictionaryItemColumns">
+        id,                 <!-- 字典项内部主键 -->
+        dictionary_type_id,<!-- 所属字典类型主键 -->
+        item_code,          <!-- 类型内稳定项代码 -->
+        item_label,         <!-- 展示文本 -->
+        sort_order,         <!-- 展示顺序 -->
+        is_enabled,         <!-- 是否启用 -->
+        created_at,         <!-- 创建UTC时间 -->
+        updated_at,         <!-- 最后修改UTC时间 -->
+        row_version         <!-- SQL Server并发版本 -->
+    </sql>
+
+    <select id="findParameterValues" resultMap="parameterValue">
+        SELECT <include refid="parameterValueColumns"/>
+        FROM sys_parameter_value AS values_table
+        LEFT JOIN org_organization AS organizations ON organizations.id = values_table.organization_id
+        <!-- 按参数键、环境和机构稳定排序 -->
+        ORDER BY values_table.parameter_key, values_table.environment_code, organizations.organization_code,
+                 values_table.id
+    </select>
+
+    <select id="findParameterValue" resultMap="parameterValue">
+        SELECT <include refid="parameterValueColumns"/>
+        FROM sys_parameter_value AS values_table
+        LEFT JOIN org_organization AS organizations ON organizations.id = values_table.organization_id
+        WHERE values_table.parameter_key = #{key}
+          AND values_table.environment_code = #{command.environment}
+        <choose>
+            <when test="command.organizationId != null">
+                AND values_table.organization_id = #{command.organizationId}
+            </when>
+            <otherwise>
+                AND values_table.organization_id IS NULL
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="createParameterValue" resultType="long" affectData="true">
+        INSERT INTO sys_parameter_value (
+            <!-- 注册参数键、类型、部署环境和可选机构作用域 -->
+            parameter_key, value_type, environment_code, organization_id, parameter_value,
+            <!-- 启用状态和创建、修改主体 -->
+            is_enabled, created_by, updated_by
+        ) VALUES (
+            #{key}, #{valueType}, #{command.environment}, #{command.organizationId}, #{command.value},
+            #{command.enabled}, #{actor}, #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <update id="updateParameterValue">
+        UPDATE sys_parameter_value
+        <!-- 同步当前注册类型、规范化值、启用状态和修改主体 -->
+        SET value_type = #{valueType}, parameter_value = #{command.value}, is_enabled = #{command.enabled},
+            updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        <!-- 内部主键确定目标，rowversion防止并发覆盖 -->
+        WHERE id = #{id} AND row_version = #{command.expectedVersion}
+    </update>
+
+    <select id="findDictionaryTypes" resultMap="dictionaryType">
+        SELECT <include refid="dictionaryTypeColumns"/>
+        FROM sys_dictionary_type
+        ORDER BY type_code, id
+    </select>
+
+    <select id="findDictionaryType" resultMap="dictionaryType">
+        SELECT <include refid="dictionaryTypeColumns"/>
+        FROM sys_dictionary_type
+        WHERE id = #{typeId}
+    </select>
+
+    <select id="dictionaryTypeCodeExists" resultType="boolean">
+        SELECT CASE WHEN EXISTS (
+            SELECT 1 FROM sys_dictionary_type WHERE type_code = #{typeCode}
+        ) THEN 1 ELSE 0 END
+    </select>
+
+    <select id="createDictionaryType" resultType="long" affectData="true">
+        INSERT INTO sys_dictionary_type (
+            <!-- 类型代码、展示名称、用途说明、初始状态和创建修改主体 -->
+            type_code, type_name, description, is_enabled, created_by, updated_by
+        ) VALUES (
+            #{command.typeCode}, #{command.typeName}, #{command.description}, 1, #{actor}, #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <update id="updateDictionaryType">
+        UPDATE sys_dictionary_type
+        <!-- 修改展示信息、启用状态、修改主体和UTC时间 -->
+        SET type_name = #{command.typeName}, description = #{command.description},
+            is_enabled = #{command.enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        <!-- 内部主键确定目标，rowversion防止并发覆盖 -->
+        WHERE id = #{typeId} AND row_version = #{command.expectedVersion}
+    </update>
+
+    <select id="findDictionaryItems" resultMap="dictionaryItem">
+        SELECT <include refid="dictionaryItemColumns"/>
+        FROM sys_dictionary_item
+        WHERE dictionary_type_id = #{typeId}
+        <if test="!includeDisabled">
+            AND is_enabled = 1
+        </if>
+        ORDER BY sort_order, item_code, id
+    </select>
+
+    <select id="findDictionaryItem" resultMap="dictionaryItem">
+        SELECT <include refid="dictionaryItemColumns"/>
+        FROM sys_dictionary_item
+        WHERE id = #{itemId}
+    </select>
+
+    <select id="dictionaryItemCodeExists" resultType="boolean">
+        SELECT CASE WHEN EXISTS (
+            SELECT 1 FROM sys_dictionary_item
+            WHERE dictionary_type_id = #{typeId} AND item_code = #{itemCode}
+        ) THEN 1 ELSE 0 END
+    </select>
+
+    <select id="createDictionaryItem" resultType="long" affectData="true">
+        INSERT INTO sys_dictionary_item (
+            <!-- 所属类型、项代码、展示文本、顺序、初始状态和创建修改主体 -->
+            dictionary_type_id, item_code, item_label, sort_order, is_enabled, created_by, updated_by
+        ) VALUES (
+            #{typeId}, #{command.itemCode}, #{command.itemLabel}, #{command.sortOrder}, 1, #{actor}, #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <update id="updateDictionaryItem">
+        UPDATE sys_dictionary_item
+        <!-- 修改展示文本、顺序、启用状态、修改主体和UTC时间 -->
+        SET item_label = #{command.itemLabel}, sort_order = #{command.sortOrder},
+            is_enabled = #{command.enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        <!-- 内部主键确定目标，rowversion防止并发覆盖 -->
+        WHERE id = #{itemId} AND row_version = #{command.expectedVersion}
+    </update>
+
+    <select id="findExternalSystems" resultMap="externalSystem">
+        SELECT id, system_code, system_name, description, is_enabled, created_at, updated_at, row_version
+        FROM sys_external_system ORDER BY system_code, id
+    </select>
+
+    <select id="findExternalSystem" resultMap="externalSystem">
+        SELECT id, system_code, system_name, description, is_enabled, created_at, updated_at, row_version
+        FROM sys_external_system WHERE id = #{systemId}
+    </select>
+
+    <select id="externalSystemCodeExists" resultType="boolean">
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM sys_external_system WHERE system_code = #{systemCode})
+                    THEN 1 ELSE 0 END
+    </select>
+
+    <select id="createExternalSystem" resultType="long" affectData="true">
+        INSERT INTO sys_external_system
+            (system_code, system_name, description, is_enabled, created_by, updated_by)
+        VALUES
+            (#{command.systemCode}, #{command.systemName}, #{command.description}, 1, #{actor}, #{actor});
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <update id="updateExternalSystem">
+        UPDATE sys_external_system
+        SET system_name = #{command.systemName}, description = #{command.description},
+            is_enabled = #{command.enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{systemId} AND row_version = #{command.expectedVersion}
+    </update>
+
+    <select id="findExternalEndpoints" resultMap="externalEndpoint">
+        SELECT endpoints.id, endpoints.external_system_id, endpoints.environment_code,
+               endpoints.organization_id, organizations.organization_code, endpoints.base_url,
+               endpoints.connect_timeout_ms, endpoints.read_timeout_ms, endpoints.credential_reference,
+               endpoints.is_enabled, endpoints.created_at, endpoints.updated_at, endpoints.row_version
+        FROM sys_external_endpoint AS endpoints
+        LEFT JOIN org_organization AS organizations ON organizations.id = endpoints.organization_id
+        WHERE endpoints.external_system_id = #{systemId}
+        ORDER BY endpoints.environment_code, organizations.organization_code, endpoints.id
+    </select>
+
+    <select id="findExternalEndpoint" resultMap="externalEndpoint">
+        SELECT endpoints.id, endpoints.external_system_id, endpoints.environment_code,
+               endpoints.organization_id, organizations.organization_code, endpoints.base_url,
+               endpoints.connect_timeout_ms, endpoints.read_timeout_ms, endpoints.credential_reference,
+               endpoints.is_enabled, endpoints.created_at, endpoints.updated_at, endpoints.row_version
+        FROM sys_external_endpoint AS endpoints
+        LEFT JOIN org_organization AS organizations ON organizations.id = endpoints.organization_id
+        WHERE endpoints.id = #{endpointId}
+    </select>
+
+    <select id="externalEndpointScopeExists" resultType="boolean">
+        SELECT CASE WHEN EXISTS (
+            SELECT 1 FROM sys_external_endpoint
+            WHERE external_system_id = #{systemId} AND environment_code = #{command.environment}
+            <choose><when test="command.organizationId != null">AND organization_id = #{command.organizationId}</when>
+                <otherwise>AND organization_id IS NULL</otherwise></choose>
+        ) THEN 1 ELSE 0 END
+    </select>
+
+    <select id="createExternalEndpoint" resultType="long" affectData="true">
+        INSERT INTO sys_external_endpoint
+            (external_system_id, environment_code, organization_id, base_url, connect_timeout_ms,
+             read_timeout_ms, credential_reference, is_enabled, created_by, updated_by)
+        VALUES
+            (#{systemId}, #{command.environment}, #{command.organizationId}, #{command.baseUrl},
+             #{command.connectTimeoutMs}, #{command.readTimeoutMs}, #{command.credentialReference},
+             0, #{actor}, #{actor});
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <update id="updateExternalEndpoint">
+        UPDATE sys_external_endpoint
+        SET base_url = #{command.baseUrl}, connect_timeout_ms = #{command.connectTimeoutMs},
+            read_timeout_ms = #{command.readTimeoutMs}, credential_reference = #{command.credentialReference},
+            is_enabled = #{command.enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{endpointId} AND row_version = #{command.expectedVersion}
+    </update>
+</mapper>

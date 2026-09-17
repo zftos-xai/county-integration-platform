@@ -14,7 +14,7 @@
             <!-- 可选父机构主键，空值表示顶级机构 -->
             <arg column="parent_id" javaType="java.lang.Long"/>
             <!-- 机构当前是否可用 -->
-            <arg column="is_enabled" javaType="boolean"/>
+            <arg column="is_enabled" javaType="_boolean"/>
             <!-- 可选业务有效起始UTC时间 -->
             <arg column="valid_from" javaType="java.time.LocalDateTime"/>
             <!-- 可选业务有效结束UTC时间 -->
@@ -24,7 +24,7 @@
             <!-- 机构档案最后修改UTC时间 -->
             <arg column="updated_at" javaType="java.time.LocalDateTime"/>
             <!-- SQL Server并发版本 -->
-            <arg column="row_version" javaType="byte[]"/>
+            <arg column="row_version" javaType="_byte[]"/>
         </constructor>
     </resultMap>
 
@@ -102,10 +102,10 @@
             #{command.organizationCode},
             #{command.organizationName},
             #{command.organizationType},
-            #{command.parentId},
+            #{command.parentId,jdbcType=BIGINT},
             1,
-            #{command.validFrom},
-            #{command.validTo},
+            #{command.validFrom,jdbcType=TIMESTAMP},
+            #{command.validTo,jdbcType=TIMESTAMP},
             #{actor},
             #{actor}
         );
@@ -119,11 +119,11 @@
             <!-- 可修改的机构类型代码 -->
             organization_type = #{command.organizationType},
             <!-- 可修改的父机构主键 -->
-            parent_id = #{command.parentId},
+            parent_id = #{command.parentId,jdbcType=BIGINT},
             <!-- 可选业务有效起始UTC时间 -->
-            valid_from = #{command.validFrom},
+            valid_from = #{command.validFrom,jdbcType=TIMESTAMP},
             <!-- 可选业务有效结束UTC时间 -->
-            valid_to = #{command.validTo},
+            valid_to = #{command.validTo,jdbcType=TIMESTAMP},
             <!-- 最后修改人稳定主体标识快照 -->
             updated_by = #{actor},
             <!-- 最后修改UTC时间 -->

@@ -12,6 +12,8 @@ const errors = []
 const versions = new Map()
 const mainVersions = new Map()
 const patchesByBusiness = new Map()
+const createdObjects = []
+const describedObjects = new Map()
 
 if (files.length === 0) {
   errors.push('migration目录中没有业务主版本SQL')
@@ -36,27 +38,73 @@ function requireHeader(file, sql, label, expectedValue) {
 function checkDocumentedObjects(file, sql) {
   const tablePattern = /CREATE\s+TABLE\s+([a-z][a-z0-9_]*)\s*\(([\s\S]*?)\);/gi
   for (const tableMatch of sql.matchAll(tablePattern)) {
+    const tableName = tableMatch[1].toLowerCase()
+    createdObjects.push({ file, type: 'TABLE', table: tableName, object: null })
     const beforeTable = sql.slice(Math.max(0, tableMatch.index - 300), tableMatch.index)
+    if (!/-- 表中文名称:\s*[\u3400-\u9fff]+表\s*$/m.test(beforeTable)) {
+      report(file, `表 ${tableMatch[1]} 前缺少以“表”结尾的“-- 表中文名称: ...”`)
+    }
     if (!/-- 表用途:\s*\S+/.test(beforeTable)) {
       report(file, `表 ${tableMatch[1]} 前缺少“-- 表用途: ...”`)
     }
     for (const rawLine of tableMatch[2].split(/\r?\n/)) {
       const line = rawLine.trim()
       if (!line || line.startsWith('--')) continue
-      const isField = /^[a-z][a-z0-9_]*\s+/i.test(line)
       const isConstraint = /^CONSTRAINT\s+/i.test(line)
+      const isField = !isConstraint && /^[a-z][a-z0-9_]*\s+/i.test(line)
       if ((isField || isConstraint) && !line.includes('--')) {
         report(file, `字段或约束缺少行内说明：“${line}”`)
+      }
+      if (isField) {
+        const fieldName = line.match(/^([a-z][a-z0-9_]*)\s+/i)[1].toLowerCase()
+        createdObjects.push({ file, type: 'COLUMN', table: tableName, object: fieldName })
+        if (/\bPRIMARY\s+KEY\b/i.test(line) && !/\bCONSTRAINT\s+[a-z][a-z0-9_]*\s+PRIMARY\s+KEY\b/i.test(line)) {
+          createdObjects.push({ file, type: 'CONSTRAINT', table: tableName, object: '$primary_key' })
+          report(file, `表 ${tableName} 的主键必须使用CONSTRAINT显式命名`)
+        }
+      }
+      const constraintMatch = line.match(/\bCONSTRAINT\s+([a-z][a-z0-9_]*)\s+(PRIMARY\s+KEY|UNIQUE|CHECK|FOREIGN\s+KEY|DEFAULT)/i)
+      if (constraintMatch) {
+        createdObjects.push({ file, type: 'CONSTRAINT', table: tableName, object: constraintMatch[1].toLowerCase() })
       }
     }
   }
 
   const indexPattern = /CREATE\s+(?:UNIQUE\s+)?INDEX\s+([a-z][a-z0-9_]*)/gi
   for (const indexMatch of sql.matchAll(indexPattern)) {
+    const afterIndex = sql.slice(indexMatch.index)
+    const tableMatch = afterIndex.match(/\bON\s+([a-z][a-z0-9_]*)\s*\(/i)
+    if (tableMatch) {
+      createdObjects.push({ file, type: 'INDEX', table: tableMatch[1].toLowerCase(), object: indexMatch[1].toLowerCase() })
+    }
     const beforeIndex = sql.slice(Math.max(0, indexMatch.index - 300), indexMatch.index)
     if (!/-- 索引用途:\s*\S+/.test(beforeIndex)) {
       report(file, `索引 ${indexMatch[1]} 前缺少“-- 索引用途: ...”`)
     }
+  }
+}
+
+function collectPersistedDescriptions(file, sql) {
+  let descriptionCount = 0
+  const descriptionPattern = /\(N'(TABLE|COLUMN|CONSTRAINT|INDEX)',\s*N'([a-z][a-z0-9_]*)',\s*(NULL|N'([a-z$][a-z0-9_$]*)'),\s*N'([^']+)'\)/gi
+  for (const match of sql.matchAll(descriptionPattern)) {
+    descriptionCount++
+    const type = match[1].toUpperCase()
+    const table = match[2].toLowerCase()
+    const object = match[3].toUpperCase() === 'NULL' ? null : match[4].toLowerCase()
+    const description = match[5].trim()
+    const key = `${type}:${table}:${object ?? ''}`
+    if (!description) report(file, `${type} ${table}.${object ?? ''} 的MS_Description不能为空`)
+    if ((type === 'TABLE' || type === 'COLUMN') && !/^[\u3400-\u9fff（）]+$/.test(description)) {
+      report(file, `${type} ${table}.${object ?? ''} 的MS_Description必须是简洁中文名称`)
+    }
+    if (type === 'TABLE' && !/^[\u3400-\u9fff（）]+表$/.test(description)) {
+      report(file, `TABLE ${table} 的中文名称必须以“表”结尾`)
+    }
+    describedObjects.set(key, { file, description })
+  }
+  if (descriptionCount > 0 && !/sys\.sp_(?:add|update)extendedproperty/i.test(sql)) {
+    report(file, '声明了MS_Description说明清单但未调用sys.sp_addextendedproperty或sys.sp_updateextendedproperty写入')
   }
 }
 
@@ -77,6 +125,7 @@ for (const file of files) {
   }
 
   const sql = readFileSync(resolve(migrationDirectory, file), 'utf8')
+  collectPersistedDescriptions(file, sql)
   requireHeader(file, sql, '业务域', business)
   requireHeader(file, sql, '变更说明')
   requireHeader(file, sql, '需求依据')
@@ -106,6 +155,23 @@ for (const file of files) {
   if (/SELECT\s+\*/i.test(sql)) report(file, '禁止使用SELECT *')
   if (/NVARCHAR\s*\(\s*MAX\s*\)/i.test(sql)) report(file, '禁止无依据使用nvarchar(max)')
   checkDocumentedObjects(file, sql)
+}
+
+const createdObjectKeys = new Set(createdObjects.map(created =>
+  `${created.type}:${created.table}:${created.object ?? ''}`
+))
+
+for (const created of createdObjects) {
+  const key = `${created.type}:${created.table}:${created.object ?? ''}`
+  if (!describedObjects.has(key)) {
+    report(created.file, `${created.type} ${created.table}.${created.object ?? ''} 缺少可落库的MS_Description说明清单`)
+  }
+}
+
+for (const [key, described] of describedObjects) {
+  if (!createdObjectKeys.has(key)) {
+    report(described.file, `MS_Description说明清单引用了不存在或未受管控的对象 ${key}`)
+  }
 }
 
 for (const [business, patches] of patchesByBusiness) {

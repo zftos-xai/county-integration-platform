@@ -4,46 +4,46 @@
     <resultMap id="userSummary" type="cn.zqkj.platform.system.domain.model.ManagedUserSummary">
         <constructor>
             <!-- 平台用户内部主键 -->
-            <arg column="id" javaType="long"/>
+            <arg column="id" javaType="_long"/>
             <!-- 平台本地登录名 -->
             <arg column="login_name" javaType="java.lang.String"/>
             <!-- 用户显示名称 -->
             <arg column="display_name" javaType="java.lang.String"/>
             <!-- 用户主归属机构主键 -->
-            <arg column="primary_organization_id" javaType="long"/>
+            <arg column="primary_organization_id" javaType="_long"/>
             <!-- 用户主归属机构编码 -->
             <arg column="organization_code" javaType="java.lang.String"/>
             <!-- 用户是否启用 -->
-            <arg column="is_enabled" javaType="boolean"/>
+            <arg column="is_enabled" javaType="_boolean"/>
             <!-- 是否必须先修改初始或重置密码 -->
-            <arg column="must_change_password" javaType="boolean"/>
+            <arg column="must_change_password" javaType="_boolean"/>
             <!-- 用户创建UTC时间 -->
             <arg column="created_at" javaType="java.time.LocalDateTime"/>
             <!-- 用户最后修改UTC时间 -->
             <arg column="updated_at" javaType="java.time.LocalDateTime"/>
             <!-- SQL Server并发版本 -->
-            <arg column="row_version" javaType="byte[]"/>
+            <arg column="row_version" javaType="_byte[]"/>
         </constructor>
     </resultMap>
 
     <resultMap id="roleSummary" type="cn.zqkj.platform.system.domain.model.RoleSummary">
         <constructor>
             <!-- 平台角色内部主键 -->
-            <arg column="id" javaType="long"/>
+            <arg column="id" javaType="_long"/>
             <!-- 稳定角色代码 -->
             <arg column="role_code" javaType="java.lang.String"/>
             <!-- 角色展示名称 -->
             <arg column="role_name" javaType="java.lang.String"/>
             <!-- 角色是否参与授权判定 -->
-            <arg column="is_enabled" javaType="boolean"/>
+            <arg column="is_enabled" javaType="_boolean"/>
             <!-- 是否为平台保护的系统角色 -->
-            <arg column="is_system_managed" javaType="boolean"/>
+            <arg column="is_system_managed" javaType="_boolean"/>
             <!-- 角色创建UTC时间 -->
             <arg column="created_at" javaType="java.time.LocalDateTime"/>
             <!-- 角色最后修改UTC时间 -->
             <arg column="updated_at" javaType="java.time.LocalDateTime"/>
             <!-- SQL Server并发版本 -->
-            <arg column="row_version" javaType="byte[]"/>
+            <arg column="row_version" javaType="_byte[]"/>
         </constructor>
     </resultMap>
 

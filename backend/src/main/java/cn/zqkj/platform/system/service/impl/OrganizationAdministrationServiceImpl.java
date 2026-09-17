@@ -2,11 +2,13 @@ package cn.zqkj.platform.system.service.impl;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
-import cn.zqkj.platform.system.domain.model.AccessActor;
 import cn.zqkj.platform.system.domain.dto.CreateOrganizationCommand;
-import cn.zqkj.platform.system.domain.vo.OrganizationVO;
+import cn.zqkj.platform.system.domain.dto.ManagementAuditCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateOrganizationCommand;
+import cn.zqkj.platform.system.domain.model.AccessActor;
+import cn.zqkj.platform.system.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.mapper.AccessMapper;
+import cn.zqkj.platform.system.service.ManagementAuditService;
 import cn.zqkj.platform.system.service.OrganizationAdministrationService;
 import cn.zqkj.platform.system.service.OrganizationService;
 import org.springframework.security.access.AccessDeniedException;
@@ -24,19 +26,23 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
 
     private final OrganizationService organizationService;
     private final AccessMapper accessMapper;
+    private final ManagementAuditService auditService;
 
     /**
      * 创建机构授权协调服务。
      *
      * @param organizationService 机构唯一写入服务
      * @param accessMapper 机构范围持久化边界
+     * @param auditService 管理审计服务
      */
     public OrganizationAdministrationServiceImpl(
             OrganizationService organizationService,
-            AccessMapper accessMapper
+            AccessMapper accessMapper,
+            ManagementAuditService auditService
     ) {
         this.organizationService = organizationService;
         this.accessMapper = accessMapper;
+        this.auditService = auditService;
     }
 
     /** @param enabled 可选启用状态 @param actor 操作人 @return 范围内机构 */
@@ -77,6 +83,7 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
         accessMapper.replaceUserOrganizations(
                 actor.userId(), scopes.stream().distinct().sorted().toList(), actor.loginName()
         );
+        audit(actor, created, "ORGANIZATION_CREATED", "创建机构并授予创建人机构范围");
         return created;
     }
 
@@ -95,7 +102,9 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
         if (command.parentId() != null) {
             get(command.parentId(), actor);
         }
-        return organizationService.update(organizationId, command, actor.loginName());
+        OrganizationVO updated = organizationService.update(organizationId, command, actor.loginName());
+        audit(actor, updated, "ORGANIZATION_UPDATED", "修改机构基础信息");
+        return updated;
     }
 
     /**
@@ -119,9 +128,19 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
         if (!enabled && accessMapper.hasEnabledPrimaryUsers(organizationId)) {
             throw new ResourceConflictException("Organization has enabled primary users");
         }
-        return organizationService.setEnabled(
+        OrganizationVO updated = organizationService.setEnabled(
                 organizationId, enabled, expectedVersion, actor.loginName()
         );
+        audit(actor, updated, enabled ? "ORGANIZATION_ENABLED" : "ORGANIZATION_DISABLED",
+                enabled ? "启用机构" : "停用机构");
+        return updated;
+    }
+
+    /** @param actor 操作人 @param organization 机构 @param action 动作 @param summary 脱敏摘要 */
+    private void audit(AccessActor actor, OrganizationVO organization, String action, String summary) {
+        auditService.recordSuccess(new ManagementAuditCommand(actor, null, organization.id(),
+                organization.organizationCode(), action, "ORGANIZATION", organization.organizationCode(),
+                "SUCCESS", summary, ManagementAuditServiceImpl.currentRequestId()));
     }
 
     /** @param actor 操作人 @param organizationCode 机构代码 */

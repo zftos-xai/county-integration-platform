@@ -3,17 +3,20 @@ import cn.zqkj.platform.system.service.impl.OrganizationAdministrationServiceImp
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.system.domain.dto.ManagementAuditCommand;
 import cn.zqkj.platform.system.domain.model.AccessActor;
 import cn.zqkj.platform.system.domain.dto.CreateOrganizationCommand;
 import cn.zqkj.platform.system.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.mapper.AccessMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -29,7 +32,7 @@ class OrganizationAdministrationServiceTest {
     @Test
     void rejectsAdditionalRootOrganization() {
         OrganizationAdministrationService service = new OrganizationAdministrationServiceImpl(
-                mock(OrganizationService.class), mock(AccessMapper.class)
+                mock(OrganizationService.class), mock(AccessMapper.class), mock(ManagementAuditService.class)
         );
 
         assertThrows(InvalidRequestException.class, () -> service.create(
@@ -42,11 +45,12 @@ class OrganizationAdministrationServiceTest {
     void grantsCreatedOrganizationToActor() {
         OrganizationService organizationService = mock(OrganizationService.class);
         AccessMapper mapper = mock(AccessMapper.class);
+        ManagementAuditService auditService = mock(ManagementAuditService.class);
         when(organizationService.get(10L)).thenReturn(organization(10L, "ORG001", null));
         when(organizationService.create(any(), eq("admin"))).thenReturn(organization(20L, "ORG002", 10L));
         when(mapper.findUserOrganizationIds(1L)).thenReturn(List.of(10L));
         OrganizationAdministrationService service = new OrganizationAdministrationServiceImpl(
-                organizationService, mapper
+                organizationService, mapper, auditService
         );
 
         service.create(new CreateOrganizationCommand(
@@ -54,6 +58,10 @@ class OrganizationAdministrationServiceTest {
         ), actor());
 
         verify(mapper).replaceUserOrganizations(1L, List.of(10L, 20L), "admin");
+        ArgumentCaptor<ManagementAuditCommand> captor = ArgumentCaptor.forClass(ManagementAuditCommand.class);
+        verify(auditService).recordSuccess(captor.capture());
+        assertEquals("ORGANIZATION_CREATED", captor.getValue().actionCode());
+        assertEquals("ORG002", captor.getValue().targetId());
     }
 
     /** 验证存在启用主归属用户时不能停用机构。 */
@@ -64,7 +72,7 @@ class OrganizationAdministrationServiceTest {
         when(organizationService.get(10L)).thenReturn(organization(10L, "ORG001", null));
         when(mapper.hasEnabledPrimaryUsers(10L)).thenReturn(true);
         OrganizationAdministrationService service = new OrganizationAdministrationServiceImpl(
-                organizationService, mapper
+                organizationService, mapper, mock(ManagementAuditService.class)
         );
 
         assertThrows(ResourceConflictException.class,

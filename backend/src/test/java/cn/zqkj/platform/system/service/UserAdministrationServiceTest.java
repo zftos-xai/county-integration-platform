@@ -3,6 +3,7 @@ import cn.zqkj.platform.system.service.impl.UserAdministrationServiceImpl;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.system.domain.dto.ManagementAuditCommand;
 import cn.zqkj.platform.system.domain.model.AccessActor;
 import cn.zqkj.platform.system.domain.dto.CreateUserCommand;
 import cn.zqkj.platform.system.domain.model.ManagedUserSummary;
@@ -10,6 +11,7 @@ import cn.zqkj.platform.system.domain.vo.ManagedUserVO;
 import cn.zqkj.platform.system.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.domain.model.RoleSummary;
 import cn.zqkj.platform.system.mapper.AccessMapper;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,6 +22,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -70,7 +73,9 @@ class UserAdministrationServiceTest {
         when(mapper.findUser(2L)).thenReturn(java.util.Optional.of(user(2L, "ORG001", true)));
         when(mapper.findUserRoleIds(2L)).thenReturn(List.of());
         when(mapper.findUserOrganizationIds(2L)).thenReturn(List.of(10L));
-        UserAdministrationService service = new UserAdministrationServiceImpl(mapper, organizationService, encoder);
+        UserAdministrationService service = new UserAdministrationServiceImpl(
+                mapper, organizationService, encoder, mock(ManagementAuditService.class)
+        );
 
         ManagedUserVO result = service.create(
                 new CreateUserCommand("Operator", "Operator", 10L, "Temporary!123"), actor()
@@ -78,6 +83,29 @@ class UserAdministrationServiceTest {
 
         assertEquals("operator", result.loginName());
         verify(mapper).replaceUserOrganizations(2L, List.of(10L), "admin");
+    }
+
+    /** 验证密码重置审计不包含临时密码。 */
+    @Test
+    void auditsPasswordResetWithoutTemporaryPassword() {
+        AccessMapper mapper = mock(AccessMapper.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+        ManagementAuditService auditService = mock(ManagementAuditService.class);
+        String temporaryPassword = "Temporary!456";
+        when(mapper.findUser(2L)).thenReturn(Optional.of(user(2L, "ORG001", true)));
+        when(encoder.encode(temporaryPassword)).thenReturn("password-hash");
+        when(mapper.resetPassword(2L, "password-hash", "admin")).thenReturn(1);
+        UserAdministrationService service = new UserAdministrationServiceImpl(
+                mapper, mock(OrganizationService.class), encoder, auditService
+        );
+
+        service.resetPassword(2L, temporaryPassword, actor());
+
+        ArgumentCaptor<ManagementAuditCommand> captor = ArgumentCaptor.forClass(ManagementAuditCommand.class);
+        verify(auditService).recordSuccess(captor.capture());
+        assertEquals("USER_PASSWORD_RESET", captor.getValue().actionCode());
+        assertFalse(captor.getValue().changeSummary().contains(temporaryPassword));
+        assertFalse(captor.getValue().changeSummary().contains("password-hash"));
     }
 
     /** 验证机构范围不能排除用户主机构。 */
@@ -119,7 +147,9 @@ class UserAdministrationServiceTest {
             AccessMapper mapper,
             OrganizationService organizationService
     ) {
-        return new UserAdministrationServiceImpl(mapper, organizationService, mock(PasswordEncoder.class));
+        return new UserAdministrationServiceImpl(
+                mapper, organizationService, mock(PasswordEncoder.class), mock(ManagementAuditService.class)
+        );
     }
 
     /** @param id 用户主键 @param organizationCode 机构代码 @param enabled 状态 @return 用户快照 */

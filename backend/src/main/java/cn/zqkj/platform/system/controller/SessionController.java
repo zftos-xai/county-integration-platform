@@ -7,10 +7,13 @@ import cn.zqkj.platform.system.domain.dto.LoginRequest;
 import cn.zqkj.platform.system.domain.vo.CsrfTokenVO;
 import cn.zqkj.platform.system.domain.vo.CurrentUserVO;
 import cn.zqkj.platform.system.service.IdentityService;
+import cn.zqkj.platform.system.service.ManagementAuditService;
+import cn.zqkj.platform.system.service.impl.ManagementAuditServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
@@ -36,6 +39,7 @@ public class SessionController {
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository contextRepository;
     private final IdentityService identityService;
+    private final ManagementAuditService auditService;
     private final SecurityContextHolderStrategy contextHolderStrategy =
             SecurityContextHolder.getContextHolderStrategy();
     private final SecurityContextLogoutHandler logoutHandler = new SecurityContextLogoutHandler();
@@ -46,15 +50,18 @@ public class SessionController {
      * @param authenticationManager 认证管理器
      * @param contextRepository 会话安全上下文仓储
      * @param identityService 身份应用服务
+     * @param auditService 管理审计服务
      */
     public SessionController(
             AuthenticationManager authenticationManager,
             SecurityContextRepository contextRepository,
-            IdentityService identityService
+            IdentityService identityService,
+            ManagementAuditService auditService
     ) {
         this.authenticationManager = authenticationManager;
         this.contextRepository = contextRepository;
         this.identityService = identityService;
+        this.auditService = auditService;
     }
 
     /**
@@ -84,9 +91,15 @@ public class SessionController {
             HttpServletRequest servletRequest,
             HttpServletResponse servletResponse
     ) {
-        Authentication authentication = authenticationManager.authenticate(
-                UsernamePasswordAuthenticationToken.unauthenticated(request.loginName(), request.password())
-        );
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    UsernamePasswordAuthenticationToken.unauthenticated(request.loginName(), request.password())
+            );
+        } catch (AuthenticationException exception) {
+            auditService.recordLoginFailure(request.loginName(), ManagementAuditServiceImpl.currentRequestId());
+            throw exception;
+        }
         servletRequest.getSession(true);
         servletRequest.changeSessionId();
         SecurityContext context = contextHolderStrategy.createEmptyContext();
