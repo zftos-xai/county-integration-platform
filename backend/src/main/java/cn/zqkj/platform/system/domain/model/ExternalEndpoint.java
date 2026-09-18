@@ -10,10 +10,11 @@ import java.time.LocalDateTime;
  * @param environment 环境
  * @param organizationId 可选机构主键
  * @param organizationCode 可选机构代码
- * @param baseUrl HTTPS基础地址
+ * @param baseUrl HTTP或HTTPS基础地址
  * @param connectTimeoutMs 连接超时毫秒
  * @param readTimeoutMs 读取超时毫秒
- * @param credentialReference 凭证引用；只在服务层内部使用
+ * @param credentialReference 认证信息内部定位符；只在服务层内部使用
+ * @param credentialConfigured 是否存在可用的托管或兼容凭证
  * @param enabled 是否启用
  * @param createdAt 创建UTC时间
  * @param updatedAt 修改UTC时间
@@ -22,5 +23,6 @@ import java.time.LocalDateTime;
 public record ExternalEndpoint(long id, long externalSystemId, ParameterEnvironment environment,
                                Long organizationId, String organizationCode, String baseUrl,
                                int connectTimeoutMs, int readTimeoutMs, String credentialReference,
-                               boolean enabled, LocalDateTime createdAt, LocalDateTime updatedAt, byte[] version) {
+                               boolean credentialConfigured, boolean enabled, LocalDateTime createdAt,
+                               LocalDateTime updatedAt, byte[] version) {
 }

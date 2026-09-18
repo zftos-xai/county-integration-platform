@@ -20,6 +20,9 @@ fi
 echo "Checking repository engineering guardrails..."
 python3 "$project_root/plugins/team-engineering-standards/skills/project-engineering-guardrails/scripts/audit_repository.py" "$project_root" --strict
 
+echo "Checking Java package layout..."
+node "$project_root/tools/verify-java-package-layout.mjs"
+
 echo "Checking Java 17 backend..."
 "$maven_command" -B -f "$project_root/backend/pom.xml" verify
 

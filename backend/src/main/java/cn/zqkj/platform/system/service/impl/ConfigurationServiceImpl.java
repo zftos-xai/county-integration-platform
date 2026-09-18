@@ -9,6 +9,7 @@ import cn.zqkj.platform.system.domain.dto.DeleteParameterCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.UpsertParameterCommand;
+import cn.zqkj.platform.system.domain.dto.ExternalEndpointAuthenticationCommand;
 import cn.zqkj.platform.system.domain.dto.ExternalEndpointCommand;
 import cn.zqkj.platform.system.domain.dto.ExternalSystemCommand;
 import cn.zqkj.platform.system.domain.dto.ManagementAuditCommand;
@@ -19,6 +20,7 @@ import cn.zqkj.platform.system.domain.model.ParameterDefinition;
 import cn.zqkj.platform.system.domain.model.ParameterValue;
 import cn.zqkj.platform.system.domain.model.ParameterValueType;
 import cn.zqkj.platform.system.domain.model.ExternalEndpoint;
+import cn.zqkj.platform.system.domain.model.ExternalEndpointAuthentication;
 import cn.zqkj.platform.system.domain.model.ExternalSystem;
 import cn.zqkj.platform.system.domain.vo.DictionaryItemVO;
 import cn.zqkj.platform.system.domain.vo.DictionaryTypeVO;
@@ -42,6 +44,7 @@ import java.net.URISyntaxException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -59,6 +62,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     private final ParameterDefinitionRegistry registry;
     private final OrganizationService organizationService;
     private final ManagementAuditService auditService;
+    private final ExternalEndpointCredentialCipher credentialCipher;
 
     /**
      * 创建平台配置服务。
@@ -67,17 +71,20 @@ public class ConfigurationServiceImpl implements ConfigurationService {
      * @param registry 代码注册参数清单
      * @param organizationService 机构查询服务
      * @param auditService 管理审计服务
+     * @param credentialCipher 机构接口认证信息加密器
      */
     public ConfigurationServiceImpl(
             ConfigurationMapper mapper,
             ParameterDefinitionRegistry registry,
             OrganizationService organizationService,
-            ManagementAuditService auditService
+            ManagementAuditService auditService,
+            ExternalEndpointCredentialCipher credentialCipher
     ) {
         this.mapper = mapper;
         this.registry = registry;
         this.organizationService = organizationService;
         this.auditService = auditService;
+        this.credentialCipher = credentialCipher;
     }
 
     /** {@inheritDoc} */
@@ -340,7 +347,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 mapper.createExternalSystem(normalized, requireActor(actor.loginName()))
         ));
         audit(actor, null, null, "EXTERNAL_SYSTEM_CREATED", "EXTERNAL_SYSTEM", result.systemCode(),
-                "已创建外部系统身份；未记录连接地址或凭证引用");
+                "已创建外部系统身份；未记录连接地址或认证信息");
         return result;
     }
 
@@ -388,15 +395,19 @@ public class ConfigurationServiceImpl implements ConfigurationService {
             throw new ResourceConflictException("外部系统已停用，不能新增服务地址");
         }
         validateEndpointScope(command, actor);
-        ExternalEndpointCommand normalized = normalizeEndpoint(command, false, null);
-        if (mapper.externalEndpointScopeExists(systemId, normalized)) {
+        ExternalEndpointAuthenticationCommand authentication = mergeAuthentication(null, command.authentication(), true);
+        ExternalEndpointCommand normalized = normalizeEndpoint(command, authentication, command.enabled(), null);
+        if (mapper.externalEndpointScopeExists(systemId, null, normalized)) {
             throw new ResourceConflictException("该外部系统、环境和机构已经配置了服务地址");
         }
         long id = mapper.createExternalEndpoint(systemId, normalized, requireActor(actor.loginName()));
+        saveAuthentication(id, authentication, requireActor(actor.loginName()));
         ExternalEndpointVO result = toExternalEndpointVO(requireExternalEndpoint(id));
         audit(actor, result.organizationId(), result.organizationCode(), "EXTERNAL_ENDPOINT_CREATED",
                 "EXTERNAL_ENDPOINT", String.valueOf(id),
-                "已创建停用服务地址；地址和凭证引用未写入审计摘要");
+                normalized.enabled()
+                        ? "已创建并启用服务地址；地址和认证信息未写入审计摘要"
+                        : "已创建停用服务地址；地址和认证信息未写入审计摘要");
         return result;
     }
 
@@ -411,22 +422,35 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         ExternalEndpoint current = requireExternalEndpoint(endpointId);
         requireVersion(command.expectedVersion());
         requireEndpointAccess(current, actor);
+        validateEndpointScope(command, actor);
+        boolean organizationChanged = !Objects.equals(current.organizationId(), command.organizationId());
+        ExternalEndpointAuthenticationCommand authentication = mergeAuthentication(
+                organizationChanged ? null : endpointId,
+                command.authentication(),
+                organizationChanged
+        );
+        if (command.enabled() && !current.credentialConfigured() && authentication == null) {
+            throw new InvalidRequestException("启用连接前必须配置接口认证信息");
+        }
         ExternalEndpointCommand normalized = normalizeEndpoint(
-                new ExternalEndpointCommand(current.environment(), current.organizationId(), command.baseUrl(),
-                        command.connectTimeoutMs(), command.readTimeoutMs(), command.credentialReference(),
-                        command.enabled(), command.expectedVersion()),
-                command.enabled(), command.expectedVersion()
+                command, authentication, command.enabled(), command.expectedVersion()
         );
         if (normalized.enabled() && !requireExternalSystem(current.externalSystemId()).enabled()) {
             throw new ResourceConflictException("外部系统已停用，不能启用其服务地址");
         }
+        if (mapper.externalEndpointScopeExists(current.externalSystemId(), endpointId, normalized)) {
+            throw new ResourceConflictException("该外部系统、环境和机构已经存在接口配置");
+        }
         if (mapper.updateExternalEndpoint(endpointId, normalized, requireActor(actor.loginName())) != 1) {
             throw new ResourceConflictException("服务地址资料已被他人修改，请刷新后重试");
+        }
+        if (authentication != null) {
+            saveAuthentication(endpointId, authentication, requireActor(actor.loginName()));
         }
         ExternalEndpointVO result = toExternalEndpointVO(requireExternalEndpoint(endpointId));
         audit(actor, result.organizationId(), result.organizationCode(), "EXTERNAL_ENDPOINT_UPDATED",
                 "EXTERNAL_ENDPOINT", String.valueOf(endpointId),
-                "已修改服务地址超时和启用状态；地址和凭证引用未写入审计摘要");
+                "已修改机构、环境、接口地址、超时或启用状态；地址和接入信息未写入审计摘要");
         return result;
     }
 
@@ -473,12 +497,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 Base64.getEncoder().encodeToString(system.version()));
     }
 
-    /** @param endpoint 外部服务地址 @return 不含凭证引用的API输出 */
+    /** @param endpoint 外部服务地址 @return 不含认证信息明文的API输出 */
     private ExternalEndpointVO toExternalEndpointVO(ExternalEndpoint endpoint) {
         return new ExternalEndpointVO(endpoint.id(), endpoint.externalSystemId(), endpoint.environment().name(),
                 endpoint.organizationId(), endpoint.organizationCode(), endpoint.baseUrl(),
                 endpoint.connectTimeoutMs(), endpoint.readTimeoutMs(),
-                endpoint.credentialReference() != null && !endpoint.credentialReference().isBlank(),
+                endpoint.credentialConfigured(),
                 endpoint.enabled(), endpoint.createdAt(), endpoint.updatedAt(),
                 Base64.getEncoder().encodeToString(endpoint.version()));
     }
@@ -622,19 +646,19 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     /** @param command 原命令 @param enabled 是否启用 @param version 并发版本 @return 规范化命令 */
     private ExternalEndpointCommand normalizeEndpoint(
             ExternalEndpointCommand command,
+            ExternalEndpointAuthenticationCommand authentication,
             boolean enabled,
             byte[] version
     ) {
-        String baseUrl = requireHttpsUrl(command.baseUrl());
+        String baseUrl = requireServiceUrl(command.baseUrl());
         if (command.connectTimeoutMs() < 100 || command.connectTimeoutMs() > 60000) {
             throw new InvalidRequestException("connectTimeoutMs 超出允许范围");
         }
         if (command.readTimeoutMs() < command.connectTimeoutMs() || command.readTimeoutMs() > 300000) {
             throw new InvalidRequestException("readTimeoutMs 超出允许范围");
         }
-        String reference = requireCredentialReference(command.credentialReference());
         return new ExternalEndpointCommand(command.environment(), command.organizationId(), baseUrl,
-                command.connectTimeoutMs(), command.readTimeoutMs(), reference, enabled, version);
+                command.connectTimeoutMs(), command.readTimeoutMs(), authentication, enabled, version);
     }
 
     /** @param actor 操作人 @param organizationId 机构主键 @param organizationCode 机构代码 @param action 动作 @param targetType 目标类型 @param targetId 目标标识 @param summary 不含敏感内容的摘要 */
@@ -645,14 +669,26 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 ManagementAuditServiceImpl.currentRequestId()));
     }
 
-    /** @param value 地址 @return 规范化HTTPS地址 */
-    private String requireHttpsUrl(String value) {
+    /**
+     * 校验并规范化外部系统服务地址。
+     *
+     * <p>县域医疗系统存在正式发布的HTTP WebService，因此允许HTTP和HTTPS。地址仍不得包含
+     * 用户信息、查询参数或片段；SOAP操作由接入程序根据已确认WSDL设置，不拼入基础地址。</p>
+     *
+     * @param value 地址
+     * @return 规范化HTTP或HTTPS地址
+     */
+    private String requireServiceUrl(String value) {
         String normalized = requireText(value, "baseUrl", 500);
         try {
             URI uri = new URI(normalized);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null
+            boolean supportedScheme = "http".equalsIgnoreCase(uri.getScheme())
+                    || "https".equalsIgnoreCase(uri.getScheme());
+            if (!supportedScheme || uri.getHost() == null || uri.getUserInfo() != null
                     || uri.getQuery() != null || uri.getFragment() != null) {
-                throw new InvalidRequestException("baseUrl 必须是 HTTPS 基础地址，且不能包含账号、密码或查询参数");
+                throw new InvalidRequestException(
+                        "baseUrl 必须是 HTTP 或 HTTPS 服务地址，且不能包含账号、密码、查询参数或片段"
+                );
             }
             return uri.normalize().toASCIIString();
         } catch (URISyntaxException exception) {
@@ -660,13 +696,75 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         }
     }
 
-    /** @param value 凭证引用 @return 规范化不透明引用 */
-    private String requireCredentialReference(String value) {
-        String reference = requireText(value, "credentialReference", 200);
-        if (!reference.matches("[a-z][a-z0-9+.-]*://\\S+")) {
-            throw new InvalidRequestException("credentialReference 必须使用获准的凭证引用地址");
+    /**
+     * 合并并校验接口认证信息；修改时空字段保留原值。
+     *
+     * @param endpointId 修改时的服务地址主键
+     * @param submitted 本次提交内容
+     * @param required 是否必须提交
+     * @return 需要保存的新完整认证信息；无需修改时为空
+     */
+    private ExternalEndpointAuthenticationCommand mergeAuthentication(
+            Long endpointId,
+            ExternalEndpointAuthenticationCommand submitted,
+            boolean required
+    ) {
+        if (submitted == null) {
+            if (required) {
+                throw new InvalidRequestException("首次配置必须填写接口认证信息");
+            }
+            return null;
         }
-        return reference;
+        ExternalEndpointAuthentication current = endpointId == null ? null
+                : mapper.findExternalEndpointCredential(endpointId).map(credentialCipher::decrypt).orElse(null);
+        String vendorCode = retained(submitted.vendorCode(), current == null ? null : current.vendorCode(), 100);
+        String username = retained(submitted.username(), current == null ? null : current.username(), 100);
+        String password = retained(submitted.password(), current == null ? null : current.password(), 200);
+        String authorizationCode = retained(
+                submitted.authorizationCode(),
+                current == null ? null : current.authorizationCode(),
+                200
+        );
+        if (vendorCode == null || authorizationCode == null) {
+            throw new InvalidRequestException("厂商编号和机构授权码不能为空");
+        }
+        if ((username == null) != (password == null)) {
+            throw new InvalidRequestException("接口用户名和接口密码必须同时填写");
+        }
+        return new ExternalEndpointAuthenticationCommand(vendorCode, username, password, authorizationCode);
+    }
+
+    /** @param endpointId 服务地址主键 @param authentication 完整认证信息 @param actor 操作人 */
+    private void saveAuthentication(
+            long endpointId,
+            ExternalEndpointAuthenticationCommand authentication,
+            String actor
+    ) {
+        var encrypted = credentialCipher.encrypt(endpointId, new ExternalEndpointAuthentication(
+                authentication.vendorCode(),
+                authentication.username(),
+                authentication.password(),
+                authentication.authorizationCode()
+        ));
+        if (mapper.findExternalEndpointCredential(endpointId).isPresent()) {
+            if (mapper.updateExternalEndpointCredential(endpointId, encrypted, actor) != 1) {
+                throw new ResourceConflictException("接口认证信息已变化，请刷新后重试");
+            }
+        } else {
+            mapper.createExternalEndpointCredential(endpointId, encrypted, actor);
+        }
+    }
+
+    /** @param submitted 本次提交值 @param current 已保存值 @param maximumLength 最大长度 @return 规范化后的保留或新值 */
+    private String retained(String submitted, String current, int maximumLength) {
+        if (submitted == null || submitted.isBlank()) {
+            return current == null || current.isBlank() ? null : current;
+        }
+        String normalized = submitted.trim();
+        if (normalized.length() > maximumLength) {
+            throw new InvalidRequestException("接口认证信息超过允许长度");
+        }
+        return normalized;
     }
 
     /** @param value 代码 @param field 字段名 @return 规范化代码 */

@@ -738,16 +738,16 @@ paths:
       operationId: listExternalEndpoints
       summary: 查询全局服务地址和当前账号有权访问的机构服务地址
       responses:
-        '200': { description: 不包含凭证引用的服务地址资料, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointListResponse' } } } }
+        '200': { description: 不包含接口认证原文的服务地址资料, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointListResponse' } } } }
         '403': { description: 'configuration:read permission and organization scope are required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
     post:
       operationId: createExternalEndpoint
-      summary: 创建默认停用的服务地址，待检查后再启用
+      summary: 创建服务地址并按请求明确启用或停用
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateExternalEndpointRequest' } } } }
       responses:
-        '201': { description: 已创建默认停用的服务地址, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
+        '201': { description: 已按请求状态创建服务地址, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'configuration:write permission and organization scope are required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
@@ -761,7 +761,7 @@ paths:
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateExternalEndpointRequest' } } } }
       responses:
-        '200': { description: 不包含凭证引用的服务地址资料, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
+        '200': { description: 不包含接口认证原文的服务地址资料, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'configuration:write permission and organization scope are required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
@@ -1363,34 +1363,47 @@ components:
         environment: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
         organizationId: { type: integer, format: int64, nullable: true }
         organizationCode: { type: string, nullable: true }
-        baseUrl: { type: string, format: uri, pattern: '^https://' }
+        baseUrl: { type: string, format: uri, pattern: '^https?://' }
         connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
         readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
-        credentialConfigured: { type: boolean, description: 是否已配置凭证；接口从不返回凭证引用本身 }
+        credentialConfigured: { type: boolean, description: 是否已配置接口认证信息；接口从不返回认证原文 }
         enabled: { type: boolean }
         createdAt: { type: string, format: date-time, description: UTC }
         updatedAt: { type: string, format: date-time, description: UTC }
         version: { type: string, format: byte }
     CreateExternalEndpointRequest:
       type: object
-      required: [environment, baseUrl, connectTimeoutMs, readTimeoutMs, credentialReference]
+      required: [environment, baseUrl, connectTimeoutMs, readTimeoutMs, authentication, enabled]
       properties:
         environment: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
         organizationId: { type: integer, format: int64, minimum: 1, nullable: true }
-        baseUrl: { type: string, format: uri, maxLength: 500, pattern: '^https://' }
+        baseUrl: { type: string, format: uri, maxLength: 500, pattern: '^https?://', description: 实际服务使用的HTTP或HTTPS基础地址，不含查询参数 }
         connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
         readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
-        credentialReference: { type: string, minLength: 1, maxLength: 200, writeOnly: true, description: 获准的凭证保管系统引用地址，不能填写明文凭证 }
+        authentication: { $ref: '#/components/schemas/ExternalEndpointAuthenticationInput' }
+        enabled: { type: boolean, description: 保存成功后是否立即允许业务使用该连接 }
     UpdateExternalEndpointRequest:
       type: object
-      required: [baseUrl, connectTimeoutMs, readTimeoutMs, credentialReference, enabled, version]
+      required: [environment, baseUrl, connectTimeoutMs, readTimeoutMs, enabled, version]
       properties:
-        baseUrl: { type: string, format: uri, maxLength: 500, pattern: '^https://' }
+        environment: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
+        organizationId: { type: integer, format: int64, minimum: 1, nullable: true }
+        baseUrl: { type: string, format: uri, maxLength: 500, pattern: '^https?://', description: 实际服务使用的HTTP或HTTPS基础地址，不含查询参数 }
         connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
         readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
-        credentialReference: { type: string, minLength: 1, maxLength: 200, writeOnly: true, description: 获准的凭证保管系统引用地址，接口从不返回该值 }
+        authentication: { allOf: [{ $ref: '#/components/schemas/ExternalEndpointAuthenticationInput' }], nullable: true, description: 可选的新认证信息；省略或传null表示保留现有内容 }
         enabled: { type: boolean }
         version: { type: string, format: byte }
+    ExternalEndpointAuthenticationInput:
+      type: object
+      writeOnly: true
+      required: [vendorCode, authorizationCode]
+      description: 机构HIS接口认证信息；服务端加密保存，任何查询接口均不回显
+      properties:
+        vendorCode: { type: string, minLength: 1, maxLength: 100, description: HIS或卫健主管部门分配的厂商编号 }
+        username: { type: string, maxLength: 100, description: 可选接口用户名；与密码同时填写 }
+        password: { type: string, format: password, maxLength: 200, description: 可选接口密码；与用户名同时填写 }
+        authorizationCode: { type: string, format: password, minLength: 1, maxLength: 200, description: 当前机构独立的接口授权码或验证码 }
     ManagementAuditEventListResponse:
       type: object
       required: [code, message, data]

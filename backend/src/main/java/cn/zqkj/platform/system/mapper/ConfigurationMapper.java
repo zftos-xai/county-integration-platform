@@ -11,7 +11,9 @@ import cn.zqkj.platform.system.domain.model.DictionaryItem;
 import cn.zqkj.platform.system.domain.model.DictionaryType;
 import cn.zqkj.platform.system.domain.model.ParameterValue;
 import cn.zqkj.platform.system.domain.model.ExternalEndpoint;
+import cn.zqkj.platform.system.domain.model.ExternalEndpointCredential;
 import cn.zqkj.platform.system.domain.model.ExternalSystem;
+import cn.zqkj.platform.system.domain.model.EncryptedExternalEndpointCredential;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -141,8 +143,21 @@ public interface ConfigurationMapper {
     /** @param endpointId 主键 @return 服务地址 */
     Optional<ExternalEndpoint> findExternalEndpoint(long endpointId);
 
-    /** @param systemId 系统主键 @param command 适用范围命令 @return 是否存在 */
+    /**
+     * @param systemCode 外部系统稳定代码
+     * @param environment 部署环境
+     * @param organizationId 机构主键
+     * @return 当前机构在指定环境下启用的服务地址；不存在时为空
+     */
+    Optional<ExternalEndpoint> findEnabledExternalEndpoint(
+            @Param("systemCode") String systemCode,
+            @Param("environment") cn.zqkj.platform.system.domain.model.ParameterEnvironment environment,
+            @Param("organizationId") long organizationId
+    );
+
+    /** @param systemId 系统主键 @param excludedEndpointId 修改时排除的当前配置主键 @param command 适用范围命令 @return 是否存在 */
     boolean externalEndpointScopeExists(@Param("systemId") long systemId,
+                                        @Param("excludedEndpointId") Long excludedEndpointId,
                                         @Param("command") ExternalEndpointCommand command);
 
     /** @param systemId 系统主键 @param command 创建命令 @param actor 操作人 @return 新主键 */
@@ -154,4 +169,21 @@ public interface ConfigurationMapper {
     int updateExternalEndpoint(@Param("endpointId") long endpointId,
                                @Param("command") ExternalEndpointCommand command,
                                @Param("actor") String actor);
+
+    /** @param endpointId 服务地址主键 @return 已保存认证密文；不存在时为空 */
+    Optional<ExternalEndpointCredential> findExternalEndpointCredential(long endpointId);
+
+    /** @param endpointId 服务地址主键 @param credential 认证密文 @param actor 操作人 */
+    void createExternalEndpointCredential(
+            @Param("endpointId") long endpointId,
+            @Param("credential") EncryptedExternalEndpointCredential credential,
+            @Param("actor") String actor
+    );
+
+    /** @param endpointId 服务地址主键 @param credential 新认证密文 @param actor 操作人 @return 修改行数 */
+    int updateExternalEndpointCredential(
+            @Param("endpointId") long endpointId,
+            @Param("credential") EncryptedExternalEndpointCredential credential,
+            @Param("actor") String actor
+    );
 }

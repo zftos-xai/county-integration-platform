@@ -87,13 +87,14 @@ public List<ExchangeRecordSummary> findRecent(String organizationCode, int limit
 
 ## 4. 命名、结构与可读性
 
-- 基础包统一为`cn.zqkj.platform`。系统管理归入`system`，交换功能归入`exchange`，内部统一使用`controller / domain / mapper / service / service.impl`分包；Service接口使用业务名称，默认实现使用`Impl`后缀。`domain`固定按`dto / model / vo`区分输入、内部模型和输出，输出类使用`VO`后缀。包名全小写，类用PascalCase，方法和变量用camelCase，常量用`UPPER_SNAKE_CASE`。
+- 基础包统一为`cn.zqkj.platform`。系统管理归入`system`，交换功能归入`exchange`，内部统一使用`controller / domain / mapper / service / service.impl`分包；需要定义领域专属异常时统一增加`exception`包。Service接口使用业务名称，默认实现使用`Impl`后缀。`domain`固定按`dto / model / vo`区分输入、内部模型和输出，输出类使用`VO`后缀。包名全小写，类用PascalCase，方法和变量用camelCase，常量用`UPPER_SNAKE_CASE`。
 - 使用统一业务术语，避免拼音、不明确缩写及含义不清的 `data`、`info`、`handle`、`process`。
 - `controller`包只允许Controller；Controller负责协议转换和输入校验并只依赖Service接口。`service.impl`负责业务规则与事务；`mapper`包只允许MyBatis Mapper接口，不增加Repository和`MyBatis...Repository`适配层；Client负责获批外部调用。
 - 请求和响应对象不得直接暴露数据库实体。对外接口规范、领域和持久化模型不一致时应明确转换边界。
 - 方法保持单一目的；复杂条件提取为有业务含义的方法，避免深层嵌套、超长参数列表和用布尔值控制多条流程。
 - 优先使用构造器注入和创建后不能修改的对象；只读传输结果可用 `record`。禁止通过静态可变状态共享请求数据。
 - Spring、安全和Web技术装配按职责放入`framework`；`common`仅允许统一响应、异常等边界明确且不含业务规则的类型，不创建无边界的`shared`或`utils`包。
+- 业务域专属异常统一放在`<业务域>/exception`，跨业务且语义稳定的公共异常才允许放在`common/exception`。异常类不得夹在`controller`、`client`、`service`或`service.impl`中；名称应表达失败语义，不使用`ServiceException`、`ClientException`等仅描述技术层次的笼统命名。
 
 ## 5. Java 基础实践
 

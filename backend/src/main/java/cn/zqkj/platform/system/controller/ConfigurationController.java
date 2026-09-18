@@ -19,6 +19,8 @@ import cn.zqkj.platform.system.domain.dto.UpsertParameterRequest;
 import cn.zqkj.platform.system.domain.dto.CreateExternalEndpointRequest;
 import cn.zqkj.platform.system.domain.dto.CreateExternalSystemRequest;
 import cn.zqkj.platform.system.domain.dto.ExternalEndpointCommand;
+import cn.zqkj.platform.system.domain.dto.ExternalEndpointAuthenticationCommand;
+import cn.zqkj.platform.system.domain.dto.ExternalEndpointAuthenticationRequest;
 import cn.zqkj.platform.system.domain.dto.ExternalSystemCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateExternalEndpointRequest;
 import cn.zqkj.platform.system.domain.dto.UpdateExternalSystemRequest;
@@ -285,7 +287,8 @@ public class ConfigurationController {
     ) {
         return ApiResponse.success(service.createExternalEndpoint(systemId, new ExternalEndpointCommand(
                 parseEnvironment(request.environment()), request.organizationId(), request.baseUrl(),
-                request.connectTimeoutMs(), request.readTimeoutMs(), request.credentialReference(), false, null
+                request.connectTimeoutMs(), request.readTimeoutMs(), authentication(request.authentication()),
+                request.enabled(), null
         ), actor(principal)));
     }
 
@@ -298,9 +301,20 @@ public class ConfigurationController {
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.updateExternalEndpoint(endpointId, new ExternalEndpointCommand(
-                null, null, request.baseUrl(), request.connectTimeoutMs(), request.readTimeoutMs(),
-                request.credentialReference(), request.enabled(), decodeVersion(request.version())
+                parseEnvironment(request.environment()), request.organizationId(), request.baseUrl(),
+                request.connectTimeoutMs(), request.readTimeoutMs(),
+                authentication(request.authentication()), request.enabled(), decodeVersion(request.version())
         ), actor(principal)));
+    }
+
+    /** @param request 可选认证请求 @return 服务层认证命令；未提交时为空 */
+    private ExternalEndpointAuthenticationCommand authentication(ExternalEndpointAuthenticationRequest request) {
+        if (request == null) {
+            return null;
+        }
+        return new ExternalEndpointAuthenticationCommand(
+                request.vendorCode(), request.username(), request.password(), request.authorizationCode()
+        );
     }
 
     /** @param principal 当前用户 @return 服务端可信操作人信息 */

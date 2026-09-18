@@ -1,7 +1,7 @@
 <!-- 登录后管理端布局：统一承载导航、页面标题、用户信息和退出入口。 -->
 <script setup lang="ts">
 import {
-  Activity, BookOpen, Building2, ClipboardList, Database, LogOut, Menu, Settings2, ShieldCheck, Users,
+  Activity, BookOpen, Building2, ClipboardList, Database, LogOut, Menu, ServerCog, Settings2, ShieldCheck, Users,
   X,
 } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
@@ -39,6 +39,7 @@ const navigationGroups: NavigationGroup[] = [
   { label: '基础配置', items: [
     { to: '/parameters', label: '参数配置', icon: Settings2, permission: 'configuration:read' },
     { to: '/dictionaries', label: '数据字典', icon: BookOpen, permission: 'configuration:read' },
+    { to: '/external-systems', label: '外部系统', icon: ServerCog, permission: 'configuration:read' },
   ] },
   { label: '运行处理', items: [
     { to: '/audit', label: '审计记录', icon: ClipboardList, permission: 'audit:read' },
@@ -60,7 +61,7 @@ const pageContext = computed(() => {
     '/audit': { section: '运行处理', description: '查询管理操作与安全审计记录' },
     '/parameters': { section: '基础配置', description: '维护平台注册参数及环境取值' },
     '/dictionaries': { section: '基础配置', description: '维护平台受控字典与字典项' },
-    '/external-systems': { section: '基础配置', description: '维护外部系统、环境服务地址与凭证引用' },
+    '/external-systems': { section: '基础配置', description: '维护外部系统及各机构的接口配置' },
     '/users': { section: '系统管理', description: '维护平台账号、角色和机构范围' },
     '/roles': { section: '系统管理', description: '维护角色及其功能权限' },
     '/organizations': { section: '系统管理', description: '维护机构档案、层级和启停状态' },
@@ -81,7 +82,7 @@ async function logout() {
     <aside class="prototype-sidebar" :class="{ open: isMobileOpen }">
       <div class="prototype-brand">
         <span class="prototype-logo"><Database :size="20" /></span>
-        <span><strong>{{ platformSettings.title }}</strong><small>{{ platformSettings.subtitle }}</small></span>
+        <span class="prototype-brand-copy"><strong>{{ platformSettings.title }}</strong><small>{{ platformSettings.subtitle }}</small></span>
         <button class="prototype-icon prototype-close" aria-label="关闭导航" title="关闭导航" @click="isMobileOpen = false"><X :size="18" /></button>
       </div>
       <nav class="prototype-nav" aria-label="功能导航">

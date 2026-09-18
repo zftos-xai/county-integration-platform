@@ -80,6 +80,17 @@ test('正式管理端采用参考图的宽侧栏、三层页面标题和全局�
   assert.match(styles, /\.prototype-main-footer \{[^}]*min-height:\s*56px/)
 })
 
+test('窄屏导航使用完整抽屉并把关闭按钮固定在品牌区内部', async () => {
+  const layout = await readFile('web-admin/src/layout/AppLayout.vue', 'utf8')
+  const styles = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8')
+
+  assert.match(layout, /class="prototype-brand-copy"/)
+  assert.match(styles, /width:\s*min\(320px, calc\(100vw - 32px\)\)/)
+  assert.match(styles, /transform:\s*translateX\(-100%\)/)
+  assert.match(styles, /\.prototype-brand-copy \{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/)
+  assert.match(styles, /\.prototype-close \{[^}]*position:\s*absolute;[^}]*right:\s*18px;[^}]*transform:\s*translateY\(-50%\)/)
+})
+
 test('正式列表统一提供分页并在最小桌面宽度固定操作列', async () => {
   const listFiles = [
     'web-admin/src/views/system/user/UserView.vue',

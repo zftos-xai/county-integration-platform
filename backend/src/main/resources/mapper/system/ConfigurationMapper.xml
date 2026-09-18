@@ -88,8 +88,18 @@
             <arg column="organization_id" javaType="java.lang.Long"/><arg column="organization_code" javaType="java.lang.String"/>
             <arg column="base_url" javaType="java.lang.String"/><arg column="connect_timeout_ms" javaType="_int"/>
             <arg column="read_timeout_ms" javaType="_int"/><arg column="credential_reference" javaType="java.lang.String"/>
-            <arg column="is_enabled" javaType="_boolean"/><arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <arg column="credential_configured" javaType="_boolean"/><arg column="is_enabled" javaType="_boolean"/>
+            <arg column="created_at" javaType="java.time.LocalDateTime"/>
             <arg column="updated_at" javaType="java.time.LocalDateTime"/><arg column="row_version" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="externalEndpointCredential" type="cn.zqkj.platform.system.domain.model.ExternalEndpointCredential">
+        <constructor>
+            <arg column="endpoint_id" javaType="_long"/>
+            <arg column="encrypted_payload" javaType="_byte[]"/>
+            <arg column="initialization_vector" javaType="_byte[]"/>
+            <arg column="encryption_version" javaType="_int"/>
         </constructor>
     </resultMap>
 
@@ -337,9 +347,11 @@
         SELECT endpoints.id, endpoints.external_system_id, endpoints.environment_code,
                endpoints.organization_id, organizations.organization_code, endpoints.base_url,
                endpoints.connect_timeout_ms, endpoints.read_timeout_ms, endpoints.credential_reference,
+               CASE WHEN credentials.endpoint_id IS NOT NULL OR endpoints.credential_reference LIKE N'env://%' THEN 1 ELSE 0 END AS credential_configured,
                endpoints.is_enabled, endpoints.created_at, endpoints.updated_at, endpoints.row_version
         FROM sys_external_endpoint AS endpoints
         LEFT JOIN org_organization AS organizations ON organizations.id = endpoints.organization_id
+        LEFT JOIN sys_external_endpoint_credential AS credentials ON credentials.endpoint_id = endpoints.id
         WHERE endpoints.external_system_id = #{systemId}
         ORDER BY endpoints.environment_code, organizations.organization_code, endpoints.id
     </select>
@@ -348,16 +360,36 @@
         SELECT endpoints.id, endpoints.external_system_id, endpoints.environment_code,
                endpoints.organization_id, organizations.organization_code, endpoints.base_url,
                endpoints.connect_timeout_ms, endpoints.read_timeout_ms, endpoints.credential_reference,
+               CASE WHEN credentials.endpoint_id IS NOT NULL OR endpoints.credential_reference LIKE N'env://%' THEN 1 ELSE 0 END AS credential_configured,
                endpoints.is_enabled, endpoints.created_at, endpoints.updated_at, endpoints.row_version
         FROM sys_external_endpoint AS endpoints
         LEFT JOIN org_organization AS organizations ON organizations.id = endpoints.organization_id
+        LEFT JOIN sys_external_endpoint_credential AS credentials ON credentials.endpoint_id = endpoints.id
         WHERE endpoints.id = #{endpointId}
+    </select>
+
+    <select id="findEnabledExternalEndpoint" resultMap="externalEndpoint">
+        SELECT endpoints.id, endpoints.external_system_id, endpoints.environment_code,
+               endpoints.organization_id, organizations.organization_code, endpoints.base_url,
+               endpoints.connect_timeout_ms, endpoints.read_timeout_ms, endpoints.credential_reference,
+               CASE WHEN credentials.endpoint_id IS NOT NULL OR endpoints.credential_reference LIKE N'env://%' THEN 1 ELSE 0 END AS credential_configured,
+               endpoints.is_enabled, endpoints.created_at, endpoints.updated_at, endpoints.row_version
+        FROM sys_external_endpoint AS endpoints
+        INNER JOIN sys_external_system AS systems ON systems.id = endpoints.external_system_id
+        INNER JOIN org_organization AS organizations ON organizations.id = endpoints.organization_id
+        LEFT JOIN sys_external_endpoint_credential AS credentials ON credentials.endpoint_id = endpoints.id
+        WHERE systems.system_code = #{systemCode}
+          AND systems.is_enabled = 1
+          AND endpoints.environment_code = #{environment}
+          AND endpoints.organization_id = #{organizationId}
+          AND endpoints.is_enabled = 1
     </select>
 
     <select id="externalEndpointScopeExists" resultType="boolean">
         SELECT CASE WHEN EXISTS (
             SELECT 1 FROM sys_external_endpoint
             WHERE external_system_id = #{systemId} AND environment_code = #{command.environment}
+            <if test="excludedEndpointId != null">AND id &lt;&gt; #{excludedEndpointId}</if>
             <choose><when test="command.organizationId != null">AND organization_id = #{command.organizationId}</when>
                 <otherwise>AND organization_id IS NULL</otherwise></choose>
         ) THEN 1 ELSE 0 END
@@ -369,16 +401,40 @@
              read_timeout_ms, credential_reference, is_enabled, created_by, updated_by)
         VALUES
             (#{systemId}, #{command.environment}, #{command.organizationId}, #{command.baseUrl},
-             #{command.connectTimeoutMs}, #{command.readTimeoutMs}, #{command.credentialReference},
-             0, #{actor}, #{actor});
+             #{command.connectTimeoutMs}, #{command.readTimeoutMs}, N'managed://database',
+             #{command.enabled}, #{actor}, #{actor});
         SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
     </select>
 
     <update id="updateExternalEndpoint">
         UPDATE sys_external_endpoint
-        SET base_url = #{command.baseUrl}, connect_timeout_ms = #{command.connectTimeoutMs},
-            read_timeout_ms = #{command.readTimeoutMs}, credential_reference = #{command.credentialReference},
+        SET environment_code = #{command.environment}, organization_id = #{command.organizationId},
+            base_url = #{command.baseUrl}, connect_timeout_ms = #{command.connectTimeoutMs},
+            read_timeout_ms = #{command.readTimeoutMs},
             is_enabled = #{command.enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
         WHERE id = #{endpointId} AND row_version = #{command.expectedVersion}
+    </update>
+
+    <select id="findExternalEndpointCredential" resultMap="externalEndpointCredential">
+        SELECT endpoint_id, encrypted_payload, initialization_vector, encryption_version
+        FROM sys_external_endpoint_credential
+        WHERE endpoint_id = #{endpointId}
+    </select>
+
+    <insert id="createExternalEndpointCredential">
+        INSERT INTO sys_external_endpoint_credential
+            (endpoint_id, encrypted_payload, initialization_vector, encryption_version, created_by, updated_by)
+        VALUES
+            (#{endpointId}, #{credential.encryptedPayload}, #{credential.initializationVector},
+             #{credential.encryptionVersion}, #{actor}, #{actor})
+    </insert>
+
+    <update id="updateExternalEndpointCredential">
+        UPDATE sys_external_endpoint_credential
+        SET encrypted_payload = #{credential.encryptedPayload},
+            initialization_vector = #{credential.initializationVector},
+            encryption_version = #{credential.encryptionVersion},
+            updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE endpoint_id = #{endpointId}
     </update>
 </mapper>

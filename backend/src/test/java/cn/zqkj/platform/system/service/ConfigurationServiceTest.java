@@ -7,6 +7,7 @@ import cn.zqkj.platform.system.domain.dto.CreateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.DeleteParameterCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.UpsertParameterCommand;
+import cn.zqkj.platform.system.domain.dto.ExternalEndpointAuthenticationCommand;
 import cn.zqkj.platform.system.domain.dto.ExternalEndpointCommand;
 import cn.zqkj.platform.system.domain.model.AccessActor;
 import cn.zqkj.platform.system.domain.model.DictionaryType;
@@ -20,6 +21,7 @@ import cn.zqkj.platform.system.domain.model.ExternalSystem;
 import cn.zqkj.platform.system.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.mapper.ConfigurationMapper;
 import cn.zqkj.platform.system.service.impl.ConfigurationServiceImpl;
+import cn.zqkj.platform.system.service.impl.ExternalEndpointCredentialCipher;
 import cn.zqkj.platform.system.service.ManagementAuditService;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
@@ -34,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -257,20 +260,101 @@ class ConfigurationServiceTest {
         verify(mapper, never()).deleteDictionaryItem(anyLong(), any());
     }
 
-    /** 验证服务地址只接受不含凭证和查询串的HTTPS基础地址。 */
+    /** 验证服务地址拒绝不支持的协议、地址凭证和查询参数。 */
     @Test
-    void rejectsInsecureExternalEndpointUrl() {
+    void rejectsInvalidExternalEndpointUrl() {
         ConfigurationMapper mapper = mock(ConfigurationMapper.class);
         when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(externalSystem(true)));
         ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
 
         assertThrows(InvalidRequestException.class, () -> service.createExternalEndpoint(
-                1L, endpointCommand("http://his.local/api", null), actor()
+                1L, endpointCommand("ftp://his.local/api", null), actor()
         ));
         assertThrows(InvalidRequestException.class, () -> service.createExternalEndpoint(
                 1L, endpointCommand("https://user:pass@his.local/api", null), actor()
         ));
+        assertThrows(InvalidRequestException.class, () -> service.createExternalEndpoint(
+                1L, endpointCommand("http://his.local/api?op=PHIS_Interface", null), actor()
+        ));
         verify(mapper, never()).createExternalEndpoint(anyLong(), any(), any());
+    }
+
+    /** 验证正式WSDL使用的HTTP WebService基础地址能够登记。 */
+    @Test
+    void acceptsHttpExternalEndpointUrl() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(externalSystem(true)));
+        when(mapper.createExternalEndpoint(eq(1L), any(), eq("admin"))).thenReturn(9L);
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(externalEndpoint()));
+        ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
+
+        service.createExternalEndpoint(
+                1L, endpointCommand("http://his.example.invalid/WebService.asmx", null), actor()
+        );
+
+        verify(mapper).createExternalEndpoint(eq(1L),
+                argThat(command -> "http://his.example.invalid/WebService.asmx".equals(command.baseUrl())
+                        && command.enabled()),
+                eq("admin"));
+    }
+
+    /** 验证首次配置必须提供业务人员可识别的厂商编号和机构授权码。 */
+    @Test
+    void rejectsIncompleteEndpointAuthentication() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(externalSystem(true)));
+        ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
+
+        ExternalEndpointCommand command = new ExternalEndpointCommand(
+                ParameterEnvironment.TEST, null, "http://his.example.invalid/WebService.asmx",
+                3000, 15000, new ExternalEndpointAuthenticationCommand("", null, null, "AUTH-008"),
+                false, null
+        );
+
+        assertThrows(InvalidRequestException.class,
+                () -> service.createExternalEndpoint(1L, command, actor()));
+        verify(mapper, never()).createExternalEndpoint(anyLong(), any(), any());
+    }
+
+    /** 验证修改非认证字段时可以保留现有机构认证信息。 */
+    @Test
+    void retainsExistingCredentialReferenceWhenUpdateDoesNotRotateCredential() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        ExternalEndpoint current = externalEndpoint();
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(current));
+        when(mapper.updateExternalEndpoint(eq(9L), any(), eq("admin"))).thenReturn(1);
+        ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
+
+        service.updateExternalEndpoint(9L, new ExternalEndpointCommand(
+                ParameterEnvironment.TEST, null, "http://his.example.invalid/WebService.asmx", 4000, 16000,
+                null, false, current.version()
+        ), actor());
+
+        verify(mapper).updateExternalEndpoint(eq(9L), argThat(command ->
+                command.environment() == ParameterEnvironment.TEST
+                        && command.organizationId() == null
+                        && command.authentication() == null), eq("admin"));
+    }
+
+    /** 验证更换适用机构时不能沿用原机构认证信息。 */
+    @Test
+    void requiresNewAuthenticationWhenEndpointOrganizationChanges() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        OrganizationService organizations = mock(OrganizationService.class);
+        ExternalEndpoint current = externalEndpoint();
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(current));
+        when(organizations.get(10L)).thenReturn(organization(10L, "ORG001"));
+        ConfigurationService service = service(mapper, List.of(), organizations);
+
+        assertThrows(InvalidRequestException.class, () -> service.updateExternalEndpoint(
+                9L,
+                new ExternalEndpointCommand(
+                        ParameterEnvironment.TEST, 10L, "http://his.example.invalid/WebService.asmx",
+                        3000, 15000, null, true, current.version()
+                ),
+                actor()
+        ));
+        verify(mapper, never()).updateExternalEndpoint(anyLong(), any(), any());
     }
 
     /** 验证机构级服务地址不能越过当前用户显式机构范围。 */
@@ -311,7 +395,7 @@ class ConfigurationServiceTest {
         when(registry.findAll()).thenReturn(definitions);
         definitions.forEach(definition -> when(registry.find(definition.key())).thenReturn(Optional.of(definition)));
         return new ConfigurationServiceImpl(mapper, registry, organizationService,
-                mock(ManagementAuditService.class));
+                mock(ManagementAuditService.class), mock(ExternalEndpointCredentialCipher.class));
     }
 
     /** @param key 参数键 @param type 类型 @param scoped 是否机构级 @param sensitive 是否敏感 @param min 下界 @param max 上界 @return 参数定义 */
@@ -372,14 +456,14 @@ class ConfigurationServiceTest {
     /** @return 外部服务地址快照 */
     private ExternalEndpoint externalEndpoint() {
         return new ExternalEndpoint(9L, 1L, ParameterEnvironment.TEST, null, null,
-                "https://his.example.invalid/api", 3000, 15000, "secret-store://his/test", false,
+                "https://his.example.invalid/api", 3000, 15000, "managed://database", true, false,
                 LocalDateTime.now(), LocalDateTime.now(), version());
     }
 
     /** @param url 地址 @param organizationId 可选机构 @return 服务地址创建命令 */
     private ExternalEndpointCommand endpointCommand(String url, Long organizationId) {
         return new ExternalEndpointCommand(ParameterEnvironment.TEST, organizationId, url, 3000, 15000,
-                "secret-store://his/test", false, null);
+                new ExternalEndpointAuthenticationCommand("V01", null, null, "AUTH-008"), true, null);
     }
 
     /** @param id 机构主键 @param code 机构代码 @return 机构记录 */

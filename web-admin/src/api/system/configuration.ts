@@ -1,7 +1,8 @@
 import { apiRequest } from '@/utils/request'
 import { isRecord } from '@/utils/validation'
 import {
-  configurationWriteRequest, dictionaryItemPath, dictionaryItemsPath, dictionaryTypePath, parameterValuePath,
+  configurationWriteRequest, dictionaryItemPath, dictionaryItemsPath, dictionaryTypePath,
+  externalEndpointPath, externalEndpointsPath, externalSystemPath, parameterValuePath,
 } from './configurationApiPaths'
 
 /** 平台参数支持的值类型。 */
@@ -81,6 +82,55 @@ export type CreateDictionaryItemInput = Pick<DictionaryItem, 'itemCode' | 'itemL
 /** 更新字典项的请求。 */
 export type UpdateDictionaryItemInput = Pick<DictionaryItem, 'itemLabel' | 'sortOrder' | 'enabled' | 'version'>
 
+/** 平台登记的外部系统。 */
+export type ExternalSystem = {
+  id: number
+  systemCode: string
+  systemName: string
+  description: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  version: string
+}
+
+/** 外部系统在某一环境和机构下的服务地址；凭证只返回是否已配置。 */
+export type ExternalEndpoint = {
+  id: number
+  externalSystemId: number
+  environment: ParameterEnvironment
+  organizationId: number | null
+  organizationCode: string | null
+  baseUrl: string
+  connectTimeoutMs: number
+  readTimeoutMs: number
+  credentialConfigured: boolean
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  version: string
+}
+
+/** 创建外部系统的请求。 */
+export type CreateExternalSystemInput = Pick<ExternalSystem, 'systemCode' | 'systemName' | 'description'>
+/** 更新外部系统的请求。 */
+export type UpdateExternalSystemInput = Pick<ExternalSystem, 'systemName' | 'description' | 'enabled' | 'version'>
+/** 管理端只写的机构HIS接口认证信息；查询接口不会回显字段值。 */
+export type ExternalEndpointAuthenticationInput = {
+  vendorCode: string
+  username: string
+  password: string
+  authorizationCode: string
+}
+/** 创建机构服务地址的请求。 */
+export type CreateExternalEndpointInput = Pick<ExternalEndpoint, 'environment' | 'organizationId' | 'baseUrl' | 'connectTimeoutMs' | 'readTimeoutMs' | 'enabled'> & {
+  authentication: ExternalEndpointAuthenticationInput
+}
+/** 更新机构接口配置的请求；认证对象为空表示保留已配置内容。 */
+export type UpdateExternalEndpointInput = Pick<ExternalEndpoint, 'environment' | 'organizationId' | 'baseUrl' | 'connectTimeoutMs' | 'readTimeoutMs' | 'enabled' | 'version'> & {
+  authentication: ExternalEndpointAuthenticationInput | null
+}
+
 const valueTypes: ParameterValueType[] = ['STRING', 'INTEGER', 'DECIMAL', 'BOOLEAN']
 const environments: ParameterEnvironment[] = ['DEVELOPMENT', 'TEST', 'PRODUCTION']
 const isNullableNumber = (value: unknown) => value === null || typeof value === 'number'
@@ -125,10 +175,33 @@ export function isDictionaryItem(value: unknown): value is DictionaryItem {
     && typeof value.createdAt === 'string' && typeof value.updatedAt === 'string' && typeof value.version === 'string'
 }
 
+/** Validates one external system returned by the management API. */
+export function isExternalSystem(value: unknown): value is ExternalSystem {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'number' && typeof value.systemCode === 'string'
+    && typeof value.systemName === 'string' && typeof value.description === 'string'
+    && typeof value.enabled === 'boolean' && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string' && typeof value.version === 'string'
+}
+
+/** Validates one organization-scoped external endpoint returned by the management API. */
+export function isExternalEndpoint(value: unknown): value is ExternalEndpoint {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'number' && typeof value.externalSystemId === 'number'
+    && environments.includes(value.environment as ParameterEnvironment)
+    && isNullableNumber(value.organizationId) && isNullableString(value.organizationCode)
+    && typeof value.baseUrl === 'string' && Number.isInteger(value.connectTimeoutMs)
+    && Number.isInteger(value.readTimeoutMs) && typeof value.credentialConfigured === 'boolean'
+    && typeof value.enabled === 'boolean' && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string' && typeof value.version === 'string'
+}
+
 const isParameterDefinitionList = (value: unknown): value is ParameterDefinition[] => Array.isArray(value) && value.every(isParameterDefinition)
 const isParameterValueList = (value: unknown): value is ParameterValue[] => Array.isArray(value) && value.every(isParameterValue)
 const isDictionaryTypeList = (value: unknown): value is DictionaryType[] => Array.isArray(value) && value.every(isDictionaryType)
 const isDictionaryItemList = (value: unknown): value is DictionaryItem[] => Array.isArray(value) && value.every(isDictionaryItem)
+const isExternalSystemList = (value: unknown): value is ExternalSystem[] => Array.isArray(value) && value.every(isExternalSystem)
+const isExternalEndpointList = (value: unknown): value is ExternalEndpoint[] => Array.isArray(value) && value.every(isExternalEndpoint)
 
 /** 查询代码注册的参数定义。 */
 export function listParameterDefinitions(signal?: AbortSignal) {
@@ -188,4 +261,38 @@ export function updateDictionaryItem(id: number, input: UpdateDictionaryItemInpu
 /** 删除一个尚未被业务数据引用的字典项。 */
 export function deleteDictionaryItem(id: number, version: string) {
   return apiRequest<void>(dictionaryItemPath(id), configurationWriteRequest('DELETE', { version }))
+}
+
+/** 查询平台登记的外部系统。 */
+export function listExternalSystems(signal?: AbortSignal) {
+  return apiRequest<ExternalSystem[]>('/configuration/external-systems', { signal }, isExternalSystemList)
+}
+
+/** 新增一个已确认的外部系统。 */
+export function createExternalSystem(input: CreateExternalSystemInput) {
+  return apiRequest<ExternalSystem>('/configuration/external-systems', configurationWriteRequest('POST', input), isExternalSystem)
+}
+
+/** 使用并发版本更新外部系统。 */
+export function updateExternalSystem(id: number, input: UpdateExternalSystemInput) {
+  return apiRequest<ExternalSystem>(externalSystemPath(id), configurationWriteRequest('PUT', input), isExternalSystem)
+}
+
+/** 查询当前管理员可见的机构服务地址。 */
+export function listExternalEndpoints(systemId: number, signal?: AbortSignal) {
+  return apiRequest<ExternalEndpoint[]>(externalEndpointsPath(systemId), { signal }, isExternalEndpointList)
+}
+
+/** 新增一个默认停用的机构服务地址。 */
+export function createExternalEndpoint(systemId: number, input: CreateExternalEndpointInput) {
+  return apiRequest<ExternalEndpoint>(
+    externalEndpointsPath(systemId), configurationWriteRequest('POST', input), isExternalEndpoint,
+  )
+}
+
+/** 更新或启停机构服务地址；认证对象为空时保留当前配置。 */
+export function updateExternalEndpoint(id: number, input: UpdateExternalEndpointInput) {
+  return apiRequest<ExternalEndpoint>(
+    externalEndpointPath(id), configurationWriteRequest('PUT', input), isExternalEndpoint,
+  )
 }

@@ -22,6 +22,21 @@ export function dictionaryItemPath(itemId: number) {
   return `/configuration/dictionary-items/${itemId}`
 }
 
+/** 构造指定外部系统的机构服务地址集合路径。 */
+export function externalEndpointsPath(systemId: number) {
+  return `/configuration/external-systems/${systemId}/endpoints`
+}
+
+/** 构造外部系统详情路径。 */
+export function externalSystemPath(systemId: number) {
+  return `/configuration/external-systems/${systemId}`
+}
+
+/** 构造机构服务地址详情路径。 */
+export function externalEndpointPath(endpointId: number) {
+  return `/configuration/external-endpoints/${endpointId}`
+}
+
 /** 将配置写模型序列化为统一请求配置。 */
 export function configurationWriteRequest(method: ConfigurationWriteMethod, body: unknown): RequestInit {
   return { method, body: JSON.stringify(body) }

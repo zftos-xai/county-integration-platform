@@ -5,6 +5,7 @@
 *.iml
 .env
 deploy/.env.dev.local
+deploy/dev/.credential-encryption-key
 backend/target/
 node_modules/
 web-admin/dist/

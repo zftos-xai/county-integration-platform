@@ -4,6 +4,7 @@ set -eu
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 environment_file=${PLATFORM_DEV_ENV_FILE:-"$project_root/deploy/.env.dev.local"}
 security_file="$project_root/deploy/dev/sqlserver2012-legacy-tls.java.security"
+credential_key_file="$project_root/deploy/dev/.credential-encryption-key"
 
 if [ ! -f "$environment_file" ]; then
     echo "缺少开发环境配置：$environment_file" >&2
@@ -20,6 +21,11 @@ set -a
 # shellcheck disable=SC1090
 . "$environment_file"
 set +a
+
+if [ "${PLATFORM_DEV_RUN_MIGRATIONS:-false}" = "true" ]; then
+    PLATFORM_DB_MIGRATION_ENABLED=true
+    export PLATFORM_DB_MIGRATION_ENABLED
+fi
 
 if [ "${PLATFORM_ENVIRONMENT:-}" != "development" ]; then
     echo "临时 TLS 兼容启动器只允许 PLATFORM_ENVIRONMENT=development。" >&2
@@ -51,6 +57,20 @@ for required_name in PLATFORM_DB_USERNAME PLATFORM_DB_PASSWORD; do
             ;;
     esac
 done
+
+if [ -z "${PLATFORM_CREDENTIAL_ENCRYPTION_KEY:-}" ]; then
+    if [ ! -f "$credential_key_file" ]; then
+        umask 077
+        if command -v openssl >/dev/null 2>&1; then
+            openssl rand -base64 48 > "$credential_key_file"
+        else
+            echo "缺少凭证加密密钥，且未找到openssl用于生成开发密钥。" >&2
+            exit 1
+        fi
+    fi
+    PLATFORM_CREDENTIAL_ENCRYPTION_KEY=$(tr -d '\r\n' < "$credential_key_file")
+    export PLATFORM_CREDENTIAL_ENCRYPTION_KEY
+fi
 
 if command -v mvn >/dev/null 2>&1; then
     maven_command=$(command -v mvn)

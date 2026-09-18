@@ -13,6 +13,7 @@ const UsersView = () => import('@/views/system/user/UserView.vue')
 const RolesView = () => import('@/views/system/role/RoleView.vue')
 const ParametersView = () => import('@/views/configuration/parameter/ParameterView.vue')
 const DictionariesView = () => import('@/views/configuration/dictionary/DictionaryView.vue')
+const ExternalSystemsView = () => import('@/views/configuration/external-system/ExternalSystemView.vue')
 const AuditView = () => import('@/views/audit/management/AuditView.vue')
 
 /** 管理端页面地址表；正式业务页面统一挂载在登录后布局下。 */
@@ -34,7 +35,7 @@ const router = createRouter({
         { path: 'roles', component: RolesView, meta: { title: '角色权限', public: false, requiredPermission: 'access:read' } },
         { path: 'parameters', component: ParametersView, meta: { title: '参数配置', public: false, requiredPermission: 'configuration:read' } },
         { path: 'dictionaries', component: DictionariesView, meta: { title: '数据字典', public: false, requiredPermission: 'configuration:read' } },
-        { path: 'external-systems', component: PlaceholderView, meta: { title: '外部系统', public: false, requiredPermission: 'configuration:read' } },
+        { path: 'external-systems', component: ExternalSystemsView, meta: { title: '外部系统', public: false, requiredPermission: 'configuration:read' } },
         { path: 'interfaces', component: PlaceholderView, meta: { title: '接口与映射', public: false } },
         { path: 'exchanges', component: PlaceholderView, meta: { title: '交换记录', public: false } },
         { path: 'exceptions', component: PlaceholderView, meta: { title: '异常与处理', public: false } },

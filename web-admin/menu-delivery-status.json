@@ -102,6 +102,21 @@
       "tests": ["web-admin/tests/auditApiPaths.test.mjs"],
       "auditSource": "backend/src/main/java/cn/zqkj/platform/system/controller/ManagementAuditController.java",
       "auditActions": ["/api/v1/audit", "/events"]
+    },
+    {
+      "id": "external-systems",
+      "label": "外部系统",
+      "route": "/external-systems",
+      "permission": "configuration:read",
+      "writeCapable": true,
+      "stage": "前端已接入",
+      "page": "web-admin/src/views/configuration/external-system/ExternalSystemView.vue",
+      "api": "web-admin/src/api/system/configuration.ts",
+      "form": "web-admin/src/views/configuration/external-system/form.ts",
+      "editor": "web-admin/src/views/configuration/external-system/components/ExternalEndpointEditorDrawer.vue",
+      "tests": ["web-admin/tests/configurationApiPaths.test.mjs", "web-admin/tests/externalSystemForm.test.mjs"],
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/service/impl/ConfigurationServiceImpl.java",
+      "auditActions": ["EXTERNAL_SYSTEM_CREATED", "EXTERNAL_SYSTEM_UPDATED", "EXTERNAL_ENDPOINT_CREATED", "EXTERNAL_ENDPOINT_UPDATED"]
     }
   ]
 }
