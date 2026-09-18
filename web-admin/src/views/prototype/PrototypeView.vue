@@ -99,7 +99,7 @@ type Organization = {
   validTo: string
   status: '启用' | '停用'
 }
-type InterfaceStatus = '接入条件待确认' | '待联调' | '演示启用' | '已启用' | '已暂停' | '已停用'
+type InterfaceStatus = '接口资料不完整' | '待联调' | '演示启用' | '已启用' | '已暂停' | '已停用'
 type CodeMapping = {
   field: string; codeSet: string; sourceCode: string; targetCode: string; description: string
   effectiveFrom: string; status: '启用' | '停用'
@@ -155,7 +155,7 @@ const isSidebarCollapsed = ref(false)
 const query = ref('')
 const orgFilter = ref('全部机构')
 const statusFilter = ref('全部状态')
-const auditActorFilter = ref('全部主体')
+const auditActorFilter = ref('全部操作者')
 const auditActionFilter = ref('全部动作')
 const isDescending = ref(true)
 const toast = ref('')
@@ -209,14 +209,14 @@ const navGroups: NavGroup[] = [
   { label: '运行监控', items: [
     { key: 'overview', label: '运行总览', icon: Activity, roles: ['manager', 'operator'] },
   ] },
-  { label: '基础数据链路', items: [
+  { label: '基础数据处理', items: [
     { key: 'foundation', label: '基础数据', icon: Database, roles: ['manager', 'operator'] },
   ] },
-  { label: '业务接口链路', items: [
+  { label: '业务接口处理', items: [
     { key: 'interfaces', label: '业务接口', icon: Settings2, roles: ['manager'] },
     { key: 'recovery', label: '交换记录', icon: ArrowLeftRight, roles: ['manager', 'operator'] },
   ] },
-  { label: '运行治理', items: [
+  { label: '运行处理', items: [
     { key: 'alerts', label: '告警管理', icon: Bell, roles: ['manager', 'operator'] },
     { key: 'audit', label: '审计记录', icon: FileSearch, roles: ['manager', 'operator'] },
   ] },
@@ -256,18 +256,18 @@ const organizationChangeReason = ref('')
 const isNewOrganization = ref(false)
 const interfaces = ref<InterfaceConfig[]>([
   { id: '200-009', name: '查询挂号记录', domain: '挂号缴费', direction: '中间接口平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '县医院HIS相关应用', targetSystem: '基层系统PHIS_Interface', channelType: 'PHIS_Interface', tradeCode: '200-009', version: '参考文档V1.0', auth: '验证码；正式方式待确认', dataScope: '机构范围、查询条件和返回字段待确认', exchangeMode: '即时查询', retention: '仅保存交换记录和结果摘要', status: '待联调', related: '', mappings: [] },
-  { id: '200-011', name: '门诊缴费', domain: '挂号缴费', direction: '中间接口平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '县医院HIS相关应用', targetSystem: '基层系统PHIS_Interface', channelType: 'PHIS_Interface', tradeCode: '200-011', version: '参考文档V1.0', auth: '验证码；正式方式待确认', dataScope: '挂号、费用、结算字段待确认', exchangeMode: '业务写入', retention: '正文默认不长期保存', status: '接入条件待确认', related: '', mappings: [] },
-  { id: '300-002', name: '获取门诊患者个案信息', domain: '双向转诊', direction: '中间接口平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '县医院HIS相关应用', targetSystem: '基层系统PHIS_Interface', channelType: 'PHIS_Interface', tradeCode: '300-002', version: '参考文档V1.0', auth: '验证码；正式方式待确认', dataScope: '患者个案最小字段待确认', exchangeMode: '即时查询', retention: '仅保存交换记录和结果摘要', status: '接入条件待确认', related: '', mappings: [] },
-  { id: '400-003', name: '电子病历回写', domain: '电子病历', direction: '电子病历系统 → 平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '电子病历系统', targetSystem: '基层系统PHIS_Interface', channelType: '回写接口', tradeCode: '400-003', version: '参考文档V1.0', auth: '调用身份和机构范围待确认', dataScope: '病历标识、医生和时间字段待确认', exchangeMode: '业务写入', retention: '正文默认不长期保存', status: '接入条件待确认', related: '', mappings: [] },
+  { id: '200-011', name: '门诊缴费', domain: '挂号缴费', direction: '中间接口平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '县医院HIS相关应用', targetSystem: '基层系统PHIS_Interface', channelType: 'PHIS_Interface', tradeCode: '200-011', version: '参考文档V1.0', auth: '验证码；正式方式待确认', dataScope: '挂号、费用、结算字段待确认', exchangeMode: '业务写入', retention: '正文默认不长期保存', status: '接口资料不完整', related: '', mappings: [] },
+  { id: '300-002', name: '获取门诊患者个案信息', domain: '双向转诊', direction: '中间接口平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '县医院HIS相关应用', targetSystem: '基层系统PHIS_Interface', channelType: 'PHIS_Interface', tradeCode: '300-002', version: '参考文档V1.0', auth: '验证码；正式方式待确认', dataScope: '患者个案最小字段待确认', exchangeMode: '即时查询', retention: '仅保存交换记录和结果摘要', status: '接口资料不完整', related: '', mappings: [] },
+  { id: '400-003', name: '电子病历回写', domain: '电子病历', direction: '电子病历系统 → 平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '电子病历系统', targetSystem: '基层系统PHIS_Interface', channelType: '回写接口', tradeCode: '400-003', version: '参考文档V1.0', auth: '调用身份和机构范围待确认', dataScope: '病历标识、医生和时间字段待确认', exchangeMode: '业务写入', retention: '正文默认不长期保存', status: '接口资料不完整', related: '', mappings: [] },
   { id: '500-002', name: '按申请单号获取申请单', domain: 'PACS', direction: '中间接口平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '县医院PACS相关应用', targetSystem: '基层系统PHIS_Interface', channelType: 'PHIS_Interface', tradeCode: '500-002', version: '参考文档V1.0', auth: '验证码；正式方式待确认', dataScope: '申请单最小字段和机构范围待确认', exchangeMode: '即时查询', retention: '仅保存交换记录和结果摘要', status: '待联调', related: 'DESIGN-02', mappings: [] },
   { id: '500-003', name: '回写检查报告', domain: 'PACS', direction: 'PACS → 中间接口平台 → 县医院HIS', provider: '县医院HIS', caller: '中间接口平台', sourceSystem: '县医院PACS', targetSystem: '县医院HIS', channelType: '回写接口', tradeCode: '500-003', version: '参考文档V1.0', auth: '机构服务身份 + 请求签名（演示）', dataScope: '检查报告最小字段与报告版本', exchangeMode: '业务写入', retention: '正文默认不长期保存', status: '演示启用', related: 'DESIGN-02', mappings: [] },
   { id: '600-003', name: '回写检验报告', domain: 'LIS', direction: 'LIS → 中间接口平台 → 县医院HIS', provider: '县医院HIS', caller: '中间接口平台', sourceSystem: '县医院LIS', targetSystem: '县医院HIS', channelType: '回写接口', tradeCode: '600-003', version: '参考文档V1.0', auth: '机构服务身份 + 请求签名（演示）', dataScope: '检验报告最小字段与报告版本', exchangeMode: '业务写入', retention: '正文默认不长期保存', status: '演示启用', related: 'DESIGN-05', mappings: [] },
-  { id: '100-008', name: '医疗机构信息查询', domain: '机构信息', direction: '中间接口平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '中间接口平台', targetSystem: '基层系统PHIS_Interface', channelType: 'PHIS_Interface', tradeCode: '100-008', version: '参考文档V1.0', auth: '验证码；正式方式待确认', dataScope: '机构标识、名称与状态', exchangeMode: '即时查询', retention: '仅保存交换记录和结果摘要', status: '接入条件待确认', related: 'DESIGN-03', mappings: [] },
+  { id: '100-008', name: '医疗机构信息查询', domain: '机构信息', direction: '中间接口平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '中间接口平台', targetSystem: '基层系统PHIS_Interface', channelType: 'PHIS_Interface', tradeCode: '100-008', version: '参考文档V1.0', auth: '验证码；正式方式待确认', dataScope: '机构标识、名称与状态', exchangeMode: '即时查询', retention: '仅保存交换记录和结果摘要', status: '接口资料不完整', related: 'DESIGN-03', mappings: [] },
   { id: 'ACB666576D94A008', name: '健康档案上传', domain: '健康档案', direction: '院内系统 → 中间接口平台 → 健康档案云平台', provider: '健康档案云平台', caller: '中间接口平台', sourceSystem: '基层院内HIS', targetSystem: '健康档案云平台', channelType: '回写接口', tradeCode: 'ACB666576D94A008', version: '演示规则V2', auth: '机构服务身份 + 请求签名（演示）', dataScope: '演示健康档案最小字段', exchangeMode: '异步写入', retention: '仅在发送恢复期临时保存最小正文', status: '演示启用', related: 'DESIGN-01', mappings: [] },
-  { id: 'ACB666576D94A000', name: '体检信息上传', domain: '体检', direction: '院内系统 → 中间接口平台 → 健康档案云平台', provider: '健康档案云平台', caller: '中间接口平台', sourceSystem: '基层院内HIS', targetSystem: '健康档案云平台', channelType: '回写接口', tradeCode: 'ACB666576D94A000', version: '演示规则V1', auth: '正式方式待确认', dataScope: '演示体检最小字段；正式范围待确认', exchangeMode: '异步写入', retention: '仅在发送恢复期临时保存最小正文', status: '接入条件待确认', related: 'DESIGN-04', mappings: [] },
+  { id: 'ACB666576D94A000', name: '体检信息上传', domain: '体检', direction: '院内系统 → 中间接口平台 → 健康档案云平台', provider: '健康档案云平台', caller: '中间接口平台', sourceSystem: '基层院内HIS', targetSystem: '健康档案云平台', channelType: '回写接口', tradeCode: 'ACB666576D94A000', version: '演示规则V1', auth: '正式方式待确认', dataScope: '演示体检最小字段；正式范围待确认', exchangeMode: '异步写入', retention: '仅在发送恢复期临时保存最小正文', status: '接口资料不完整', related: 'DESIGN-04', mappings: [] },
   { id: 'SIM-REPORT-QUERY', name: '查询检查报告', domain: '报告查询', direction: '基层系统 → 中间接口平台 → PACS', provider: '县医院PACS', caller: '中间接口平台', sourceSystem: '基层业务系统', targetSystem: '县医院PACS', channelType: 'PHIS_Interface', tradeCode: 'SIM-REPORT-QUERY', version: '演示规则V1', auth: '正式方式待确认', dataScope: '报告查询条件和结果摘要；正式范围待确认', exchangeMode: '即时查询', retention: '不保存报告正文', status: '已停用', related: 'DESIGN-09', mappings: [] },
-  { id: '900-001', name: '回写远程会诊结果', domain: '远程会诊', direction: '远程会诊系统 → 平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '远程会诊系统', targetSystem: '基层系统PHIS_Interface', channelType: '回写接口', tradeCode: '900-001', version: '参考文档V1.0', auth: '调用身份和机构范围待确认', dataScope: '会诊结果最小字段待确认', exchangeMode: '业务写入', retention: '正文默认不长期保存', status: '接入条件待确认', related: '', mappings: [] },
-  { id: 'PAGE-EMR', name: 'HIS打开电子病历页面', domain: '电子病历', direction: '县医院HIS → 平台入口 → 电子病历系统', provider: '电子病历系统', caller: '县医院HIS', sourceSystem: '县医院HIS', targetSystem: '电子病历系统页面', channelType: '约定页面', tradeCode: '页面标识待确认', version: '接入条件待确认', auth: '单点登录方式待确认', dataScope: '患者上下文、就诊上下文和有效期待确认', exchangeMode: '页面跳转', retention: '平台不保存页面业务正文', status: '接入条件待确认', related: '', mappings: [] },
+  { id: '900-001', name: '回写远程会诊结果', domain: '远程会诊', direction: '远程会诊系统 → 平台 → 基层系统', provider: '基层系统', caller: '中间接口平台', sourceSystem: '远程会诊系统', targetSystem: '基层系统PHIS_Interface', channelType: '回写接口', tradeCode: '900-001', version: '参考文档V1.0', auth: '调用身份和机构范围待确认', dataScope: '会诊结果最小字段待确认', exchangeMode: '业务写入', retention: '正文默认不长期保存', status: '接口资料不完整', related: '', mappings: [] },
+  { id: 'PAGE-EMR', name: 'HIS打开电子病历页面', domain: '电子病历', direction: '县医院HIS → 平台入口 → 电子病历系统', provider: '电子病历系统', caller: '县医院HIS', sourceSystem: '县医院HIS', targetSystem: '电子病历系统页面', channelType: '约定页面', tradeCode: '页面标识待确认', version: '接口资料不完整', auth: '单点登录方式待确认', dataScope: '患者信息、就诊信息和有效期待确认', exchangeMode: '页面跳转', retention: '平台不保存页面业务正文', status: '接口资料不完整', related: '', mappings: [] },
 ])
 const interfaceDraft = ref<InterfaceConfig | null>(null)
 const interfaceChangeReason = ref('')
@@ -293,14 +293,14 @@ const pageHeader = computed(() => ({
       ? '掌握基础数据同步、业务交换和待处理告警'
       : '掌握同步异常、交换异常和当前待办',
   },
-  foundation: { section: '基础数据链路', title: '基础数据', description: '核对同步结果、平台保存范围和 HIS 读取状态' },
+  foundation: { section: '基础数据处理', title: '基础数据', description: '核对同步结果、平台保存范围和 HIS 读取状态' },
   organizations: { section: '系统管理', title: '机构管理', description: '维护机构主数据、层级、有效期和外部代码对应' },
-  interfaces: { section: '业务接口链路', title: '业务接口', description: '维护接口规则、版本和新请求准入状态' },
-  exchanges: { section: '业务接口链路', title: '交换记录', description: '按业务单号追踪受理、发送、回执和处理进度' },
-  recovery: { section: '业务接口链路', title: '交换记录', description: '核查业务结果、数据保存状态和后续处理责任' },
-  exceptions: { section: '业务接口链路', title: '异常记录', description: '核查异常原因并登记处理结果和依据' },
-  alerts: { section: '运行治理', title: '告警管理', description: '处理结果未知、版本变化和数据到期等运行问题' },
-  audit: { section: '运行治理', title: '审计记录', description: '追溯配置变更、人工核查和告警处理记录' },
+  interfaces: { section: '业务接口处理', title: '业务接口', description: '维护接口规则、版本以及当前是否允许新请求' },
+  exchanges: { section: '业务接口处理', title: '交换记录', description: '按业务单号追踪受理、发送、目标系统返回结果和处理进度' },
+  recovery: { section: '业务接口处理', title: '交换记录', description: '核查业务结果、数据保存状态和后续处理责任' },
+  exceptions: { section: '业务接口处理', title: '异常记录', description: '核查异常原因并登记处理结果和依据' },
+  alerts: { section: '运行处理', title: '告警管理', description: '处理结果未知、版本变化和数据到期等运行问题' },
+  audit: { section: '运行处理', title: '审计记录', description: '追溯配置变更、人工核查和告警处理记录' },
   parameters: { section: '基础配置', title: '参数配置', description: '维护代码已注册参数在指定环境和机构范围内的取值' },
   dictionaries: { section: '基础配置', title: '数据字典', description: '维护平台通用代码、显示名称、顺序和启停状态' },
   'external-systems': { section: '基础配置', title: '外部系统', description: '维护已确认系统及其环境、机构范围、TLS、超时和凭证引用' },
@@ -320,9 +320,9 @@ const interfaceImpact = computed(() => {
   const changed = [
     current.name !== draft.name && '接口名称', (current.provider !== draft.provider || current.caller !== draft.caller || current.sourceSystem !== draft.sourceSystem || current.targetSystem !== draft.targetSystem) && '调用关系',
     current.version !== draft.version && '规则版本', current.status !== draft.status && '接口状态',
-    current.auth !== draft.auth && '鉴权方式', current.dataScope !== draft.dataScope && '数据范围', current.exchangeMode !== draft.exchangeMode && '处理方式', normalized.transport !== draft.transport && '传输方式', normalized.timeoutSeconds !== draft.timeoutSeconds && '超时设置', normalized.retryPolicy !== draft.retryPolicy && '重试规则',
+    current.auth !== draft.auth && '身份验证方式', current.dataScope !== draft.dataScope && '数据范围', current.exchangeMode !== draft.exchangeMode && '处理方式', normalized.transport !== draft.transport && '传输方式', normalized.timeoutSeconds !== draft.timeoutSeconds && '超时设置', normalized.retryPolicy !== draft.retryPolicy && '重试规则',
     normalized.idempotency !== draft.idempotency && '重复识别规则', normalized.successCriteria !== draft.successCriteria && '成功判定',
-    current.retention !== draft.retention && '数据保存策略', normalized.endpoint !== draft.endpoint && '服务路由', normalized.effectiveAt !== draft.effectiveAt && '计划启用时间',
+    current.retention !== draft.retention && '数据保存策略', normalized.endpoint !== draft.endpoint && '服务地址', normalized.effectiveAt !== draft.effectiveAt && '计划启用时间',
     JSON.stringify(current.mappings) !== JSON.stringify(draft.mappings) && '编码对应',
   ].filter(Boolean) as string[]
   const organizations = Object.values(organizationInterfaceAccess.value).filter(ids => ids.includes(current.id)).length
@@ -340,7 +340,7 @@ const interfaceDiffRows = computed(() => {
   const before = { ...current, ...interfaceRuntimeDefaults(current) }
   const fields: Array<[string, keyof InterfaceConfig]> = [
     ['接口名称', 'name'], ['提供方', 'provider'], ['调用方', 'caller'], ['源系统', 'sourceSystem'], ['目标系统', 'targetSystem'],
-    ['规则版本', 'version'], ['接口状态', 'status'], ['鉴权方式', 'auth'], ['数据范围', 'dataScope'], ['处理方式', 'exchangeMode'], ['服务路由', 'endpoint'], ['传输方式', 'transport'],
+    ['规则版本', 'version'], ['接口状态', 'status'], ['身份验证方式', 'auth'], ['数据范围', 'dataScope'], ['处理方式', 'exchangeMode'], ['服务地址', 'endpoint'], ['传输方式', 'transport'],
     ['超时秒数', 'timeoutSeconds'], ['重试规则', 'retryPolicy'], ['重复识别规则', 'idempotency'],
     ['成功判定', 'successCriteria'], ['数据保存策略', 'retention'], ['计划启用时间', 'effectiveAt'],
   ]
@@ -439,9 +439,9 @@ function interfaceReadiness(item: InterfaceConfig) {
   const runtime = interfaceRuntimeDefaults(item)
   const resolved = (value?: string) => Boolean(value?.trim()) && !value!.includes('待确认') && !value!.includes('待对方') && !value!.includes('尚未')
   return [
-    { label: '调用关系与鉴权', passed: [item.provider, item.caller, item.sourceSystem, item.targetSystem, item.auth].every(resolved) },
+    { label: '调用关系与身份验证', passed: [item.provider, item.caller, item.sourceSystem, item.targetSystem, item.auth].every(resolved) },
     { label: '数据范围与保存策略', passed: [item.dataScope, item.retention].every(resolved) },
-    { label: '服务路由与传输方式', passed: [runtime.endpoint, runtime.transport].every(resolved) },
+    { label: '服务地址与传输方式', passed: [runtime.endpoint, runtime.transport].every(resolved) },
     { label: '超时、重试与重复识别', passed: [runtime.timeoutSeconds, runtime.retryPolicy, runtime.idempotency].every(resolved) },
     { label: '业务成功判定', passed: resolved(runtime.successCriteria) },
     { label: '已批准且在有效期内的机构权限', passed: interfaceApprovedPermissionCount(item.id) > 0 },
@@ -466,7 +466,7 @@ const selectedAlertSteps = computed(() => {
   const type = selectedAlert.value?.type ?? ''
   if (type.includes('到期') || type.includes('清理')) return [
     ['系统已停止相关发送', '到期规则触发后，平台自动阻止该请求继续发送。'], ['领取故障处理', '自动清理失败后，由运维领取技术故障事项。'],
-    ['核对既定清理范围', '查看接口策略中已经批准的临时数据范围，不逐笔重新选择。'], ['重试自动清理', '排除故障后受控重试，并保留执行结果。'], ['登记处理结论', '记录证据、遗留问题和后续责任。'],
+    ['核对既定清理范围', '查看接口策略中已经批准的临时数据范围，不逐笔重新选择。'], ['重试自动清理', '排除故障后受控重试，并保留执行结果。'], ['登记处理结论', '记录处理依据、遗留问题和后续责任。'],
   ]
   if (type.includes('接口')) return [
     ['确认影响范围', '核对失败接口、连续失败次数和受影响业务。'], ['领取处理事项', '指定当前处理人并暂停无效的自动重试。'],
@@ -474,10 +474,10 @@ const selectedAlertSteps = computed(() => {
   ]
   if (type.includes('接收结果')) return [
     ['领取核查事项', '指定核查人并确认本次请求与业务单号。'], ['查询目标系统', '按同一业务单号和请求版本核查目标端结果。'],
-    ['登记核查证据', '保存查询记录、回执编号和核查结论。'], ['决定后续处理', '已确认写入则结束；明确未写入才进入受控恢复。'], ['安排下次核查', '结果未知时登记责任人与下次核查时间。'],
+    ['登记核查依据', '保存查询记录、目标系统返回结果编号和核查结论。'], ['决定后续处理', '已确认写入则结束；明确未写入才进入受控恢复。'], ['安排下次核查', '结果未知时登记责任人与下次核查时间。'],
   ]
   return [
-    ['确认告警对象', '核对调用主体、机构、接口与数据范围。'], ['领取处理事项', '指定当前处理人并保持请求拦截。'],
+    ['确认告警对象', '核对调用方、机构、接口与数据范围。'], ['领取处理事项', '指定当前处理人并保持请求拦截。'],
     ['检查授权配置', '核对机构权限、接口权限和授权变更记录。'], ['确认处置结果', '修正配置或确认拒绝符合预期。'], ['登记处理结论', '记录依据、影响范围和后续安排。'],
   ]
 })
@@ -504,7 +504,7 @@ const canSaveFinding = computed(() => role.value === 'operator' && selectedScena
 const auditRows = computed(() => [
   ...localEvents.value,
   ...auditSeed.map(item => ({ ...item, time: `2026-09-14 ${item.time}` })),
-].filter(item => auditActorFilter.value === '全部主体' || (auditActorFilter.value === '系统事件' ? item.actor.startsWith('SIM-SVC') : !item.actor.startsWith('SIM-SVC')))
+].filter(item => auditActorFilter.value === '全部操作者' || (auditActorFilter.value === '系统事件' ? item.actor.startsWith('SIM-SVC') : !item.actor.startsWith('SIM-SVC')))
   .filter(item => auditActionFilter.value === '全部动作' || item.action.includes(auditActionFilter.value))
   .filter(item => `${item.actor} ${item.action} ${item.object} ${item.detail ?? ''}`.toLowerCase().includes(query.value.trim().toLowerCase())))
 function pageSlice<T>(items: T[]): T[] { return items.slice((listPage.value - 1) * listPageSize.value, listPage.value * listPageSize.value) }
@@ -522,7 +522,7 @@ function navigate(next: Page) {
   query.value = ''
   orgFilter.value = '全部机构'
   statusFilter.value = '全部状态'
-  auditActorFilter.value = '全部主体'
+  auditActorFilter.value = '全部操作者'
   auditActionFilter.value = '全部动作'
   listPage.value = 1
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0 }))
@@ -574,12 +574,12 @@ function interfaceRuntimeDefaults(item: InterfaceConfig) {
   const isWrite = item.exchangeMode.includes('写入')
   return {
     environment: item.environment ?? '演示环境',
-    endpoint: item.endpoint ?? (item.status === '接入条件待确认' ? '待对方提供' : `SIM-ENDPOINT-${item.id}`),
+    endpoint: item.endpoint ?? (item.status === '接口资料不完整' ? '待对方提供' : `SIM-ENDPOINT-${item.id}`),
     transport: item.transport ?? (isPage ? 'HTTPS GET' : 'HTTPS POST'),
     timeoutSeconds: item.timeoutSeconds ?? (isPage ? '15' : '30'),
     retryPolicy: item.retryPolicy ?? (isWrite ? '业务结果未知时不自动重发' : '连接失败最多2次；业务失败不重试'),
     idempotency: item.idempotency ?? (isWrite ? '机构代码 + 源业务单号 + 版本' : '请求编号'),
-    successCriteria: item.successCriteria ?? (isWrite ? '目标系统返回明确业务成功码及回执编号' : '返回成功码且数据结构校验通过'),
+    successCriteria: item.successCriteria ?? (isWrite ? '目标系统返回明确业务成功码及目标系统返回结果编号' : '返回成功码且数据结构校验通过'),
     effectiveAt: item.effectiveAt ?? '2026-09-16 00:00',
   }
 }
@@ -607,8 +607,8 @@ function runIntakeCheck() {
   const missing = interfaceReadiness(current).filter(item => !item.passed).map(item => item.label)
   intakeCheckResult.value = missing.length
     ? `启用前检查未通过：${missing.join('、')}。`
-    : `启用前检查通过；当前版本 ${current.version} 已具备新请求准入条件。`
-  record('检查新请求准入', current.id, intakeCheckResult.value)
+    : `启用前检查通过；当前版本 ${current.version} 已允许接收新请求。`
+  record('检查是否允许新请求', current.id, intakeCheckResult.value)
   toast.value = missing.length ? '启用前检查发现未完成条件' : '启用前检查通过（演示）'
 }
 function openInterfaceDefinition(interfaceId: string) {
@@ -1009,7 +1009,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
         </template>
 
         <template v-else-if="page === 'interfaces'">
-          <div class="business-interface-intro"><div><span>核心链路 02</span><strong>接口状态直接控制新请求能否进入</strong><small>新请求采用当前规则版本；历史交换记录保留受理时规则快照，不随配置修改。</small></div><div class="interface-summary"><em>{{ interfaces.length }} 项</em><em>{{ interfaces.filter(item => interfaceAcceptsNew(item)).length }} 项允许演示接入</em><em>{{ interfaces.filter(item => item.status === '已停用').length }} 项已停用</em><em>{{ interfaces.filter(item => item.status === '接入条件待确认').length }} 项条件待确认</em></div></div>
+          <div class="business-interface-intro"><div><span>主要数据传递过程 02</span><strong>接口状态直接控制新请求能否进入</strong><small>新请求采用当前规则版本；历史交换记录保留受理时规则快照，不随配置修改。</small></div><div class="interface-summary"><em>{{ interfaces.length }} 项</em><em>{{ interfaces.filter(item => interfaceAcceptsNew(item)).length }} 项允许演示接入</em><em>{{ interfaces.filter(item => item.status === '已停用').length }} 项已停用</em><em>{{ interfaces.filter(item => item.status === '接口资料不完整').length }} 项条件待确认</em></div></div>
           <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input v-model="query" aria-label="搜索业务接口" placeholder="交易码、名称、系统或业务场景" /></label><span>{{ interfaceRows.length }} 项业务接口</span></div>
           <section class="prototype-section work-table-section business-interface-table action-column-table"><div class="prototype-table-wrap"><table class="work-table"><thead><tr><th>接口 / 业务场景</th><th>运行系统</th><th>提供方 / 调用方</th><th>接口规则</th><th>处理与保存</th><th>关联交换</th><th>运行控制</th><th>操作</th></tr></thead><tbody><tr v-for="item in interfacePagedRows" :key="item.id"><td><button class="work-row-link" @click="editInterface(item)">{{ item.name }}</button><small>{{ item.id }} · {{ item.domain }}</small></td><td><strong>{{ item.sourceSystem }}</strong><small>→ {{ item.targetSystem }}</small></td><td><strong>提供：{{ item.provider }}</strong><small>调用：{{ item.caller }}</small></td><td><strong>{{ item.channelType }}</strong><small>{{ item.tradeCode }} · {{ item.version }}</small></td><td><strong>{{ item.exchangeMode }}</strong><small>{{ item.retention }}</small></td><td><button class="interface-record-count" :disabled="!interfaceScenarioCount(item.id)" @click="editInterface(item, 'related')"><strong>{{ interfaceScenarioCount(item.id) }}</strong><span>笔记录</span></button></td><td><span class="prototype-tag" :class="interfaceStatusClass(item.status)">{{ interfaceStatusLabel(item.status) }}</span><small class="interface-runtime-note" :class="{ blocked: !interfaceAcceptsNew(item) }">{{ interfaceAcceptsNew(item) ? `允许新请求 · ${item.version}` : '阻止新请求' }}</small></td><td><button class="btn btn-outline-primary btn-sm" @click="editInterface(item)">查看详情</button></td></tr></tbody></table><div v-if="!interfaceRows.length" class="prototype-empty">没有符合条件的业务接口</div></div><AdminPagination :total="interfaceRows.length" :page="listPage" :page-size="listPageSize" @update:page="listPage = $event" @update:page-size="listPageSize = $event" /></section>
         </template>
@@ -1036,8 +1036,8 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
         </template>
 
         <template v-else-if="page === 'audit'">
-          <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input v-model="query" aria-label="搜索审计记录" placeholder="操作者、动作、对象或变更内容" /></label><select v-model="auditActorFilter" aria-label="主体筛选"><option>全部主体</option><option>系统事件</option><option>人工操作</option></select><select v-model="auditActionFilter" aria-label="动作筛选"><option>全部动作</option><option>配置</option><option>核查</option><option>告警</option></select><span>{{ auditRows.length }} 条</span></div>
-          <section class="prototype-section work-table-section action-column-table"><div class="prototype-table-wrap"><table class="work-table"><thead><tr><th>时间</th><th>操作主体</th><th>动作</th><th>对象</th><th>变更内容</th><th>操作</th></tr></thead><tbody><tr v-for="(item, index) in auditPagedRows" :key="`${item.object}-${index}`"><td>{{ item.time }}</td><td>{{ item.actor }}</td><td>{{ item.action }}</td><td>{{ item.object }}</td><td>{{ item.detail || '—' }}</td><td><button class="btn btn-outline-primary btn-sm" @click="openAuditDetail(item)">查看详情</button></td></tr></tbody></table><div v-if="!auditRows.length" class="prototype-empty">没有符合条件的审计记录</div></div><AdminPagination :total="auditRows.length" :page="listPage" :page-size="listPageSize" @update:page="listPage = $event" @update:page-size="listPageSize = $event" /></section>
+          <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input v-model="query" aria-label="搜索审计记录" placeholder="操作者、动作、对象或变更内容" /></label><select v-model="auditActorFilter" aria-label="操作者筛选"><option>全部操作者</option><option>系统事件</option><option>人工操作</option></select><select v-model="auditActionFilter" aria-label="动作筛选"><option>全部动作</option><option>配置</option><option>核查</option><option>告警</option></select><span>{{ auditRows.length }} 条</span></div>
+          <section class="prototype-section work-table-section action-column-table"><div class="prototype-table-wrap"><table class="work-table"><thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>变更内容</th><th>操作</th></tr></thead><tbody><tr v-for="(item, index) in auditPagedRows" :key="`${item.object}-${index}`"><td>{{ item.time }}</td><td>{{ item.actor }}</td><td>{{ item.action }}</td><td>{{ item.object }}</td><td>{{ item.detail || '—' }}</td><td><button class="btn btn-outline-primary btn-sm" @click="openAuditDetail(item)">查看详情</button></td></tr></tbody></table><div v-if="!auditRows.length" class="prototype-empty">没有符合条件的审计记录</div></div><AdminPagination :total="auditRows.length" :page="listPage" :page-size="listPageSize" @update:page="listPage = $event" @update:page-size="listPageSize = $event" /></section>
         </template>
       </div>
     </main>
@@ -1055,7 +1055,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
         <div class="work-drawer-body">
           <template v-if="drawerTab === 'overview'">
             <div v-if="selectedScenario.savedContent" class="work-inline-note">正文：{{ selectedScenario.savedContent }}。原处理结果仍保留。</div><div v-if="selectedScenario.status === '查询失败'" class="work-inline-note">{{ selectedScenario.question }}</div><div v-if="selectedRecovery" class="work-finding"><span>处理进度：{{ progressStatusLabel(selectedRecovery.status, Boolean(selectedRecovery.assignee)) }} · 数据状态：{{ dataStatusLabel(selectedRecovery.dataStatus) }}</span><button class="prototype-text-button" @click="openRecovery(selectedRecovery.id)">数据详情</button></div>
-            <dl class="work-facts"><div><dt>机构</dt><dd>{{ selectedScenario.organization }}<small>{{ selectedScenario.organizationCode }}</small></dd></div><div><dt>业务类型</dt><dd>{{ selectedScenario.domain }}</dd></div><div><dt>源系统 / 目标系统</dt><dd>{{ selectedScenario.sourceSystem }} → {{ selectedScenario.targetSystem }}</dd></div><div><dt>源业务单号</dt><dd>{{ selectedScenario.sourceRecordId }}</dd></div><div><dt>患者标识</dt><dd>{{ selectedScenario.patientRef }}</dd></div><div><dt>请求编号</dt><dd>{{ selectedScenario.requestId }}</dd></div><div><dt>受理时间</dt><dd>{{ selectedScenario.occurredAt }}</dd></div><div><dt>回执 / 拦截原因</dt><dd>{{ selectedScenario.receipt }}</dd></div></dl>
+            <dl class="work-facts"><div><dt>机构</dt><dd>{{ selectedScenario.organization }}<small>{{ selectedScenario.organizationCode }}</small></dd></div><div><dt>业务类型</dt><dd>{{ selectedScenario.domain }}</dd></div><div><dt>源系统 / 目标系统</dt><dd>{{ selectedScenario.sourceSystem }} → {{ selectedScenario.targetSystem }}</dd></div><div><dt>源业务单号</dt><dd>{{ selectedScenario.sourceRecordId }}</dd></div><div><dt>患者标识</dt><dd>{{ selectedScenario.patientRef }}</dd></div><div><dt>请求编号</dt><dd>{{ selectedScenario.requestId }}</dd></div><div><dt>受理时间</dt><dd>{{ selectedScenario.occurredAt }}</dd></div><div><dt>目标系统返回结果 / 拦截原因</dt><dd>{{ selectedScenario.receipt }}</dd></div></dl>
             <div class="work-data-boundary"><ShieldCheck :size="17" /><span><strong>数据留存边界</strong><small>本页只展示交换追踪摘要和合成引用，不展示或保存完整请求、响应、患者身份信息及报告正文。</small></span></div>
             <div class="work-inline-actions"><button class="prototype-button" @click="drawerTab = 'trace'">查看处理轨迹</button><button v-if="queueStatuses.includes(selectedScenario.status)" class="work-quiet-button" @click="drawerTab = 'work'">进入处置</button></div>
           </template>
@@ -1073,7 +1073,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
           <template v-else>
             <div class="work-section-label">处置记录</div>
             <div v-if="findings[selectedScenario.id]" class="work-finding"><Check :size="16" /><span>{{ outcomeLabel(findings[selectedScenario.id].outcome) }} · {{ findings[selectedScenario.id].note }}<small v-if="findings[selectedScenario.id].evidence">依据编号：{{ findings[selectedScenario.id].evidence }}</small></span></div>
-            <div v-if="!queueStatuses.includes(selectedScenario.status)" class="work-inline-note">当前记录无需人工异常处置，可查看回执与轨迹。</div>
+            <div v-if="!queueStatuses.includes(selectedScenario.status)" class="work-inline-note">当前记录无需人工异常处置，可查看目标系统返回结果与轨迹。</div>
             <template v-else-if="role === 'manager'"><div class="work-inline-note">当前为管理视角。异常核查由平台运维办理。</div><button class="prototype-button" @click="role = 'operator'">切换运维，办理此记录</button></template>
             <template v-else>
               <div class="work-assignee"><span>处理人</span><strong>{{ claimed.includes(selectedScenario.id) ? '当前运维' : '未领取' }}</strong><button v-if="!claimed.includes(selectedScenario.id)" class="prototype-button" @click="claim">领取</button></div>
@@ -1081,8 +1081,8 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
                 <template v-if="selectedScenario.status === '结果未知'">
                   <label>目标端核查结果</label>
                   <div class="work-choice-group" role="group" aria-label="目标端核查结果"><button v-for="choice in [{ value: 'written', label: '已确认写入' }, { value: 'not-written', label: '明确未写入' }, { value: 'uncertain', label: '结果未知' }]" :key="choice.value" :class="{ active: outcome === choice.value }" :aria-pressed="outcome === choice.value" @click="outcome = choice.value as Outcome">{{ choice.label }}</button></div>
-                  <div class="work-inline-note">{{ outcome === 'written' ? '登记对应回执，不再重复发送。' : outcome === 'not-written' ? '记录查询结果，进入后续补偿处理。' : '保持人工核查，不关闭差异或重复写入。' }}</div>
-                  <label for="work-evidence">查询依据{{ outcome === 'uncertain' ? '（可选）' : '（必填）' }}</label><input id="work-evidence" v-model="evidence" maxlength="80" placeholder="填写回执编号或日志编号" />
+                  <div class="work-inline-note">{{ outcome === 'written' ? '登记对应目标系统返回结果，不再重复发送。' : outcome === 'not-written' ? '记录查询结果，进入后续失败后补救处理。' : '保持人工核查，不关闭差异或重复写入。' }}</div>
+                  <label for="work-evidence">查询依据{{ outcome === 'uncertain' ? '（可选）' : '（必填）' }}</label><input id="work-evidence" v-model="evidence" maxlength="80" placeholder="填写目标系统返回结果编号或日志编号" />
                 </template>
                 <template v-else>
                   <label>处置动作</label><div class="work-choice-group" role="group" aria-label="处置动作"><button :class="{ active: handlingAction === 'revalidate' }" @click="handlingAction = 'revalidate'">重新校验</button><button :class="{ active: handlingAction === 'blocked' }" @click="handlingAction = 'blocked'">保持拦截</button></div>
@@ -1115,13 +1115,13 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
               <label for="intf-type">交互类型</label><select id="intf-type" v-model="interfaceDraft.channelType"><option>PHIS_Interface</option><option>回写接口</option><option>约定页面</option></select>
               <label for="intf-code">交易码或页面标识</label><input id="intf-code" v-model="interfaceDraft.tradeCode" maxlength="32" />
               <label for="intf-version">规则版本</label><input id="intf-version" v-model="interfaceDraft.version" maxlength="30" />
-              <label for="intf-auth">鉴权方式</label><input id="intf-auth" v-model="interfaceDraft.auth" maxlength="100" />
+              <label for="intf-auth">身份验证方式</label><input id="intf-auth" v-model="interfaceDraft.auth" maxlength="100" />
               <label for="intf-scope">数据范围</label><textarea id="intf-scope" v-model="interfaceDraft.dataScope" maxlength="200" rows="2"></textarea>
               <label for="intf-mode">处理方式</label><input id="intf-mode" v-model="interfaceDraft.exchangeMode" maxlength="50" />
               <label for="intf-retention">数据保存策略</label><textarea id="intf-retention" v-model="interfaceDraft.retention" maxlength="200" rows="2"></textarea>
               <div class="work-section-label work-form-span">连接与调用</div>
               <label for="intf-environment">使用环境</label><input id="intf-environment" v-model="interfaceDraft.environment" maxlength="40" />
-              <label for="intf-endpoint">服务地址或路由标识</label><input id="intf-endpoint" v-model="interfaceDraft.endpoint" maxlength="120" placeholder="不得填写账号或密钥" />
+              <label for="intf-endpoint">服务地址或服务标识</label><input id="intf-endpoint" v-model="interfaceDraft.endpoint" maxlength="120" placeholder="不得填写账号或密钥" />
               <label for="intf-transport">传输方式</label><select id="intf-transport" v-model="interfaceDraft.transport"><option>HTTPS POST</option><option>HTTPS GET</option><option>SOAP</option><option>数据库读取</option></select>
               <div class="work-section-label work-form-span">执行控制</div>
               <label for="intf-timeout">超时秒数</label><input id="intf-timeout" v-model="interfaceDraft.timeoutSeconds" inputmode="numeric" maxlength="4" />
@@ -1131,12 +1131,12 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
               <div class="work-section-label work-form-span">版本控制</div>
               <label for="intf-effective">计划启用时间</label><input id="intf-effective" v-model="interfaceDraft.effectiveAt" maxlength="30" />
               <label>当前运行状态</label><div class="interface-current-status"><span class="prototype-tag" :class="interfaceStatusClass(interfaceDraft.status)">{{ interfaceStatusLabel(interfaceDraft.status) }}</span><small>{{ interfaceAcceptsNew(interfaceDraft) ? '允许新请求进入' : '当前阻止新请求' }}</small></div>
-              <div class="work-data-boundary"><ShieldCheck :size="17" /><span><strong>{{ interfaceDraft.retention }}</strong><small>业务写入必须走正式接口。页面和接口均需分别确认鉴权、最小字段、成功条件、超时、重试和数据到期规则。</small></span></div>
+              <div class="work-data-boundary"><ShieldCheck :size="17" /><span><strong>{{ interfaceDraft.retention }}</strong><small>业务写入必须走正式接口。页面和接口均需分别确认身份验证、最小字段、成功条件、超时、重试和数据到期规则。</small></span></div>
             </div>
           </template>
           <template v-else-if="drawerTab === 'related'">
             <section class="interface-runtime-card" :class="{ blocked: !interfaceAcceptsNew(selectedInterface) }">
-              <div><span>新请求准入</span><strong>{{ interfaceAcceptsNew(selectedInterface) ? '允许创建交换记录' : '阻止新请求' }}</strong><small>{{ interfaceAcceptsNew(selectedInterface) ? `采用当前规则 ${selectedInterface.version}` : `当前状态：${selectedInterface.status}` }}</small></div>
+              <div><span>是否允许新请求</span><strong>{{ interfaceAcceptsNew(selectedInterface) ? '允许创建交换记录' : '阻止新请求' }}</strong><small>{{ interfaceAcceptsNew(selectedInterface) ? `采用当前规则 ${selectedInterface.version}` : `当前状态：${selectedInterface.status}` }}</small></div>
               <dl><div><dt>历史交换</dt><dd>{{ relatedInterfaceScenarios.length }} 笔</dd></div><div><dt>版本不同</dt><dd>{{ interfaceSnapshotMismatchCount(selectedInterface.id) }} 笔</dd></div></dl>
               <button class="btn btn-outline-primary btn-sm" @click="runIntakeCheck">检查新请求</button>
             </section>
@@ -1161,7 +1161,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
             <ol v-else class="work-timeline interface-history"><li v-for="item in interfaceHistory[interfaceDraft.id]" :key="item.time"><span><Check :size="13" /></span><p><strong>{{ item.summary }}</strong><small>{{ item.time }} · {{ item.actor }} · {{ item.reason }}</small><button v-if="item.snapshot" class="btn btn-outline-primary btn-sm mt-2" @click="prepareInterfaceRollback(item)">载入为恢复草稿</button></p></li></ol>
             <div v-if="relatedScenario" class="work-section-label work-spaced-label">关联交换</div><button v-if="relatedScenario" class="work-related-link" @click="showRelated(relatedScenario.id)">{{ relatedScenario.sourceRecordId }}<ArrowUpRight :size="15" /></button>
           </template>
-          <section v-if="drawerTab === 'overview'" class="interface-impact-review interface-readiness"><div class="prototype-section-head work-embedded-head"><div><h3>启用前条件</h3><small>只核对必要准入条件，不增加独立审批流程。</small></div><button class="btn btn-outline-primary btn-sm" @click="runIntakeCheck">执行启用前检查</button></div><dl><div v-for="item in selectedInterfaceReadiness" :key="item.label"><dt>{{ item.label }}</dt><dd :class="item.passed ? 'text-green' : 'text-red'">{{ item.passed ? '已具备' : '未完成' }}</dd></div></dl><div v-if="intakeCheckResult" class="work-inline-note interface-intake-result"><Check :size="15" />{{ intakeCheckResult }}</div></section>
+          <section v-if="drawerTab === 'overview'" class="interface-impact-review interface-readiness"><div class="prototype-section-head work-embedded-head"><div><h3>启用前条件</h3><small>只核对启用前必须满足的条件，不增加独立审批流程。</small></div><button class="btn btn-outline-primary btn-sm" @click="runIntakeCheck">执行启用前检查</button></div><dl><div v-for="item in selectedInterfaceReadiness" :key="item.label"><dt>{{ item.label }}</dt><dd :class="item.passed ? 'text-green' : 'text-red'">{{ item.passed ? '已具备' : '未完成' }}</dd></div></dl><div v-if="intakeCheckResult" class="work-inline-note interface-intake-result"><Check :size="15" />{{ intakeCheckResult }}</div></section>
           <section v-if="(drawerTab === 'overview' || drawerTab === 'work') && interfaceImpact" class="interface-impact-review"><div class="prototype-section-head work-embedded-head"><div><h3>保存前影响检查</h3><small>根据当前页面数据计算，不代表真实环境扫描结果。</small></div><span>{{ interfaceImpact.changed.length ? `${interfaceImpact.changed.length} 类变更` : '尚未修改' }}</span></div><dl><div><dt>变更内容</dt><dd>{{ interfaceImpact.changed.join('、') || '当前草稿与已保存配置一致' }}</dd></div><div><dt>已配置机构</dt><dd>{{ interfaceImpact.organizations }} 家</dd></div><div><dt>当前有效权限</dt><dd>{{ interfaceImpact.effectiveOrganizations }} 家</dd></div><div><dt>历史涉及机构</dt><dd>{{ interfaceImpact.historyOrganizations }} 家</dd></div><div><dt>未完成交换</dt><dd>{{ interfaceImpact.pending }} 笔</dd></div><div><dt>新请求</dt><dd>{{ interfaceImpact.intake }}</dd></div><div><dt>历史交换</dt><dd>{{ interfaceImpact.historyRule }}</dd></div></dl><div v-if="interfaceDiffRows.length" class="table-responsive"><table class="table table-sm interface-diff-table"><thead><tr><th>变更字段</th><th>当前配置</th><th>拟保存配置</th></tr></thead><tbody><tr v-for="row in interfaceDiffRows" :key="row.label"><td><strong>{{ row.label }}</strong></td><td>{{ row.before }}</td><td>{{ row.after }}</td></tr></tbody></table></div><div v-if="interfaceImpact.permissionMismatch" class="alert alert-warning mb-2">历史交换涉及机构多于当前有效权限机构。应核对权限是否已收回、尚未批准、已经失效或存在遗漏配置。</div><div v-if="interfaceRuleChanged" class="alert alert-info mb-0">保存规则变更后，接口自动进入“待联调”并停止新请求；已有交换记录不受影响。</div></section>
           <div v-if="drawerTab === 'overview' || drawerTab === 'work'" class="work-save-area"><label for="intf-reason">操作依据（必填）</label><textarea id="intf-reason" v-model="interfaceChangeReason" maxlength="200" rows="3" placeholder="说明规则变更、启用或暂停原因"></textarea><div class="interface-control-actions"><button class="prototype-button" :disabled="!interfaceChangeReason.trim() || !interfaceRuleChanged" @click="saveInterface">保存为待联调版本</button><button class="btn btn-outline-primary" :disabled="!interfaceChangeReason.trim() || !canActivateSelectedInterface" @click="activateInterface">启用当前版本</button><button class="btn btn-outline-danger" :disabled="!interfaceChangeReason.trim() || !interfaceAcceptsNew(selectedInterface) || interfaceRuleChanged" @click="pauseInterface">暂停新请求</button></div></div>
         </div>
@@ -1179,12 +1179,12 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
             <section class="incident-panel incident-diagnosis"><header><h3>故障诊断</h3><div><button class="btn btn-outline-secondary btn-sm" @click="toast = '已重新检查连接状态（演示）'"><RefreshCw :size="14" />重新检查</button><button class="btn btn-outline-secondary btn-sm" @click="drawerTab = 'trace'"><FileSearch :size="14" />查看错误日志</button></div></header><dl><div><dt>目标系统状态</dt><dd class="danger">服务不可用</dd><span>目标接口服务无响应</span></div><div><dt>网络连通性</dt><dd class="success">通过</dd><span>与目标 IP 网络连接正常</span></div><div><dt>证书状态</dt><dd class="success">通过</dd><span>证书在有效期内</span></div><div><dt>目标服务</dt><dd class="danger">失败</dd><span>TCP 连接被拒绝</span></div><div><dt>最近错误</dt><dd>Connection refused</dd><span>2026-09-15 10:26:17</span></div><div><dt>初步原因</dt><dd>目标接口服务停止</dd><span>等待对方运维确认服务状态</span></div></dl></section>
             <section class="incident-panel incident-verification"><header><h3>恢复验证</h3></header><ol><li class="done"><span><Check :size="14" /></span><div><strong>网络连通性检查</strong><small>与目标 IP 网络连通</small></div><em>已通过</em></li><li :class="{ done: alertProbeState === '已通过' }"><span>{{ alertProbeState === '已通过' ? '✓' : '2' }}</span><div><strong>接口探测</strong><small>发送探测请求验证接口可用性</small></div><em>{{ alertProbeState }}</em></li><li :class="{ done: alertValidationState === '已通过' }"><span>{{ alertValidationState === '已通过' ? '✓' : '3' }}</span><div><strong>受控验证请求</strong><small>选择一笔明确未发送记录验证完整流程</small></div><em>{{ alertValidationState }}</em></li></ol><div class="incident-verification-actions"><button class="btn btn-primary" :disabled="role !== 'operator' || alertValidationState === '已通过'" @click="runInterfaceProbe">{{ alertProbeState === '待执行' ? '执行接口探测' : alertValidationState === '未创建' ? '执行受控验证' : '验证已通过' }}</button><button class="btn btn-outline-primary" :disabled="role !== 'operator' || alertValidationState !== '已通过' || !areAlertRequestsLimited" @click="resumeIncidentRequests">{{ areAlertRequestsLimited ? '恢复新请求' : '新请求已恢复' }}</button></div><small class="incident-action-note">完成受控验证后方可恢复；历史记录不会自动重发。</small></section>
           </div>
-          <section class="incident-routing"><h3>受影响记录分流</h3><div class="incident-counts"><button @click="drawerTab = 'work'"><span>明确未发送</span><strong>{{ interfaceIncidentCounts.notSent }}</strong><small>可进入受控重试</small></button><button class="warning" @click="drawerTab = 'work'"><span>结果未知</span><strong>{{ interfaceIncidentCounts.unknown }}</strong><small>需核查目标结果</small></button><button class="danger" @click="drawerTab = 'work'"><span>校验未通过</span><strong>{{ interfaceIncidentCounts.invalid }}</strong><small>来源修正后重新校验</small></button><button class="success" @click="drawerTab = 'work'"><span>已确认写入</span><strong>{{ interfaceIncidentCounts.written }}</strong><small>禁止再次发送</small></button></div><div class="table-responsive"><table class="table table-sm incident-record-table"><thead><tr><th>业务记录</th><th>当前结果</th><th>失败位置</th><th>处理路径</th><th>操作</th></tr></thead><tbody><tr v-for="row in interfaceIncidentRoutes" :key="row.item.id"><td><strong>{{ row.item.sourceRecordId }}</strong><small>{{ row.item.requestId }}</small></td><td><span class="prototype-tag" :class="row.tone">{{ row.result }}</span></td><td>{{ row.stage }}</td><td>{{ row.route }}</td><td><button class="btn btn-link btn-sm" @click="openRelatedInterfaceScenario(row.item)">{{ row.action }}</button></td></tr></tbody></table></div></section>
+          <section class="incident-routing"><h3>受影响记录分类处理</h3><div class="incident-counts"><button @click="drawerTab = 'work'"><span>明确未发送</span><strong>{{ interfaceIncidentCounts.notSent }}</strong><small>可进入受控重试</small></button><button class="warning" @click="drawerTab = 'work'"><span>结果未知</span><strong>{{ interfaceIncidentCounts.unknown }}</strong><small>需核查目标结果</small></button><button class="danger" @click="drawerTab = 'work'"><span>校验未通过</span><strong>{{ interfaceIncidentCounts.invalid }}</strong><small>来源修正后重新校验</small></button><button class="success" @click="drawerTab = 'work'"><span>已确认写入</span><strong>{{ interfaceIncidentCounts.written }}</strong><small>禁止再次发送</small></button></div><div class="table-responsive"><table class="table table-sm incident-record-table"><thead><tr><th>业务记录</th><th>当前结果</th><th>失败位置</th><th>处理方式</th><th>操作</th></tr></thead><tbody><tr v-for="row in interfaceIncidentRoutes" :key="row.item.id"><td><strong>{{ row.item.sourceRecordId }}</strong><small>{{ row.item.requestId }}</small></td><td><span class="prototype-tag" :class="row.tone">{{ row.result }}</span></td><td>{{ row.stage }}</td><td>{{ row.route }}</td><td><button class="btn btn-link btn-sm" @click="openRelatedInterfaceScenario(row.item)">{{ row.action }}</button></td></tr></tbody></table></div></section>
           <section class="incident-followup"><h3>技术恢复与业务后续</h3><div class="incident-followup-fields"><label>后续责任人<select v-model="alertFollowupOwner" class="form-select" :disabled="role !== 'operator'"><option>李强</option><option>张建国</option><option>当前运维</option></select></label><label>完成期限<input v-model="alertDueAt" class="form-control" :disabled="role !== 'operator'" /></label><label>下次检查<input v-model="alertNextCheckAt" class="form-control" :disabled="role !== 'operator'" /></label><label class="incident-note">处理依据<input v-model="alertNote" class="form-control" maxlength="200" placeholder="记录恢复验证依据和遗留业务安排" :disabled="role !== 'operator'" /></label></div><div class="alert alert-info mb-2">技术告警恢复后，{{ interfaceIncidentCounts.unknown }} 笔结果未知记录继续按独立核查事项处理，不会被批量改写。</div><footer><span>{{ interfaceIncidentFollowupReady ? '结果未知记录均已形成独立核查事项' : '仍有结果未知记录未形成独立核查事项' }}</span><div v-if="role === 'operator'"><button class="btn btn-outline-secondary" @click="saveIncidentProgress(false)">保存处理进展</button><button class="btn btn-outline-primary" @click="saveIncidentProgress(true)">转入持续观察</button><button class="btn btn-primary" :disabled="!canCompleteInterfaceIncident" @click="completeInterfaceIncident">完成技术告警</button></div><span v-else class="text-secondary">管理角色仅查看处理安排</span></footer></section>
           <div v-if="role === 'manager'" class="work-inline-note">管理视角只读；运行控制、接口探测和状态登记由运维角色执行。 <button class="btn btn-primary btn-sm" @click="role = 'operator'">切换运维视角</button></div>
         </div>
-        <div v-else-if="drawerTab === 'overview'" class="work-drawer-body alert-process"><div class="work-section-label">基本信息</div><dl class="work-facts"><div><dt>问题类型</dt><dd>{{ selectedAlert.type }}</dd></div><div><dt>业务对象</dt><dd>{{ selectedAlertRow.relatedInterface?.name || selectedAlertRow.relatedScenario?.organization || selectedAlert.object }}</dd></div><div><dt>业务结果</dt><dd>{{ businessResultLabel(selectedAlertRow.businessResult) }}</dd></div><div><dt>当前责任人</dt><dd>{{ selectedAlertRow.owner }}</dd></div><div><dt>数据状态</dt><dd>{{ dataStatusLabel(selectedAlertRow.dataStatus) }}</dd></div><div><dt>等待时长</dt><dd class="text-red">{{ selectedAlertRow.wait }}</dd></div><div><dt>首次发生</dt><dd>{{ selectedAlertRow.firstOccurredAt }}</dd></div><div><dt>最近发生</dt><dd>{{ selectedAlertRow.lastOccurredAt }}</dd></div><div><dt>聚合事件数</dt><dd>{{ selectedAlertRow.occurrences }} 次</dd></div><div><dt>聚合依据</dt><dd>{{ selectedAlert.type }} + {{ selectedAlert.object }}</dd></div><div><dt>应处理时间</dt><dd>{{ selectedAlertRow.dueAt }}</dd></div></dl><div class="work-section-label work-spaced-label">处理步骤</div><ol class="alert-steps"><li v-for="(step, index) in selectedAlertSteps" :key="step[0]" :class="{ done: index === 0 || index === 1 && selectedAlert.status !== '待确认' }"><span>{{ index + 1 }}</span><div><strong>{{ step[0] }}</strong><p>{{ step[1] }}</p></div><em v-if="index === 0">已确认</em><button v-else-if="index === 1 && selectedAlert.status === '待确认' && role === 'operator'" class="btn btn-primary btn-sm" @click="updateAlert('处理中')">确认并领取</button></li></ol><div class="alert alert-info">{{ selectedAlert.type.includes('到期') || selectedAlert.type.includes('清理') ? '清理操作只删除临时数据，不会改变业务结果；业务结果仍需由业务方根据实际情况确认。' : '处置告警只更新运行处理进度；业务结果必须依据目标系统回执或有效查询证据单独确认。' }}</div><button v-if="selectedAlertRow.relatedTask" class="btn btn-primary" @click="openRecovery(selectedAlertRow.relatedTask.id)">进入关联数据处理</button><div v-if="selectedAlert.note" class="work-finding"><Check :size="16" /><span>{{ selectedAlert.note }}</span></div><div v-if="role === 'manager'" class="work-inline-note">管理角色只读，告警确认和恢复由运维角色处理。</div><div v-else-if="selectedAlert.status !== '已恢复'" class="work-form alert-followup-form"><label for="alert-owner">后续责任人</label><select id="alert-owner" v-model="alertFollowupOwner"><option>当前运维</option><option>李强</option><option>张建国</option></select><label for="alert-due">完成期限</label><input id="alert-due" v-model="alertDueAt" /><label for="alert-next-check">下次检查</label><input id="alert-next-check" v-model="alertNextCheckAt" /><label for="alert-note">处理依据与安排</label><textarea id="alert-note" v-model="alertNote" rows="3" maxlength="200" placeholder="记录核查证据、当前结论和下次检查事项"></textarea><div class="work-inline-actions"><button class="btn btn-outline-secondary" :disabled="!alertNote.trim()" @click="saveGeneralAlertProgress(false)">保存处理进展</button><button class="btn btn-primary" :disabled="!alertNote.trim()" @click="saveGeneralAlertProgress(true)">完成告警处理</button></div></div></div>
-        <div v-else-if="drawerTab === 'work' && isInterfaceFailureAlert" class="work-drawer-body incident-records-tab"><div class="prototype-section-head work-embedded-head"><div><h3>受影响交换记录</h3><small>接口恢复与历史记录处理相互独立；每笔记录按结果进入对应路径。</small></div><span>{{ interfaceIncidentScenarios.length }} 笔</span></div><div class="table-responsive"><table class="table incident-record-table"><thead><tr><th>业务记录</th><th>机构</th><th>当前结果</th><th>失败位置</th><th>处理路径</th><th>操作</th></tr></thead><tbody><tr v-for="row in interfaceIncidentRoutes" :key="row.item.id"><td><strong>{{ row.item.sourceRecordId }}</strong><small>{{ row.item.requestId }}</small></td><td>{{ row.item.organization }}</td><td><span class="prototype-tag" :class="row.tone">{{ row.result }}</span></td><td>{{ row.stage }}</td><td>{{ row.route }}</td><td><button class="btn btn-outline-primary btn-sm" @click="openRelatedInterfaceScenario(row.item)">{{ row.action }}</button></td></tr></tbody></table></div></div>
+        <div v-else-if="drawerTab === 'overview'" class="work-drawer-body alert-process"><div class="work-section-label">基本信息</div><dl class="work-facts"><div><dt>问题类型</dt><dd>{{ selectedAlert.type }}</dd></div><div><dt>业务对象</dt><dd>{{ selectedAlertRow.relatedInterface?.name || selectedAlertRow.relatedScenario?.organization || selectedAlert.object }}</dd></div><div><dt>业务结果</dt><dd>{{ businessResultLabel(selectedAlertRow.businessResult) }}</dd></div><div><dt>当前责任人</dt><dd>{{ selectedAlertRow.owner }}</dd></div><div><dt>数据状态</dt><dd>{{ dataStatusLabel(selectedAlertRow.dataStatus) }}</dd></div><div><dt>等待时长</dt><dd class="text-red">{{ selectedAlertRow.wait }}</dd></div><div><dt>首次发生</dt><dd>{{ selectedAlertRow.firstOccurredAt }}</dd></div><div><dt>最近发生</dt><dd>{{ selectedAlertRow.lastOccurredAt }}</dd></div><div><dt>合并事件数</dt><dd>{{ selectedAlertRow.occurrences }} 次</dd></div><div><dt>合并条件</dt><dd>{{ selectedAlert.type }} + {{ selectedAlert.object }}</dd></div><div><dt>应处理时间</dt><dd>{{ selectedAlertRow.dueAt }}</dd></div></dl><div class="work-section-label work-spaced-label">处理步骤</div><ol class="alert-steps"><li v-for="(step, index) in selectedAlertSteps" :key="step[0]" :class="{ done: index === 0 || index === 1 && selectedAlert.status !== '待确认' }"><span>{{ index + 1 }}</span><div><strong>{{ step[0] }}</strong><p>{{ step[1] }}</p></div><em v-if="index === 0">已确认</em><button v-else-if="index === 1 && selectedAlert.status === '待确认' && role === 'operator'" class="btn btn-primary btn-sm" @click="updateAlert('处理中')">确认并领取</button></li></ol><div class="alert alert-info">{{ selectedAlert.type.includes('到期') || selectedAlert.type.includes('清理') ? '清理操作只删除临时数据，不会改变业务结果；业务结果仍需由业务方根据实际情况确认。' : '处理告警只更新运行处理进度；业务结果必须根据目标系统返回结果或有效查询记录单独确认。' }}</div><button v-if="selectedAlertRow.relatedTask" class="btn btn-primary" @click="openRecovery(selectedAlertRow.relatedTask.id)">进入关联数据处理</button><div v-if="selectedAlert.note" class="work-finding"><Check :size="16" /><span>{{ selectedAlert.note }}</span></div><div v-if="role === 'manager'" class="work-inline-note">管理角色只读，告警确认和恢复由运维角色处理。</div><div v-else-if="selectedAlert.status !== '已恢复'" class="work-form alert-followup-form"><label for="alert-owner">后续责任人</label><select id="alert-owner" v-model="alertFollowupOwner"><option>当前运维</option><option>李强</option><option>张建国</option></select><label for="alert-due">完成期限</label><input id="alert-due" v-model="alertDueAt" /><label for="alert-next-check">下次检查</label><input id="alert-next-check" v-model="alertNextCheckAt" /><label for="alert-note">处理依据与安排</label><textarea id="alert-note" v-model="alertNote" rows="3" maxlength="200" placeholder="记录核查依据、当前结论和下次检查事项"></textarea><div class="work-inline-actions"><button class="btn btn-outline-secondary" :disabled="!alertNote.trim()" @click="saveGeneralAlertProgress(false)">保存处理进展</button><button class="btn btn-primary" :disabled="!alertNote.trim()" @click="saveGeneralAlertProgress(true)">完成告警处理</button></div></div></div>
+        <div v-else-if="drawerTab === 'work' && isInterfaceFailureAlert" class="work-drawer-body incident-records-tab"><div class="prototype-section-head work-embedded-head"><div><h3>受影响交换记录</h3><small>接口恢复与历史记录处理互不影响；每笔记录根据结果采用对应处理方式。</small></div><span>{{ interfaceIncidentScenarios.length }} 笔</span></div><div class="table-responsive"><table class="table incident-record-table"><thead><tr><th>业务记录</th><th>机构</th><th>当前结果</th><th>失败位置</th><th>处理方式</th><th>操作</th></tr></thead><tbody><tr v-for="row in interfaceIncidentRoutes" :key="row.item.id"><td><strong>{{ row.item.sourceRecordId }}</strong><small>{{ row.item.requestId }}</small></td><td>{{ row.item.organization }}</td><td><span class="prototype-tag" :class="row.tone">{{ row.result }}</span></td><td>{{ row.stage }}</td><td>{{ row.route }}</td><td><button class="btn btn-outline-primary btn-sm" @click="openRelatedInterfaceScenario(row.item)">{{ row.action }}</button></td></tr></tbody></table></div></div>
         <div v-else-if="drawerTab === 'work'" class="work-drawer-body"><div class="work-section-label">处理记录</div><ol class="work-timeline"><li><span><Check :size="13" /></span><p><strong>系统生成待处理事项</strong>{{ selectedAlert.type }}<small>{{ selectedAlert.occurredAt }} · {{ selectedAlert.id }}</small></p></li><li v-if="selectedAlert.status !== '待确认'"><span><Check :size="13" /></span><p><strong>运维已确认</strong>{{ selectedAlert.note || '已领取并开始处理' }}<small>当前运维 · {{ selectedAlert.status }}</small></p></li></ol></div>
         <div v-else class="work-drawer-body"><div class="work-section-label">相关日志</div><dl class="work-facts"><div><dt>告警编号</dt><dd>{{ selectedAlert.id }}</dd></div><div><dt>关联对象</dt><dd>{{ selectedAlert.object }}</dd></div><div><dt>错误摘要</dt><dd>{{ selectedAlert.note || selectedAlert.type }}</dd></div><div><dt>数据范围</dt><dd>仅显示合成交换摘要</dd></div></dl><button v-if="selectedAlertRow.relatedInterface && role === 'manager'" class="work-related-link" @click="openInterfaceDefinition(selectedAlertRow.relatedInterface.id)">查看接口定义 <ArrowUpRight :size="14" /></button><button v-else-if="selectedAlertRow.relatedScenario" class="work-related-link" @click="showRelated(selectedAlertRow.relatedScenario.id)">查看关联发送过程 <ArrowUpRight :size="14" /></button></div>
       </template>
@@ -1214,9 +1214,9 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
       <template v-else-if="drawer === 'audit' && selectedAuditEvent">
         <div class="work-drawer-sub"><span class="prototype-tag neutral">{{ selectedAuditEvent.actor.startsWith('SIM-SVC') ? '系统事件' : '人工操作' }}</span><span>{{ selectedAuditEvent.time }}</span></div>
         <div class="work-drawer-body">
-          <section class="detail-section"><h3>事件事实</h3><dl class="work-facts"><div><dt>操作主体</dt><dd>{{ selectedAuditEvent.actor }}</dd></div><div><dt>发生时间</dt><dd>{{ selectedAuditEvent.time }}</dd></div><div><dt>业务对象</dt><dd>{{ selectedAuditEvent.object }}</dd></div><div><dt>动作</dt><dd>{{ selectedAuditEvent.action }}</dd></div></dl></section>
-          <section class="detail-section"><h3>变更与证据</h3><dl class="work-facts"><div><dt>处理摘要</dt><dd>{{ selectedAuditEvent.detail || '该事件未登记补充说明' }}</dd></div><div><dt>证据编号</dt><dd>{{ selectedAuditEvent.evidenceRef || '历史演示数据未登记独立证据编号' }}</dd></div><div><dt>业务影响</dt><dd>{{ selectedAuditEvent.impact || '请结合关联对象的当前状态判断' }}</dd></div><div><dt>关联标识</dt><dd>{{ selectedAuditEvent.object }}</dd></div></dl><div v-if="auditDiffRows.length" class="table-responsive mt-3"><table class="table table-sm interface-diff-table"><thead><tr><th>字段</th><th>变更前</th><th>变更后</th></tr></thead><tbody><tr v-for="row in auditDiffRows" :key="row.field"><td><strong>{{ row.field }}</strong></td><td>{{ row.before }}</td><td>{{ row.after }}</td></tr></tbody></table></div><div v-else class="prototype-empty">该历史事件未保存字段级差异</div></section>
-          <div class="work-data-boundary"><ShieldCheck :size="17" /><span><strong>审计记录只读</strong><small>事件详情用于追溯操作主体、时间、对象和动作；业务正文和敏感凭据不在此展示。</small></span></div>
+          <section class="detail-section"><h3>事件事实</h3><dl class="work-facts"><div><dt>操作人</dt><dd>{{ selectedAuditEvent.actor }}</dd></div><div><dt>发生时间</dt><dd>{{ selectedAuditEvent.time }}</dd></div><div><dt>业务对象</dt><dd>{{ selectedAuditEvent.object }}</dd></div><div><dt>动作</dt><dd>{{ selectedAuditEvent.action }}</dd></div></dl></section>
+          <section class="detail-section"><h3>变更记录</h3><dl class="work-facts"><div><dt>处理摘要</dt><dd>{{ selectedAuditEvent.detail || '该事件未登记补充说明' }}</dd></div><div><dt>相关记录编号</dt><dd>{{ selectedAuditEvent.evidenceRef || '历史演示数据未登记独立记录编号' }}</dd></div><div><dt>业务影响</dt><dd>{{ selectedAuditEvent.impact || '请结合关联对象的当前状态判断' }}</dd></div><div><dt>关联标识</dt><dd>{{ selectedAuditEvent.object }}</dd></div></dl><div v-if="auditDiffRows.length" class="table-responsive mt-3"><table class="table table-sm interface-diff-table"><thead><tr><th>字段</th><th>变更前</th><th>变更后</th></tr></thead><tbody><tr v-for="row in auditDiffRows" :key="row.field"><td><strong>{{ row.field }}</strong></td><td>{{ row.before }}</td><td>{{ row.after }}</td></tr></tbody></table></div><div v-else class="prototype-empty">该历史事件未保存字段级差异</div></section>
+          <div class="work-data-boundary"><ShieldCheck :size="17" /><span><strong>审计记录只读</strong><small>事件详情用于追溯操作人、时间、对象和动作；业务正文和敏感凭据不在此展示。</small></span></div>
         </div>
       </template>
     </aside>

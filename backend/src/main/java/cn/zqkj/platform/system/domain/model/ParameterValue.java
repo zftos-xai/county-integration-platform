@@ -3,7 +3,7 @@ package cn.zqkj.platform.system.domain.model;
 import java.time.LocalDateTime;
 
 /**
- * 已保存的平台参数作用域值。
+ * 已保存的平台按适用范围保存的参数值。
  *
  * @param id 参数值主键
  * @param parameterKey 注册参数键

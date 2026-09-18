@@ -3,7 +3,7 @@ package cn.zqkj.platform.system.domain.model;
 import java.time.LocalDateTime;
 
 /**
- * 外部系统环境与机构作用域端点快照。
+ * 外部系统环境与适用机构服务地址快照。
  *
  * @param id 主键
  * @param externalSystemId 外部系统主键

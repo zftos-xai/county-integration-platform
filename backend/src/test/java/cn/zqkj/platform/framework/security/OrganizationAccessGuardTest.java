@@ -18,7 +18,7 @@ class OrganizationAccessGuardTest {
     private final OrganizationAccessGuard guard = new OrganizationAccessGuard();
 
     /**
-     * 验证主体只能访问权限标识完全匹配的机构。
+     * 验证用户只能访问权限标识完全匹配的机构。
      */
     @Test
     void permitsOnlyMatchingOrganizationAuthority() {

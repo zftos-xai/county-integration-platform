@@ -65,7 +65,7 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
     /**
      * 比较会话权限与数据库当前权限、机构范围和强制改密状态。
      *
-     * @param principal 会话主体
+     * @param principal 会话中的登录用户
      * @param mustChangePassword 数据库当前强制改密状态
      * @return 完全一致时为true
      */

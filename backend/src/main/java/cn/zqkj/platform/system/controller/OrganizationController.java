@@ -56,8 +56,8 @@ public class OrganizationController {
      * 查询机构列表。
      *
      * @param enabled 可选启用状态
-     * @param principal 当前认证主体
-     * @return 机构快照列表
+     * @param principal 当前已登录用户
+     * @return 机构记录列表
      */
     @GetMapping
     @PreAuthorize("hasAuthority('organization:read')")
@@ -72,8 +72,8 @@ public class OrganizationController {
      * 查询指定机构。
      *
      * @param id 机构主键
-     * @param principal 当前认证主体
-     * @return 机构快照
+     * @param principal 当前已登录用户
+     * @return 机构记录
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('organization:read')")
@@ -88,8 +88,8 @@ public class OrganizationController {
      * 创建平台机构。
      *
      * @param request 创建请求
-     * @param principal 当前已认证主体
-     * @return 新建机构快照
+     * @param principal 当前已登录用户
+     * @return 新建机构记录
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -114,8 +114,8 @@ public class OrganizationController {
      *
      * @param id 机构主键
      * @param request 修改请求
-     * @param principal 当前已认证主体
-     * @return 修改后机构快照
+     * @param principal 当前已登录用户
+     * @return 修改后机构记录
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('organization:write')")
@@ -140,8 +140,8 @@ public class OrganizationController {
      *
      * @param id 机构主键
      * @param request 状态修改请求
-     * @param principal 当前已认证主体
-     * @return 修改后机构快照
+     * @param principal 当前已登录用户
+     * @return 修改后机构记录
      */
     @PatchMapping("/{id}/enabled")
     @PreAuthorize("hasAuthority('organization:write')")
@@ -158,7 +158,7 @@ public class OrganizationController {
         ));
     }
 
-    /** @param principal 当前主体 @return 应用服务操作人上下文 */
+    /** @param principal 当前用户 @return 应用服务操作人信息 */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
@@ -183,11 +183,11 @@ public class OrganizationController {
         try {
             byte[] version = Base64.getDecoder().decode(value);
             if (version.length != Long.BYTES) {
-                throw new InvalidRequestException("version must represent an 8-byte rowversion value");
+                throw new InvalidRequestException("version 必须表示一个 8 字节的 SQL Server 行版本号");
             }
             return version;
         } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("version must be valid Base64");
+            throw new InvalidRequestException("version 必须是有效的 Base64 文本");
         }
     }
 }

@@ -26,7 +26,7 @@ export const authState = reactive<AuthState>({
 let initialization: Promise<void> | null = null
 
 /**
- * 初始化当前会话，复用进行中的请求，避免路由并发导航重复查询主体。
+ * 初始化当前会话，复用进行中的请求，避免并发页面跳转重复查询用户。
  * 401 表示未登录而不是系统错误。
  */
 export async function initializeAuth() {
@@ -51,7 +51,7 @@ export async function initializeAuth() {
   return initialization
 }
 
-/** 使用凭据登录并更新内存中的当前主体。 */
+/** 使用凭据登录并更新内存中的当前用户。 */
 export async function authenticate(loginName: string, password: string) {
   authState.isLoading = true
   authState.error = null
@@ -64,7 +64,7 @@ export async function authenticate(loginName: string, password: string) {
   }
 }
 
-/** 注销服务端会话，并无条件清空前端主体状态。 */
+/** 注销服务端会话，并无条件清空前端用户状态。 */
 export async function endSession() {
   authState.isLoading = true
   try {
@@ -76,7 +76,7 @@ export async function endSession() {
   }
 }
 
-/** 修改密码后清空主体，要求使用新密码重新建立会话。 */
+/** 修改密码后清空当前用户信息，要求使用新密码重新建立会话。 */
 export async function updatePassword(currentPassword: string, newPassword: string) {
   authState.isLoading = true
   try {
@@ -88,7 +88,7 @@ export async function updatePassword(currentPassword: string, newPassword: strin
   }
 }
 
-/** 判断当前主体是否具有指定功能权限；未指定权限的功能默认可见。 */
+/** 判断当前用户是否具有指定功能权限；未指定权限的功能默认可见。 */
 export function hasPermission(permission?: string) {
   return !permission || Boolean(authState.user?.permissions.includes(permission))
 }

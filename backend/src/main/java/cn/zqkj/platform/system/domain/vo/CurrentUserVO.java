@@ -5,7 +5,7 @@ import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import java.util.List;
 
 /**
- * 表示可返回管理端的当前已认证主体，不包含密码哈希和会话标识。
+ * 表示可返回管理端的当前已登录用户，不包含密码哈希和会话标识。
  *
  * @param userId 用户主键
  * @param loginName 登录名
@@ -28,9 +28,9 @@ public record CurrentUserVO(
 ) {
 
     /**
-     * 从服务端认证主体创建脱敏当前用户视图。
+     * 从服务端登录用户创建脱敏当前用户视图。
      *
-     * @param principal 平台认证主体
+     * @param principal 平台登录用户
      * @return 当前用户视图
      */
     public static CurrentUserVO from(PlatformUserPrincipal principal) {

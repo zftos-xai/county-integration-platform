@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 从平台身份库加载Spring Security认证主体。
+ * 从平台身份库加载Spring Security登录用户。
  */
 @Service
 public class PlatformUserDetailsServiceImpl implements PlatformUserDetailsService {

@@ -7,6 +7,9 @@ import cn.zqkj.platform.system.domain.dto.CreateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryItemRequest;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryTypeRequest;
+import cn.zqkj.platform.system.domain.dto.DeleteParameterCommand;
+import cn.zqkj.platform.system.domain.dto.DeleteParameterRequest;
+import cn.zqkj.platform.system.domain.dto.DeleteDictionaryRequest;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryItemRequest;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryTypeCommand;
@@ -35,6 +38,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -70,7 +74,7 @@ public class ConfigurationController {
         return ApiResponse.success(service.findParameterDefinitions());
     }
 
-    /** @param principal 当前主体 @return 当前机构范围内及全局参数值 */
+    /** @param principal 当前用户 @return 当前机构范围内及全局参数值 */
     @GetMapping("/parameters")
     @PreAuthorize("hasAuthority('configuration:read')")
     public ApiResponse<List<ParameterValueVO>> parameters(
@@ -79,7 +83,7 @@ public class ConfigurationController {
         return ApiResponse.success(service.findParameterValues(actor(principal)));
     }
 
-    /** @param key 注册参数键 @param request 写入请求 @param principal 当前主体 @return 写入后的安全值 */
+    /** @param key 注册参数键 @param request 写入请求 @param principal 当前用户 @return 写入后的安全值 */
     @PutMapping("/parameters/{key}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<ParameterValueVO> upsertParameter(
@@ -91,7 +95,7 @@ public class ConfigurationController {
         try {
             environment = ParameterEnvironment.valueOf(request.environment().trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("environment is invalid");
+            throw new InvalidRequestException("environment 不是允许的环境名称");
         }
         return ApiResponse.success(service.upsertParameter(
                 key,
@@ -103,6 +107,25 @@ public class ConfigurationController {
         ));
     }
 
+    /** @param key 注册参数键 @param request 删除请求 @param principal 当前用户 @return 空成功响应 */
+    @DeleteMapping("/parameters/{key}")
+    @PreAuthorize("hasAuthority('configuration:write')")
+    public ApiResponse<Void> deleteParameter(
+            @PathVariable String key,
+            @Valid @RequestBody DeleteParameterRequest request,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        service.deleteParameter(
+                key,
+                new DeleteParameterCommand(
+                        parseEnvironment(request.environment()), request.organizationId(),
+                        decodeVersion(request.version())
+                ),
+                actor(principal)
+        );
+        return ApiResponse.success(null);
+    }
+
     /** @return 全部平台系统字典类型 */
     @GetMapping("/dictionaries")
     @PreAuthorize("hasAuthority('configuration:read')")
@@ -110,7 +133,7 @@ public class ConfigurationController {
         return ApiResponse.success(service.findDictionaryTypes());
     }
 
-    /** @param request 创建请求 @param principal 当前主体 @return 新字典类型 */
+    /** @param request 创建请求 @param principal 当前用户 @return 新字典类型 */
     @PostMapping("/dictionaries")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
@@ -124,7 +147,7 @@ public class ConfigurationController {
         ));
     }
 
-    /** @param typeId 类型主键 @param request 修改请求 @param principal 当前主体 @return 修改后类型 */
+    /** @param typeId 类型主键 @param request 修改请求 @param principal 当前用户 @return 修改后类型 */
     @PutMapping("/dictionaries/{typeId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<DictionaryTypeVO> updateDictionaryType(
@@ -141,6 +164,18 @@ public class ConfigurationController {
         ));
     }
 
+    /** @param typeId 类型主键 @param request 删除请求 @param principal 当前用户 @return 空成功响应 */
+    @DeleteMapping("/dictionaries/{typeId}")
+    @PreAuthorize("hasAuthority('configuration:write')")
+    public ApiResponse<Void> deleteDictionaryType(
+            @PathVariable @Positive long typeId,
+            @Valid @RequestBody DeleteDictionaryRequest request,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        service.deleteDictionaryType(typeId, decodeVersion(request.version()), actor(principal));
+        return ApiResponse.success(null);
+    }
+
     /** @param typeId 类型主键 @param includeDisabled 是否包含停用项 @return 字典项 */
     @GetMapping("/dictionaries/{typeId}/items")
     @PreAuthorize("hasAuthority('configuration:read')")
@@ -151,7 +186,7 @@ public class ConfigurationController {
         return ApiResponse.success(service.findDictionaryItems(typeId, includeDisabled));
     }
 
-    /** @param typeId 类型主键 @param request 创建请求 @param principal 当前主体 @return 新字典项 */
+    /** @param typeId 类型主键 @param request 创建请求 @param principal 当前用户 @return 新字典项 */
     @PostMapping("/dictionaries/{typeId}/items")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
@@ -167,7 +202,7 @@ public class ConfigurationController {
         ));
     }
 
-    /** @param itemId 字典项主键 @param request 修改请求 @param principal 当前主体 @return 修改后字典项 */
+    /** @param itemId 字典项主键 @param request 修改请求 @param principal 当前用户 @return 修改后字典项 */
     @PutMapping("/dictionary-items/{itemId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<DictionaryItemVO> updateDictionaryItem(
@@ -184,6 +219,18 @@ public class ConfigurationController {
         ));
     }
 
+    /** @param itemId 字典项主键 @param request 删除请求 @param principal 当前用户 @return 空成功响应 */
+    @DeleteMapping("/dictionary-items/{itemId}")
+    @PreAuthorize("hasAuthority('configuration:write')")
+    public ApiResponse<Void> deleteDictionaryItem(
+            @PathVariable @Positive long itemId,
+            @Valid @RequestBody DeleteDictionaryRequest request,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        service.deleteDictionaryItem(itemId, decodeVersion(request.version()), actor(principal));
+        return ApiResponse.success(null);
+    }
+
     /** @return 已确认外部系统 */
     @GetMapping("/external-systems")
     @PreAuthorize("hasAuthority('configuration:read')")
@@ -191,7 +238,7 @@ public class ConfigurationController {
         return ApiResponse.success(service.findExternalSystems());
     }
 
-    /** @param request 创建请求 @param principal 当前主体 @return 新外部系统 */
+    /** @param request 创建请求 @param principal 当前用户 @return 新外部系统 */
     @PostMapping("/external-systems")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
@@ -204,7 +251,7 @@ public class ConfigurationController {
         ), actor(principal)));
     }
 
-    /** @param systemId 系统主键 @param request 修改请求 @param principal 当前主体 @return 修改后系统 */
+    /** @param systemId 系统主键 @param request 修改请求 @param principal 当前用户 @return 修改后系统 */
     @PutMapping("/external-systems/{systemId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<ExternalSystemVO> updateExternalSystem(
@@ -217,7 +264,7 @@ public class ConfigurationController {
         ), actor(principal)));
     }
 
-    /** @param systemId 系统主键 @param principal 当前主体 @return 授权范围内端点 */
+    /** @param systemId 系统主键 @param principal 当前用户 @return 授权范围内服务地址 */
     @GetMapping("/external-systems/{systemId}/endpoints")
     @PreAuthorize("hasAuthority('configuration:read')")
     public ApiResponse<List<ExternalEndpointVO>> externalEndpoints(
@@ -227,7 +274,7 @@ public class ConfigurationController {
         return ApiResponse.success(service.findExternalEndpoints(systemId, actor(principal)));
     }
 
-    /** @param systemId 系统主键 @param request 创建请求 @param principal 当前主体 @return 新端点 */
+    /** @param systemId 系统主键 @param request 创建请求 @param principal 当前用户 @return 新服务地址 */
     @PostMapping("/external-systems/{systemId}/endpoints")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
@@ -242,7 +289,7 @@ public class ConfigurationController {
         ), actor(principal)));
     }
 
-    /** @param endpointId 端点主键 @param request 修改请求 @param principal 当前主体 @return 修改后端点 */
+    /** @param endpointId 服务地址主键 @param request 修改请求 @param principal 当前用户 @return 修改后服务地址 */
     @PutMapping("/external-endpoints/{endpointId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<ExternalEndpointVO> updateExternalEndpoint(
@@ -256,7 +303,7 @@ public class ConfigurationController {
         ), actor(principal)));
     }
 
-    /** @param principal 当前主体 @return 服务端可信操作人上下文 */
+    /** @param principal 当前用户 @return 服务端可信操作人信息 */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
@@ -266,7 +313,7 @@ public class ConfigurationController {
         try {
             return ParameterEnvironment.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("environment is invalid");
+            throw new InvalidRequestException("environment 不是允许的环境名称");
         }
     }
 
@@ -284,7 +331,7 @@ public class ConfigurationController {
             }
             return version;
         } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("version must be Base64 encoded 8-byte rowversion");
+            throw new InvalidRequestException("version 必须是由 8 字节 SQL Server 行版本号编码得到的 Base64 文本");
         }
     }
 }

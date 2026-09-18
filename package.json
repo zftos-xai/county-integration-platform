@@ -10,9 +10,12 @@
     "build": "npm run build --workspace web-admin && npm run build --workspace web-embed",
     "typecheck": "npm run typecheck --workspace web-admin && npm run typecheck --workspace web-embed",
     "test:frontend": "node --test web-admin/tests/*.test.mjs",
+    "seed:acceptance": "node tools/seed-business-acceptance.mjs",
+    "cleanup:acceptance": "node tools/seed-business-acceptance.mjs --cleanup",
     "verify:frontend-comments": "node tools/verify-frontend-comments.mjs",
+    "verify:menu-delivery": "node tools/verify-menu-delivery.mjs",
     "verify:sql": "node tools/verify-sql-migrations.mjs",
-    "verify:frontend": "npm run verify:frontend-comments && npm run typecheck && npm run build && npm run test:frontend"
+    "verify:frontend": "npm run verify:frontend-comments && npm run verify:menu-delivery && npm run typecheck && npm run build && npm run test:frontend"
   },
   "devDependencies": {
     "typescript": "5.9.3"

@@ -125,7 +125,7 @@ class OrganizationServiceTest {
      * @param id 机构主键
      * @param parentId 可选父机构主键
      * @param enabled 启用状态
-     * @return 机构快照
+     * @return 机构记录
      */
     private OrganizationVO view(Long id, Long parentId, boolean enabled) {
         return new OrganizationVO(

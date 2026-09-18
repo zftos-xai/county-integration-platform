@@ -3,7 +3,7 @@ package cn.zqkj.platform.system.domain.model;
 import java.util.Set;
 
 /**
- * 表示从服务端认证主体解析出的管理操作人和机构范围。
+ * 表示从服务端登录用户解析出的管理操作人和机构范围。
  *
  * @param userId 操作人用户主键
  * @param loginName 操作人登录名

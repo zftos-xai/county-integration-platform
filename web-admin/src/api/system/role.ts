@@ -1,6 +1,6 @@
 import { apiRequest } from '@/utils/request'
 import { isRecord, isStringArray } from '@/utils/validation'
-import { roleDetailPath, rolePermissionsPath, roleWriteRequest } from './roleContract'
+import { roleDetailPath, rolePermissionsPath, roleWriteRequest } from './roleApiPaths'
 
 /** 用户授权页面使用的角色摘要模型。 */
 export type Role = {
@@ -65,7 +65,7 @@ export function isPermissionList(value: unknown): value is Permission[] {
   return Array.isArray(value) && value.every(isPermission)
 }
 
-/** 查询当前主体可读取的角色及其权限代码。 */
+/** 查询当前用户可读取的角色及其权限代码。 */
 export function listRoles(signal?: AbortSignal) {
   return apiRequest<Role[]>('/roles', { signal }, isRoleList)
 }
@@ -88,6 +88,11 @@ export function createRole(input: CreateRoleInput) {
 /** 修改非系统角色的名称和启用状态。 */
 export function updateRole(id: number, input: UpdateRoleInput) {
   return apiRequest<Role>(roleDetailPath(id), roleWriteRequest('PUT', input), isRole)
+}
+
+/** 删除未分配给用户的非系统角色。 */
+export function deleteRole(id: number, version: string) {
+  return apiRequest<void>(roleDetailPath(id), roleWriteRequest('DELETE', { version }))
 }
 
 /** 原子替换非系统角色的代码注册权限。 */

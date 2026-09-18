@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 /**
- * 为每个 HTTP 请求建立可验证的请求编号并写入日志上下文。
+ * 为每个 HTTP 请求建立可验证的请求编号并写入日志字段。
  *
  * <p>不可信或超长的外部请求编号会被替换，避免日志注入和追踪字段失控。</p>
  */

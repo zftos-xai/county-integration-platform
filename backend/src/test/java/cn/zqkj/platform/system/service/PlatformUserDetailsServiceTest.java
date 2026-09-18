@@ -53,10 +53,10 @@ class PlatformUserDetailsServiceTest {
     }
 
     /**
-     * 创建指定首次改密状态的用户快照。
+     * 创建指定首次改密状态的用户记录。
      *
      * @param mustChangePassword 是否必须修改密码
-     * @return 用户快照
+     * @return 用户记录
      */
     private UserAccount account(boolean mustChangePassword) {
         return new UserAccount(

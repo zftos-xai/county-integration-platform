@@ -1,6 +1,6 @@
 # Team Engineering Standards
 
-团队工程规范插件，用于审计项目治理基线、选择适用技术栈规则、补齐 CI 门禁，并指导规范在其他项目分阶段落地。
+团队工程规范插件，用于检查项目是否遵守当前工程规则、选择适用的技术规则、补齐持续集成（CI）自动检查，并指导其他项目分阶段采用这些规则。
 
 ## 安装
 
@@ -19,13 +19,13 @@ codex plugin add team-engineering-standards@county-integration-team
 使用 $project-engineering-guardrails 审计当前项目，区分通用规则、技术栈规则和项目覆盖项，并修复可自动处理的问题。
 ```
 
-只读运行仓库基线审计：
+只读检查仓库当前是否符合规则：
 
 ```bash
 python3 skills/project-engineering-guardrails/scripts/audit_repository.py /path/to/project
 ```
 
-在 CI 中要求基线完整：
+在持续集成（CI）中把不符合规则的情况作为失败处理：
 
 ```bash
 python3 skills/project-engineering-guardrails/scripts/audit_repository.py /path/to/project --strict
@@ -33,7 +33,7 @@ python3 skills/project-engineering-guardrails/scripts/audit_repository.py /path/
 
 ## 维护
 
-- 插件遵循语义化版本；规则行为变化必须更新版本和发布说明。
+- 插件版本号按变更影响编号；规则行为变化必须更新版本和发布说明。
 - 通用规则进入插件，项目专属要求留在项目 `AGENTS.md`。
 - 每次修改后运行技能、插件和目标项目三类验证。
 

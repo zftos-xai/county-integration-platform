@@ -1,7 +1,7 @@
 package cn.zqkj.platform.system.domain.model;
 
 /**
- * 表示用于认证和当前主体构建的平台本地用户快照。
+ * 表示用于认证和当前用户构建的平台本地用户记录。
  *
  * @param id 用户内部主键
  * @param loginName 本地登录名

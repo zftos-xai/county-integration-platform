@@ -1,4 +1,4 @@
-<!-- 无权访问页面：用于路由守卫拒绝缺少功能权限的直接访问。 -->
+<!-- 无权访问页面：用于页面访问权限检查拒绝缺少功能权限的直接访问。 -->
 <script setup lang="ts">
 import { ShieldX } from 'lucide-vue-next'
 import StandaloneState from '@/components/StandaloneState.vue'

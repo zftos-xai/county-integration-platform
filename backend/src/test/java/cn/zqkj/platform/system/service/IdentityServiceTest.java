@@ -133,7 +133,7 @@ class IdentityServiceTest {
     /**
      * 创建机构测试快照。
      *
-     * @return 机构快照
+     * @return 机构记录
      */
     private OrganizationVO organization() {
         return new OrganizationVO(
@@ -145,7 +145,7 @@ class IdentityServiceTest {
     /**
      * 创建用户认证测试快照。
      *
-     * @return 用户快照
+     * @return 用户记录
      */
     private UserAccount account() {
         return new UserAccount(30L, "admin", "平台管理员", "hash", 10L, "ORG001", true, true);

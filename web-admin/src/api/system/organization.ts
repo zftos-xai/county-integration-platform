@@ -1,10 +1,10 @@
 import { apiRequest } from '@/utils/request'
 import {
   organizationDetailPath, organizationEnabledPath, organizationListPath, organizationWriteRequest,
-} from './organizationContract'
+} from './organizationApiPaths'
 import { isRecord } from '@/utils/validation'
 
-/** 当前主体可管理范围内的机构 API 模型。 */
+/** 当前用户可管理范围内的机构 API 模型。 */
 export type Organization = {
   id: number
   organizationCode: string
@@ -55,7 +55,7 @@ export function isOrganizationList(value: unknown): value is Organization[] {
   return Array.isArray(value) && value.every(isOrganization)
 }
 
-/** 按可选启用状态查询当前主体可见的机构。 */
+/** 按可选启用状态查询当前用户可见的机构。 */
 export function listOrganizations(enabled?: boolean, signal?: AbortSignal) {
   return apiRequest<Organization[]>(organizationListPath(enabled), { signal }, isOrganizationList)
 }

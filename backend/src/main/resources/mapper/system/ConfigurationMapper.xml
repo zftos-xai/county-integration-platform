@@ -11,9 +11,9 @@
             <arg column="value_type" javaType="cn.zqkj.platform.system.domain.model.ParameterValueType"/>
             <!-- 参数部署环境 -->
             <arg column="environment_code" javaType="cn.zqkj.platform.system.domain.model.ParameterEnvironment"/>
-            <!-- 可选机构作用域主键 -->
+            <!-- 可选的适用机构主键 -->
             <arg column="organization_id" javaType="java.lang.Long"/>
-            <!-- 可选机构作用域代码 -->
+            <!-- 可选的适用机构代码 -->
             <arg column="organization_code" javaType="java.lang.String"/>
             <!-- 经类型校验的参数值 -->
             <arg column="parameter_value" javaType="java.lang.String"/>
@@ -98,8 +98,8 @@
         values_table.parameter_key,       <!-- 代码注册参数键 -->
         values_table.value_type,          <!-- 保存时的注册值类型 -->
         values_table.environment_code,    <!-- 部署环境代码 -->
-        values_table.organization_id,     <!-- 可选机构作用域主键 -->
-        organizations.organization_code, <!-- 可选机构作用域代码 -->
+        values_table.organization_id,     <!-- 可选的适用机构主键 -->
+        organizations.organization_code, <!-- 可选的适用机构代码 -->
         values_table.parameter_value,     <!-- 经类型和范围校验的参数值 -->
         values_table.is_enabled,          <!-- 参数值是否启用 -->
         values_table.created_at,          <!-- 创建UTC时间 -->
@@ -155,11 +155,18 @@
         </choose>
     </select>
 
+    <select id="findParameterValueById" resultMap="parameterValue">
+        SELECT <include refid="parameterValueColumns"/>
+        FROM sys_parameter_value AS values_table
+        LEFT JOIN org_organization AS organizations ON organizations.id = values_table.organization_id
+        WHERE values_table.id = #{id}
+    </select>
+
     <select id="createParameterValue" resultType="long" affectData="true">
         INSERT INTO sys_parameter_value (
-            <!-- 注册参数键、类型、部署环境和可选机构作用域 -->
+            <!-- 注册参数键、类型、部署环境和可选的适用机构 -->
             parameter_key, value_type, environment_code, organization_id, parameter_value,
-            <!-- 启用状态和创建、修改主体 -->
+            <!-- 启用状态和创建、修改人 -->
             is_enabled, created_by, updated_by
         ) VALUES (
             #{key}, #{valueType}, #{command.environment}, #{command.organizationId}, #{command.value},
@@ -170,12 +177,18 @@
 
     <update id="updateParameterValue">
         UPDATE sys_parameter_value
-        <!-- 同步当前注册类型、规范化值、启用状态和修改主体 -->
+        <!-- 同步当前注册类型、规范化值、启用状态和修改人 -->
         SET value_type = #{valueType}, parameter_value = #{command.value}, is_enabled = #{command.enabled},
             updated_by = #{actor}, updated_at = SYSUTCDATETIME()
         <!-- 内部主键确定目标，rowversion防止并发覆盖 -->
         WHERE id = #{id} AND row_version = #{command.expectedVersion}
     </update>
+
+    <delete id="deleteParameterValue">
+        DELETE FROM sys_parameter_value
+        <!-- 内部主键确定目标，rowversion防止删除已经被他人修改的配置 -->
+        WHERE id = #{id} AND row_version = #{expectedVersion}
+    </delete>
 
     <select id="findDictionaryTypes" resultMap="dictionaryType">
         SELECT <include refid="dictionaryTypeColumns"/>
@@ -197,7 +210,7 @@
 
     <select id="createDictionaryType" resultType="long" affectData="true">
         INSERT INTO sys_dictionary_type (
-            <!-- 类型代码、展示名称、用途说明、初始状态和创建修改主体 -->
+            <!-- 类型代码、展示名称、用途说明、初始状态和创建人和修改人 -->
             type_code, type_name, description, is_enabled, created_by, updated_by
         ) VALUES (
             #{command.typeCode}, #{command.typeName}, #{command.description}, 1, #{actor}, #{actor}
@@ -207,12 +220,22 @@
 
     <update id="updateDictionaryType">
         UPDATE sys_dictionary_type
-        <!-- 修改展示信息、启用状态、修改主体和UTC时间 -->
+        <!-- 修改展示信息、启用状态、修改人和UTC时间 -->
         SET type_name = #{command.typeName}, description = #{command.description},
             is_enabled = #{command.enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
         <!-- 内部主键确定目标，rowversion防止并发覆盖 -->
         WHERE id = #{typeId} AND row_version = #{command.expectedVersion}
     </update>
+
+    <select id="countDictionaryItems" resultType="long">
+        SELECT COUNT_BIG(1) FROM sys_dictionary_item WHERE dictionary_type_id = #{typeId}
+    </select>
+
+    <delete id="deleteDictionaryType">
+        DELETE FROM sys_dictionary_type
+        WHERE id = #{typeId} AND row_version = #{expectedVersion}
+          AND NOT EXISTS (SELECT 1 FROM sys_dictionary_item WHERE dictionary_type_id = #{typeId})
+    </delete>
 
     <select id="findDictionaryItems" resultMap="dictionaryItem">
         SELECT <include refid="dictionaryItemColumns"/>
@@ -239,7 +262,7 @@
 
     <select id="createDictionaryItem" resultType="long" affectData="true">
         INSERT INTO sys_dictionary_item (
-            <!-- 所属类型、项代码、展示文本、顺序、初始状态和创建修改主体 -->
+            <!-- 所属类型、项代码、展示文本、顺序、初始状态和创建人和修改人 -->
             dictionary_type_id, item_code, item_label, sort_order, is_enabled, created_by, updated_by
         ) VALUES (
             #{typeId}, #{command.itemCode}, #{command.itemLabel}, #{command.sortOrder}, 1, #{actor}, #{actor}
@@ -249,12 +272,36 @@
 
     <update id="updateDictionaryItem">
         UPDATE sys_dictionary_item
-        <!-- 修改展示文本、顺序、启用状态、修改主体和UTC时间 -->
+        <!-- 修改展示文本、顺序、启用状态、修改人和UTC时间 -->
         SET item_label = #{command.itemLabel}, sort_order = #{command.sortOrder},
             is_enabled = #{command.enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
         <!-- 内部主键确定目标，rowversion防止并发覆盖 -->
         WHERE id = #{itemId} AND row_version = #{command.expectedVersion}
     </update>
+
+    <select id="countDictionaryItemReferences" resultType="long">
+        <![CDATA[
+        DECLARE @reference_count BIGINT = 0;
+        DECLARE @reference_sql NVARCHAR(MAX) = N'';
+        SELECT @reference_sql = @reference_sql
+            + N'SELECT @total = @total + COUNT_BIG(1) FROM '
+            + QUOTENAME(OBJECT_SCHEMA_NAME(fkc.parent_object_id)) + N'.'
+            + QUOTENAME(OBJECT_NAME(fkc.parent_object_id)) + N' WHERE '
+            + QUOTENAME(COL_NAME(fkc.parent_object_id, fkc.parent_column_id)) + N' = @item_id;'
+        FROM sys.foreign_key_columns AS fkc
+        WHERE fkc.referenced_object_id = OBJECT_ID(N'dbo.sys_dictionary_item')
+          AND COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id) = N'id';
+        IF LEN(@reference_sql) > 0
+            EXEC sys.sp_executesql @reference_sql,
+                N'@item_id BIGINT, @total BIGINT OUTPUT',
+                @item_id = #{itemId}, @total = @reference_count OUTPUT;
+        SELECT @reference_count;
+        ]]>
+    </select>
+
+    <delete id="deleteDictionaryItem">
+        DELETE FROM sys_dictionary_item WHERE id = #{itemId} AND row_version = #{expectedVersion}
+    </delete>
 
     <select id="findExternalSystems" resultMap="externalSystem">
         SELECT id, system_code, system_name, description, is_enabled, created_at, updated_at, row_version

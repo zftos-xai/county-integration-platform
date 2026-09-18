@@ -48,9 +48,9 @@ for (const sourceRoot of sourceRoots) {
 }
 
 if (failures.length) {
-  console.error('前端注释门禁失败：')
+  console.error('前端注释自动检查失败：')
   failures.forEach(failure => console.error(`- ${failure}`))
   process.exit(1)
 }
 
-console.log('前端注释门禁通过。')
+console.log('前端注释自动检查通过。')

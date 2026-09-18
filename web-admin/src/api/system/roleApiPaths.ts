@@ -1,5 +1,5 @@
 /** 角色写接口允许的 HTTP 方法。 */
-export type RoleWriteMethod = 'POST' | 'PUT'
+export type RoleWriteMethod = 'POST' | 'PUT' | 'DELETE'
 
 /** 构造角色详情地址。 */
 export function roleDetailPath(id: number) {

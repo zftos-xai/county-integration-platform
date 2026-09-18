@@ -2,7 +2,7 @@ import { apiRequest } from '@/utils/request'
 import { isRecord } from '@/utils/validation'
 import {
   configurationWriteRequest, dictionaryItemPath, dictionaryItemsPath, dictionaryTypePath, parameterValuePath,
-} from './configurationContract'
+} from './configurationApiPaths'
 
 /** 平台参数支持的值类型。 */
 export type ParameterValueType = 'STRING' | 'INTEGER' | 'DECIMAL' | 'BOOLEAN'
@@ -23,7 +23,7 @@ export type ParameterDefinition = {
   pattern: string | null
 }
 
-/** 当前管理员可见的参数作用域值。 */
+/** 当前管理员可见的按适用范围保存的参数值。 */
 export type ParameterValue = {
   id: number
   parameterKey: string
@@ -38,7 +38,7 @@ export type ParameterValue = {
   version: string
 }
 
-/** 创建或更新参数作用域值的请求。 */
+/** 创建或更新按适用范围保存的参数值的请求。 */
 export type UpsertParameterInput = {
   environment: ParameterEnvironment
   organizationId: number | null
@@ -140,9 +140,14 @@ export function listParameterValues(signal?: AbortSignal) {
   return apiRequest<ParameterValue[]>('/configuration/parameters', { signal }, isParameterValueList)
 }
 
-/** 创建或并发更新一个参数作用域值。 */
+/** 创建或并发更新一个按适用范围保存的参数值。 */
 export function upsertParameterValue(key: string, input: UpsertParameterInput) {
   return apiRequest<ParameterValue>(parameterValuePath(key), configurationWriteRequest('PUT', input), isParameterValue)
+}
+
+/** 删除一个适用范围内的参数配置，使该范围恢复为尚未配置。 */
+export function deleteParameterValue(key: string, input: Pick<UpsertParameterInput, 'environment' | 'organizationId' | 'version'>) {
+  return apiRequest<void>(parameterValuePath(key), configurationWriteRequest('DELETE', input))
 }
 
 /** 查询平台字典类型。 */
@@ -160,6 +165,11 @@ export function updateDictionaryType(id: number, input: UpdateDictionaryTypeInpu
   return apiRequest<DictionaryType>(dictionaryTypePath(id), configurationWriteRequest('PUT', input), isDictionaryType)
 }
 
+/** 删除一个不含字典项的字典类型。 */
+export function deleteDictionaryType(id: number, version: string) {
+  return apiRequest<void>(dictionaryTypePath(id), configurationWriteRequest('DELETE', { version }))
+}
+
 /** 查询指定类型的字典项，管理页包含停用项。 */
 export function listDictionaryItems(typeId: number, signal?: AbortSignal) {
   return apiRequest<DictionaryItem[]>(dictionaryItemsPath(typeId, true), { signal }, isDictionaryItemList)
@@ -173,4 +183,9 @@ export function createDictionaryItem(typeId: number, input: CreateDictionaryItem
 /** 并发更新平台字典项。 */
 export function updateDictionaryItem(id: number, input: UpdateDictionaryItemInput) {
   return apiRequest<DictionaryItem>(dictionaryItemPath(id), configurationWriteRequest('PUT', input), isDictionaryItem)
+}
+
+/** 删除一个尚未被业务数据引用的字典项。 */
+export function deleteDictionaryItem(id: number, version: string) {
+  return apiRequest<void>(dictionaryItemPath(id), configurationWriteRequest('DELETE', { version }))
 }

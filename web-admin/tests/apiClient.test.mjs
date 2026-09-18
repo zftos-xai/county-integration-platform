@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { apiRequest, ApiClientError, clearCsrfToken } from '../src/utils/request.ts'
+import {
+  apiRequest, ApiClientError, asUncertainWriteError, clearCsrfToken, isWriteResultUncertain,
+} from '../src/utils/request.ts'
 
 test('写请求先取得CSRF令牌并携带会话凭据', async () => {
   clearCsrfToken()
@@ -62,7 +64,7 @@ test('成功状态缺少统一响应数据时拒绝作为业务成功', async ()
   )
 })
 
-test('业务数据未通过运行时合同校验时拒绝进入页面状态', async () => {
+test('业务数据未通过运行时接口格式校验时拒绝进入页面状态', async () => {
   globalThis.fetch = async () => Response.json({ code: 'SUCCESS', message: 'ok', data: { id: 'wrong-type' } })
   await assert.rejects(
     () => apiRequest('/organizations/1', {}, value => typeof value === 'object' && value !== null && value.id === 1),
@@ -78,4 +80,14 @@ test('请求超过共享超时后返回受控超时错误', async () => {
     () => apiRequest('/session/current', { timeoutMs: 5 }),
     error => error instanceof ApiClientError && error.code === 'REQUEST_TIMEOUT',
   )
+})
+
+test('写请求超时或断网时提示先重新读取，明确失败则保留原错误', () => {
+  const timeout = new ApiClientError('REQUEST_TIMEOUT', '请求超时', 0, 'req-timeout')
+  const conflict = new ApiClientError('RESOURCE_CONFLICT', '数据已变化', 409, 'req-conflict')
+
+  assert.equal(isWriteResultUncertain(timeout), true)
+  assert.match(asUncertainWriteError(timeout).message, /先重新读取最新数据/)
+  assert.equal(asUncertainWriteError(timeout).requestId, 'req-timeout')
+  assert.equal(asUncertainWriteError(conflict), conflict)
 })

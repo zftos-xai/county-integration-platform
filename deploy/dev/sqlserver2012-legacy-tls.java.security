@@ -1,0 +1,4 @@
+# Development-only compatibility policy for the SQL Server 2012 instance exposed on 127.0.0.1:14330.
+# This removes TLSv1 and TLSv1.1 from the JDK 17 disabled list while retaining the other weak algorithms.
+# It must only be appended with -Djava.security.properties and must never replace the global JDK policy.
+jdk.tls.disabledAlgorithms=SSLv3, DTLSv1.0, RC4, DES, MD5withRSA, DH keySize < 1024, EC keySize < 224, 3DES_EDE_CBC, anon, NULL, ECDH

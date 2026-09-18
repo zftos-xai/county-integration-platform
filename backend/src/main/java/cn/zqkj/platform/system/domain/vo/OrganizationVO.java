@@ -32,7 +32,7 @@ public record OrganizationVO(
 ) {
 
     /**
-     * 创建机构快照并防止外部持有可变并发版本数组。
+     * 创建机构记录并防止外部持有可变并发版本数组。
      */
     public OrganizationVO {
         version = version == null ? null : version.clone();

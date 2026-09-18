@@ -13,8 +13,9 @@ const UsersView = () => import('@/views/system/user/UserView.vue')
 const RolesView = () => import('@/views/system/role/RoleView.vue')
 const ParametersView = () => import('@/views/configuration/parameter/ParameterView.vue')
 const DictionariesView = () => import('@/views/configuration/dictionary/DictionaryView.vue')
+const AuditView = () => import('@/views/audit/management/AuditView.vue')
 
-/** 管理端路由表；正式业务页面统一挂载在登录后布局下。 */
+/** 管理端页面地址表；正式业务页面统一挂载在登录后布局下。 */
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -26,7 +27,7 @@ const router = createRouter({
       path: '/',
       component: Layout,
       children: [
-        // 未完成的路由保留直达占位提示，但不会进入正式侧栏导航。
+        // 未完成功能的页面地址保留直达占位提示，但不会进入正式侧栏导航。
         { path: '', component: DashboardView, meta: { title: '运行总览', public: false } },
         { path: 'organizations', component: OrganizationsView, meta: { title: '机构管理', public: false, requiredPermission: 'organization:read' } },
         { path: 'users', component: UsersView, meta: { title: '用户管理', public: false, requiredPermission: 'identity:read' } },
@@ -38,7 +39,7 @@ const router = createRouter({
         { path: 'exchanges', component: PlaceholderView, meta: { title: '交换记录', public: false } },
         { path: 'exceptions', component: PlaceholderView, meta: { title: '异常与处理', public: false } },
         { path: 'data-review', component: PlaceholderView, meta: { title: '数据核查', public: false } },
-        { path: 'audit', component: PlaceholderView, meta: { title: '审计记录', public: false, requiredPermission: 'audit:read' } },
+        { path: 'audit', component: AuditView, meta: { title: '审计记录', public: false, requiredPermission: 'audit:read' } },
       ],
     },
     { path: '/:pathMatch(.*)*', component: NotFoundView, meta: { title: '页面不存在', public: true } },

@@ -159,7 +159,7 @@
             must_change_password = 0,
             <!-- 记录密码修改UTC时间 -->
             password_changed_at = SYSUTCDATETIME(),
-            <!-- 记录最后修改主体 -->
+            <!-- 记录最后修改人 -->
             updated_by = #{actor},
             <!-- 记录最后修改UTC时间 -->
             updated_at = SYSUTCDATETIME()

@@ -2,7 +2,7 @@ import type {
   ParameterDefinition, ParameterEnvironment, ParameterValue, UpsertParameterInput,
 } from '@/api/system/configuration'
 
-/** 参数编辑器使用的作用域与值草稿。 */
+/** 参数编辑器使用的适用范围和值的草稿。 */
 export type ParameterForm = {
   environment: ParameterEnvironment
   organizationId: number | null

@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   organizationDetailPath, organizationEnabledPath, organizationListPath, organizationWriteRequest,
-} from '../src/api/system/organizationContract.ts'
+} from '../src/api/system/organizationApiPaths.ts'
 
-test('机构查询路径按契约生成可选启用状态', () => {
+test('机构查询路径按接口定义生成可选启用状态', () => {
   assert.equal(organizationListPath(), '/organizations')
   assert.equal(organizationListPath(true), '/organizations?enabled=true')
   assert.equal(organizationDetailPath(7), '/organizations/7')

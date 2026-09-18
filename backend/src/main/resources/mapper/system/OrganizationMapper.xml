@@ -94,9 +94,9 @@
             valid_from,
             <!-- 可选业务有效结束UTC时间 -->
             valid_to,
-            <!-- 创建人稳定主体标识快照 -->
+            <!-- 创建人稳定用户标识快照 -->
             created_by,
-            <!-- 最后修改人稳定主体标识快照 -->
+            <!-- 最后修改人稳定用户标识快照 -->
             updated_by
         ) VALUES (
             #{command.organizationCode},
@@ -124,7 +124,7 @@
             valid_from = #{command.validFrom,jdbcType=TIMESTAMP},
             <!-- 可选业务有效结束UTC时间 -->
             valid_to = #{command.validTo,jdbcType=TIMESTAMP},
-            <!-- 最后修改人稳定主体标识快照 -->
+            <!-- 最后修改人稳定用户标识快照 -->
             updated_by = #{actor},
             <!-- 最后修改UTC时间 -->
             updated_at = SYSUTCDATETIME()
@@ -137,7 +137,7 @@
         UPDATE org_organization
         <!-- 机构目标启用状态 -->
         SET is_enabled = #{enabled},
-            <!-- 最后修改人稳定主体标识快照 -->
+            <!-- 最后修改人稳定用户标识快照 -->
             updated_by = #{actor},
             <!-- 最后修改UTC时间 -->
             updated_at = SYSUTCDATETIME()

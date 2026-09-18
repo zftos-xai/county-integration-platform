@@ -4,7 +4,7 @@ import { resolveRouteAccess } from '@/utils/routeAccess'
 import { platformSettings } from '@/settings'
 
 /**
- * 注册全局路由权限守卫。
+ * 注册全局页面访问权限检查。
  * 前端只负责导航约束和体验提示，最终身份、权限与机构范围仍由后端校验。
  */
 export function setupPermissionGuard(router: Router) {

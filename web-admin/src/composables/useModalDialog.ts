@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onUnmounted, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 
 const FOCUSABLE_SELECTOR = [
@@ -53,9 +53,12 @@ export function useModalDialog(isOpen: Ref<boolean>, requestClose: () => void) {
     }
   }
 
-  onBeforeUnmount(() => {
-    returnFocus?.focus()
+  onUnmounted(() => {
+    const target = returnFocus
     returnFocus = null
+    // Restore after the modal DOM has left the document so the removed close
+    // button cannot retain focus and the triggering control is focusable again.
+    queueMicrotask(() => target?.focus())
   })
 
   return { dialogRef, handleDialogKeydown }

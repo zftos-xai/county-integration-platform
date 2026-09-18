@@ -2,6 +2,7 @@ package cn.zqkj.platform.system.service;
 
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryTypeCommand;
+import cn.zqkj.platform.system.domain.dto.DeleteParameterCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.UpsertParameterCommand;
@@ -31,6 +32,9 @@ public interface ConfigurationService {
     /** @param key 参数键 @param command 写入命令 @param actor 操作人 @return 写入后的安全参数值 */
     ParameterValueVO upsertParameter(String key, UpsertParameterCommand command, AccessActor actor);
 
+    /** @param key 参数键 @param command 删除命令 @param actor 操作人 */
+    void deleteParameter(String key, DeleteParameterCommand command, AccessActor actor);
+
     /** @return 全部平台系统字典类型 */
     List<DictionaryTypeVO> findDictionaryTypes();
 
@@ -39,6 +43,9 @@ public interface ConfigurationService {
 
     /** @param typeId 类型主键 @param command 修改命令 @param actor 操作人 @return 修改后类型 */
     DictionaryTypeVO updateDictionaryType(long typeId, UpdateDictionaryTypeCommand command, AccessActor actor);
+
+    /** @param typeId 类型主键 @param expectedVersion 当前并发版本 @param actor 操作人 */
+    void deleteDictionaryType(long typeId, byte[] expectedVersion, AccessActor actor);
 
     /** @param typeId 类型主键 @param includeDisabled 是否包含停用项 @return 稳定排序字典项 */
     List<DictionaryItemVO> findDictionaryItems(long typeId, boolean includeDisabled);
@@ -49,6 +56,9 @@ public interface ConfigurationService {
     /** @param itemId 字典项主键 @param command 修改命令 @param actor 操作人 @return 修改后字典项 */
     DictionaryItemVO updateDictionaryItem(long itemId, UpdateDictionaryItemCommand command, AccessActor actor);
 
+    /** @param itemId 字典项主键 @param expectedVersion 当前并发版本 @param actor 操作人 */
+    void deleteDictionaryItem(long itemId, byte[] expectedVersion, AccessActor actor);
+
     /** @return 已确认外部系统 */
     List<ExternalSystemVO> findExternalSystems();
 
@@ -58,12 +68,12 @@ public interface ConfigurationService {
     /** @param systemId 系统主键 @param command 修改命令 @param actor 操作人 @return 修改后系统 */
     ExternalSystemVO updateExternalSystem(long systemId, ExternalSystemCommand command, AccessActor actor);
 
-    /** @param systemId 系统主键 @param actor 操作人 @return 授权范围内端点 */
+    /** @param systemId 系统主键 @param actor 操作人 @return 授权范围内服务地址 */
     List<ExternalEndpointVO> findExternalEndpoints(long systemId, AccessActor actor);
 
-    /** @param systemId 系统主键 @param command 创建命令 @param actor 操作人 @return 新端点 */
+    /** @param systemId 系统主键 @param command 创建命令 @param actor 操作人 @return 新服务地址 */
     ExternalEndpointVO createExternalEndpoint(long systemId, ExternalEndpointCommand command, AccessActor actor);
 
-    /** @param endpointId 端点主键 @param command 修改命令 @param actor 操作人 @return 修改后端点 */
+    /** @param endpointId 服务地址主键 @param command 修改命令 @param actor 操作人 @return 修改后服务地址 */
     ExternalEndpointVO updateExternalEndpoint(long endpointId, ExternalEndpointCommand command, AccessActor actor);
 }

@@ -13,7 +13,7 @@ public interface ParameterDefinitionRegistry {
     /**
      * 返回全部已批准参数定义。
      *
-     * @return 按参数键排序的不可变定义列表
+     * @return 按参数键排序的调用方不能修改的定义列表
      */
     List<ParameterDefinition> findAll();
 

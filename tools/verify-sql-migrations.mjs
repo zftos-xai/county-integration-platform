@@ -130,7 +130,7 @@ for (const file of files) {
   requireHeader(file, sql, '变更说明')
   requireHeader(file, sql, '需求依据')
   requireHeader(file, sql, '数据边界')
-  requireHeader(file, sql, '时间口径')
+  requireHeader(file, sql, '时间规则')
   requireHeader(file, sql, '回退方案')
 
   if (mainMatch) {

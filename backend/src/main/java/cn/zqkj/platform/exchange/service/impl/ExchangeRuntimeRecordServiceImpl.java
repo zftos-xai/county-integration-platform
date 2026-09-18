@@ -52,7 +52,7 @@ public class ExchangeRuntimeRecordServiceImpl implements ExchangeRuntimeRecordSe
         validate(record);
         int insertedRows = mapper.insertRuntimeRecord(record);
         if (insertedRows != 1) {
-            throw new IllegalStateException("Exchange runtime record was not inserted exactly once");
+            throw new IllegalStateException("交换运行记录写入次数不是 1 次");
         }
         return record.requestId();
     }
@@ -65,7 +65,7 @@ public class ExchangeRuntimeRecordServiceImpl implements ExchangeRuntimeRecordSe
      */
     private void validate(ExchangeRuntimeRecord record) {
         if (record == null) {
-            throw new InvalidRequestException("exchange runtime record is required");
+            throw new InvalidRequestException("必须提供交换运行记录");
         }
         requireText(record.requestId(), "requestId", REQUEST_ID_MAX_LENGTH);
         requireText(record.interfaceCode(), "interfaceCode", INTERFACE_CODE_MAX_LENGTH);
@@ -74,7 +74,7 @@ public class ExchangeRuntimeRecordServiceImpl implements ExchangeRuntimeRecordSe
         requireText(record.organizationCode(), "organizationCode", ORGANIZATION_CODE_MAX_LENGTH);
         requireText(record.sourceRecordId(), "sourceRecordId", SOURCE_RECORD_ID_MAX_LENGTH);
         if (record.result() == null) {
-            throw new InvalidRequestException("result is required");
+            throw new InvalidRequestException("必须提供处理结果 result");
         }
         requireOptionalLength(record.targetResultCode(), "targetResultCode", TARGET_RESULT_CODE_MAX_LENGTH);
         requireOptionalLength(record.resultMessage(), "resultMessage", SUMMARY_MAX_LENGTH);
@@ -85,13 +85,13 @@ public class ExchangeRuntimeRecordServiceImpl implements ExchangeRuntimeRecordSe
                 SUMMARY_MAX_LENGTH
         );
         if (record.durationMs() < 0) {
-            throw new InvalidRequestException("durationMs must not be negative");
+            throw new InvalidRequestException("durationMs 不能小于 0");
         }
         if (record.receivedAt() == null || record.processedAt() == null) {
-            throw new InvalidRequestException("receivedAt and processedAt are required");
+            throw new InvalidRequestException("必须提供 receivedAt 和 processedAt");
         }
         if (record.processedAt().isBefore(record.receivedAt())) {
-            throw new InvalidRequestException("processedAt must not be before receivedAt");
+            throw new InvalidRequestException("processedAt 不能早于 receivedAt");
         }
         validateNoResponse(record);
     }
@@ -107,10 +107,10 @@ public class ExchangeRuntimeRecordServiceImpl implements ExchangeRuntimeRecordSe
             return;
         }
         if (hasText(record.targetResultCode())) {
-            throw new InvalidRequestException("NO_RESPONSE must not contain a target result code");
+            throw new InvalidRequestException("结果为 NO_RESPONSE 时不能包含目标系统结果代码");
         }
         if (!hasText(record.communicationErrorSummary())) {
-            throw new InvalidRequestException("NO_RESPONSE requires a communication error summary");
+            throw new InvalidRequestException("结果为 NO_RESPONSE 时必须提供通信错误摘要");
         }
     }
 

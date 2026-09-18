@@ -3,7 +3,7 @@ package cn.zqkj.platform.system.domain.vo;
 import java.time.LocalDateTime;
 
 /**
- * 平台参数作用域值的安全输出。
+ * 平台按适用范围保存的参数值的安全输出。
  *
  * @param id 参数值主键
  * @param parameterKey 参数键

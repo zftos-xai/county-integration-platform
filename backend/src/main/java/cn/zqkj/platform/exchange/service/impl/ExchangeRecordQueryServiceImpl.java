@@ -43,12 +43,12 @@ public class ExchangeRecordQueryServiceImpl implements ExchangeRecordQueryServic
     @Override
     public List<ExchangeRecordVO> findRecent(ExchangeRecordQuery query) {
         if (query.limit() < 1) {
-            throw new InvalidRequestException("limit must be at least one");
+            throw new InvalidRequestException("limit 必须大于或等于 1");
         }
         if (query.receivedFrom() != null
                 && query.receivedTo() != null
                 && query.receivedFrom().isAfter(query.receivedTo())) {
-            throw new InvalidRequestException("receivedFrom must not be after receivedTo");
+            throw new InvalidRequestException("receivedFrom 不能晚于 receivedTo");
         }
         ExchangeRecordQuery boundedQuery = new ExchangeRecordQuery(
                 query.organizationCode(),

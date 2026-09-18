@@ -41,6 +41,22 @@ export class ApiClientError extends Error {
   }
 }
 
+/** 判断写请求是否可能已被后台执行但前端没有收到最终结果。 */
+export function isWriteResultUncertain(error: ApiClientError) {
+  return error.code === 'REQUEST_TIMEOUT' || error.code === 'NETWORK_ERROR'
+}
+
+/** 将写请求的连接错误改写成防止用户直接重复提交的恢复提示。 */
+export function asUncertainWriteError(error: ApiClientError) {
+  if (!isWriteResultUncertain(error)) return error
+  return new ApiClientError(
+    error.code,
+    '无法确认刚才的操作是否已经保存，请先重新读取最新数据，不要直接重复提交',
+    error.status,
+    error.requestId,
+  )
+}
+
 let csrfToken: CsrfToken | null = null
 let csrfRequest: Promise<CsrfToken> | null = null
 const DEFAULT_TIMEOUT_MS = 15_000
@@ -138,7 +154,7 @@ async function loadCsrfToken(): Promise<CsrfToken> {
   return csrfRequest
 }
 
-/** Returns whether an unknown response contains a usable CSRF token contract. */
+/** Returns whether an unknown response contains a usable CSRF token format. */
 function isCsrfToken(value: unknown): value is CsrfToken {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const record = value as Record<string, unknown>

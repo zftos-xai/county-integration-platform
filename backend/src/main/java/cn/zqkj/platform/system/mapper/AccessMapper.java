@@ -102,6 +102,15 @@ public interface AccessMapper {
             @Param("actor") String actor
     );
 
+    /** @param roleId 角色主键 @return 使用该角色的用户数量 */
+    int countUsersByRole(long roleId);
+
+    /** @param roleId 角色主键 */
+    void deleteRolePermissions(long roleId);
+
+    /** @param roleId 角色主键 @param expectedVersion 并发版本 @return 删除行数 */
+    int deleteRole(@Param("roleId") long roleId, @Param("expectedVersion") byte[] expectedVersion);
+
     /** @param roleId 角色主键 @return 权限代码 */
     List<String> findRolePermissionCodes(long roleId);
 

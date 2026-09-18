@@ -5,6 +5,7 @@ import cn.zqkj.platform.common.core.ApiResponse;
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.system.domain.dto.CreateRoleCommand;
 import cn.zqkj.platform.system.domain.dto.CreateRoleRequest;
+import cn.zqkj.platform.system.domain.dto.DeleteRoleRequest;
 import cn.zqkj.platform.system.domain.dto.ReplacePermissionCodesRequest;
 import cn.zqkj.platform.system.domain.dto.UpdateRoleCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateRoleRequest;
@@ -19,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -59,7 +61,7 @@ public class RoleAdministrationController {
         return ApiResponse.success(service.get(roleId));
     }
 
-    /** @param request 创建请求 @param principal 当前主体 @return 新角色 */
+    /** @param request 创建请求 @param principal 当前用户 @return 新角色 */
     @PostMapping("/roles")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('access:write')")
@@ -72,7 +74,7 @@ public class RoleAdministrationController {
         ));
     }
 
-    /** @param roleId 角色主键 @param request 修改请求 @param principal 当前主体 @return 修改后角色 */
+    /** @param roleId 角色主键 @param request 修改请求 @param principal 当前用户 @return 修改后角色 */
     @PutMapping("/roles/{roleId}")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<RoleVO> updateRole(
@@ -85,7 +87,19 @@ public class RoleAdministrationController {
         ), actor(principal)));
     }
 
-    /** @param roleId 角色主键 @param request 权限请求 @param principal 当前主体 @return 修改后角色 */
+    /** @param roleId 角色主键 @param request 删除请求 @param principal 当前用户 @return 空成功响应 */
+    @DeleteMapping("/roles/{roleId}")
+    @PreAuthorize("hasAuthority('access:write')")
+    public ApiResponse<Void> deleteRole(
+            @PathVariable @Positive long roleId,
+            @Valid @RequestBody DeleteRoleRequest request,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        service.delete(roleId, decodeVersion(request.version()), actor(principal));
+        return ApiResponse.success(null);
+    }
+
+    /** @param roleId 角色主键 @param request 权限请求 @param principal 当前用户 @return 修改后角色 */
     @PutMapping("/roles/{roleId}/permissions")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<RoleVO> replacePermissions(
@@ -105,7 +119,7 @@ public class RoleAdministrationController {
         return ApiResponse.success(service.findPermissions());
     }
 
-    /** @param principal 当前主体 @return 审计操作人 */
+    /** @param principal 当前用户 @return 审计操作人 */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
@@ -115,11 +129,11 @@ public class RoleAdministrationController {
         try {
             byte[] version = Base64.getDecoder().decode(value);
             if (version.length != Long.BYTES) {
-                throw new InvalidRequestException("version must represent an 8-byte rowversion value");
+                throw new InvalidRequestException("version 必须表示一个 8 字节的 SQL Server 行版本号");
             }
             return version;
         } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("version must be valid Base64");
+            throw new InvalidRequestException("version 必须是有效的 Base64 文本");
         }
     }
 }

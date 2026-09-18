@@ -74,7 +74,7 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
     @Override
     public OrganizationVO create(CreateOrganizationCommand command, AccessActor actor) {
         if (command.parentId() == null) {
-            throw new InvalidRequestException("A managed organization must have an accessible parent organization");
+            throw new InvalidRequestException("新增下级机构时，上级机构必须在当前账号可访问范围内");
         }
         get(command.parentId(), actor);
         OrganizationVO created = organizationService.create(command, actor.loginName());
@@ -108,7 +108,7 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
     }
 
     /**
-     * 修改范围内机构启用状态。
+     * 恢复或撤销范围内机构。
      *
      * @param organizationId 机构主键
      * @param enabled 目标状态
@@ -126,17 +126,17 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
     ) {
         get(organizationId, actor);
         if (!enabled && accessMapper.hasEnabledPrimaryUsers(organizationId)) {
-            throw new ResourceConflictException("Organization has enabled primary users");
+            throw new ResourceConflictException("该机构仍有以此为主要机构的可登录用户，不能撤销；请先调整这些用户的主要机构或注销账号");
         }
         OrganizationVO updated = organizationService.setEnabled(
                 organizationId, enabled, expectedVersion, actor.loginName()
         );
         audit(actor, updated, enabled ? "ORGANIZATION_ENABLED" : "ORGANIZATION_DISABLED",
-                enabled ? "启用机构" : "停用机构");
+                enabled ? "恢复使用机构" : "撤销机构；历史数据和操作记录继续保留");
         return updated;
     }
 
-    /** @param actor 操作人 @param organization 机构 @param action 动作 @param summary 脱敏摘要 */
+    /** @param actor 操作人 @param organization 机构 @param action 动作 @param summary 不含敏感内容的摘要 */
     private void audit(AccessActor actor, OrganizationVO organization, String action, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, organization.id(),
                 organization.organizationCode(), action, "ORGANIZATION", organization.organizationCode(),
@@ -146,7 +146,7 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
     /** @param actor 操作人 @param organizationCode 机构代码 */
     private void requireAccess(AccessActor actor, String organizationCode) {
         if (!actor.canAccess(organizationCode)) {
-            throw new AccessDeniedException("Organization access is not permitted");
+            throw new AccessDeniedException("当前账号无权访问该机构");
         }
     }
 }

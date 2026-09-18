@@ -80,12 +80,45 @@ class RoleAdministrationServiceTest {
         assertEquals("替换角色权限；权限数量=1", captor.getValue().changeSummary());
     }
 
+    /** 验证仍分配给用户的角色不能删除。 */
+    @Test
+    void rejectsDeletingAssignedRole() {
+        AccessMapper mapper = mock(AccessMapper.class);
+        when(mapper.findRole(2L)).thenReturn(Optional.of(role(false)));
+        when(mapper.countUsersByRole(2L)).thenReturn(2);
+        RoleAdministrationService service = new RoleAdministrationServiceImpl(
+                mapper, mock(ManagementAuditService.class)
+        );
+
+        assertThrows(ResourceConflictException.class, () -> service.delete(2L, version(), actor()));
+        verify(mapper, never()).deleteRole(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    /** 验证未分配用户的非系统角色可连同权限关系删除。 */
+    @Test
+    void deletesUnusedCustomRole() {
+        AccessMapper mapper = mock(AccessMapper.class);
+        when(mapper.findRole(2L)).thenReturn(Optional.of(role(false)));
+        when(mapper.deleteRole(org.mockito.ArgumentMatchers.eq(2L),
+                org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        RoleAdministrationService service = new RoleAdministrationServiceImpl(
+                mapper, mock(ManagementAuditService.class)
+        );
+
+        service.delete(2L, version(), actor());
+
+        verify(mapper).deleteRolePermissions(2L);
+        verify(mapper).deleteRole(org.mockito.ArgumentMatchers.eq(2L),
+                org.mockito.ArgumentMatchers.any());
+    }
+
     /** @return 固定操作人 */
     private AccessActor actor() {
         return new AccessActor(1L, "admin", Set.of("ORG001"));
     }
 
-    /** @param systemManaged 系统保护标识 @return 角色快照 */
+    /** @param systemManaged 系统保护标识 @return 角色记录 */
     private RoleSummary role(boolean systemManaged) {
         return new RoleSummary(
                 systemManaged ? 1L : 2L,

@@ -57,7 +57,7 @@ public class ExchangeRecordController {
      * @param requestId 可选平台请求编号
      * @param result 可选最终交换结果
      * @param limit 最大返回数量，取值范围为 1 至 100
-     * @param authentication 当前登录主体
+     * @param authentication 当前登录用户
      * @return 交换记录摘要列表；无数据时列表为空
      */
     @GetMapping

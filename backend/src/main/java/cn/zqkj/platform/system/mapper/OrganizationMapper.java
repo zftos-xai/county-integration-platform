@@ -18,7 +18,7 @@ public interface OrganizationMapper {
      * 按主键读取机构。
      *
      * @param id 机构主键
-     * @return 机构快照；不存在时为空
+     * @return 机构记录；不存在时为空
      */
     OrganizationVO findById(long id);
 
@@ -42,7 +42,7 @@ public interface OrganizationMapper {
      * 新建机构并回填主键。
      *
      * @param command 已校验创建命令
-     * @param actor 操作主体标识
+     * @param actor 操作人标识
      * @return 新机构主键
      */
     long create(@Param("command") CreateOrganizationCommand command, @Param("actor") String actor);
@@ -52,7 +52,7 @@ public interface OrganizationMapper {
      *
      * @param id 机构主键
      * @param command 修改命令
-     * @param actor 操作主体标识
+     * @param actor 操作人标识
      * @return 实际修改行数
      */
     int update(
@@ -67,7 +67,7 @@ public interface OrganizationMapper {
      * @param id 机构主键
      * @param enabled 目标启用状态
      * @param expectedVersion 并发版本
-     * @param actor 操作主体标识
+     * @param actor 操作人标识
      * @return 实际修改行数
      */
     int setEnabled(

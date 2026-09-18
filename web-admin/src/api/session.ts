@@ -1,7 +1,7 @@
 import { apiRequest, clearCsrfToken } from '@/utils/request'
 import { isRecord, isStringArray } from '@/utils/validation'
 
-/** 后端返回的当前登录主体；权限与机构范围均以服务端结果为准。 */
+/** 后端返回的当前登录用户；权限与机构范围均以服务端结果为准。 */
 export type CurrentUser = {
   userId: number
   loginName: string
@@ -26,7 +26,7 @@ export function isCurrentUser(value: unknown): value is CurrentUser {
     && isStringArray(value.organizationCodes)
 }
 
-/** 读取当前服务端会话对应的登录主体。 */
+/** 读取当前服务端会话对应的登录用户。 */
 export function getCurrentUser(signal?: AbortSignal) {
   return apiRequest<CurrentUser>('/session/current', { signal }, isCurrentUser)
 }
@@ -50,7 +50,7 @@ export async function logout() {
   }
 }
 
-/** 修改当前主体密码；后端会使原会话失效，因此始终清除 CSRF 缓存。 */
+/** 修改当前用户密码；后端会使原会话失效，因此始终清除 CSRF 缓存。 */
 export async function changePassword(currentPassword: string, newPassword: string) {
   try {
     await apiRequest<void>('/session/password', {

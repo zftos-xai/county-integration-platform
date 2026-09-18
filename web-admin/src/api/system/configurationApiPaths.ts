@@ -1,5 +1,5 @@
 /** 配置管理写接口允许的 HTTP 方法。 */
-export type ConfigurationWriteMethod = 'POST' | 'PUT'
+export type ConfigurationWriteMethod = 'POST' | 'PUT' | 'DELETE'
 
 /** 构造参数值写入地址，并对参数键执行路径编码。 */
 export function parameterValuePath(key: string) {

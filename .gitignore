@@ -4,14 +4,15 @@
 .DS_Store
 *.iml
 .env
+deploy/.env.dev.local
 backend/target/
 node_modules/
 web-admin/dist/
 web-embed/dist/
 deploy/data/
 deploy/sqlserver/*.local.sql
-contracts/samples/*
-!contracts/samples/README.md
+interface-specs/samples/*
+!interface-specs/samples/README.md
 
 # Build outputs and local tooling
 *.class

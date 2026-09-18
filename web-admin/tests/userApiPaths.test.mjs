@@ -3,9 +3,9 @@ import test from 'node:test'
 import {
   userDetailPath, userEnabledPath, userOrganizationScopesPath,
   userPasswordResetPath, userRolesPath, userWriteRequest,
-} from '../src/api/system/userContract.ts'
+} from '../src/api/system/userApiPaths.ts'
 
-test('用户管理路径与授权子资源符合契约', () => {
+test('用户管理路径与授权子资源符合接口定义', () => {
   assert.equal(userDetailPath(9), '/users/9')
   assert.equal(userEnabledPath(9), '/users/9/enabled')
   assert.equal(userPasswordResetPath(9), '/users/9/password-reset')

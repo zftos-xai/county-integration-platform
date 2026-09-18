@@ -87,7 +87,7 @@ public class IdentityServiceImpl implements IdentityService {
         validateBootstrapSecret(suppliedSecret);
         BootstrapCommand normalized = normalize(command);
         if (mapper.lockAndCountUsers() > 0) {
-            throw new ResourceConflictException("Platform bootstrap has already completed");
+            throw new ResourceConflictException("平台初始管理员已经创建，不能重复初始化");
         }
 
         OrganizationVO organization = organizationService.create(
@@ -135,14 +135,14 @@ public class IdentityServiceImpl implements IdentityService {
                 .filter(UserAccount::enabled)
                 .orElseThrow(() -> new AccessDeniedException("Current user is unavailable"));
         if (!passwordEncoder.matches(currentPassword, account.passwordHash())) {
-            throw new InvalidRequestException("Current password does not match");
+            throw new InvalidRequestException("当前密码不正确");
         }
         validatePassword(newPassword, account.loginName());
         if (passwordEncoder.matches(newPassword, account.passwordHash())) {
-            throw new InvalidRequestException("New password must differ from current password");
+            throw new InvalidRequestException("新密码不能与当前密码相同");
         }
         if (mapper.changePassword(userId, passwordEncoder.encode(newPassword), account.loginName()) != 1) {
-            throw new ResourceConflictException("User password state changed concurrently");
+            throw new ResourceConflictException("密码状态已被其他操作修改，请重新登录后再试");
         }
     }
 
@@ -154,11 +154,11 @@ public class IdentityServiceImpl implements IdentityService {
      */
     private BootstrapCommand normalize(BootstrapCommand command) {
         if (command == null) {
-            throw new InvalidRequestException("Bootstrap request is required");
+            throw new InvalidRequestException("必须提供平台初始化信息");
         }
         String loginName = requireText(command.loginName(), "loginName", 64).toLowerCase(Locale.ROOT);
         if (!LOGIN_PATTERN.matcher(loginName).matches()) {
-            throw new InvalidRequestException("loginName has an invalid format");
+            throw new InvalidRequestException("loginName 格式无效");
         }
         validatePassword(command.initialPassword(), loginName);
         return new BootstrapCommand(
@@ -178,14 +178,14 @@ public class IdentityServiceImpl implements IdentityService {
      */
     private void validateBootstrapSecret(String suppliedSecret) {
         if (!isBootstrapSecretConfigured() || suppliedSecret == null) {
-            throw new AccessDeniedException("Platform bootstrap is unavailable");
+            throw new AccessDeniedException("当前不能执行平台初始化");
         }
         boolean matches = MessageDigest.isEqual(
                 bootstrapSecret.getBytes(StandardCharsets.UTF_8),
                 suppliedSecret.getBytes(StandardCharsets.UTF_8)
         );
         if (!matches) {
-            throw new AccessDeniedException("Platform bootstrap credential is invalid");
+            throw new AccessDeniedException("平台初始化凭证无效");
         }
     }
 
@@ -208,10 +208,10 @@ public class IdentityServiceImpl implements IdentityService {
         if (password == null
                 || password.length() < MINIMUM_PASSWORD_LENGTH
                 || password.length() > MAXIMUM_PASSWORD_LENGTH) {
-            throw new InvalidRequestException("Password length is outside the allowed range");
+            throw new InvalidRequestException("密码长度不符合要求");
         }
         if (password.toLowerCase(Locale.ROOT).contains(loginName.toLowerCase(Locale.ROOT))) {
-            throw new InvalidRequestException("Password must not contain the login name");
+            throw new InvalidRequestException("密码不能包含登录名");
         }
     }
 

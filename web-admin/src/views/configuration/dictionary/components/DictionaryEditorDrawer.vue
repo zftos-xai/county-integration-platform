@@ -3,13 +3,14 @@
 import { AlertCircle, X } from 'lucide-vue-next'
 import { ref } from 'vue'
 import { useModalDialog } from '@/composables/useModalDialog'
+import { isWriteResultUncertain } from '@/utils/request'
 import type { ApiClientError } from '@/utils/request'
 import type { DictionaryItemForm, DictionaryTypeForm } from '../form'
 
 export type DictionaryEditorKind = 'type-create' | 'type-edit' | 'item-create' | 'item-edit'
 
 const props = defineProps<{ kind: DictionaryEditorKind; title: string; isSaving: boolean; error: ApiClientError | null; formError: string }>()
-const emit = defineEmits<{ close: []; submit: [] }>()
+const emit = defineEmits<{ close: []; submit: []; reload: [] }>()
 const typeForm = defineModel<DictionaryTypeForm>('typeForm', { required: true })
 const itemForm = defineModel<DictionaryItemForm>('itemForm', { required: true })
 const isOpen = ref(true)
@@ -23,7 +24,7 @@ const isCreating = props.kind.endsWith('create')
     <section ref="dialogRef" class="work-drawer dictionary-editor" role="dialog" aria-modal="true" aria-labelledby="dictionary-editor-title" tabindex="-1" @keydown="handleDialogKeydown">
       <header class="work-drawer-header"><div><small>{{ isType ? '字典类型' : '字典项' }}</small><h2 id="dictionary-editor-title">{{ title }}</h2></div><button class="prototype-icon" type="button" aria-label="关闭" @click="emit('close')"><X :size="18" /></button></header>
       <div class="work-drawer-body">
-        <div v-if="error" class="drawer-error" role="alert"><AlertCircle :size="18" /><span><strong>{{ error.message }}</strong><small v-if="error.status === 409">数据已被更新，请关闭后刷新再操作。</small><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span></div>
+        <div v-if="error" class="drawer-error" role="alert"><AlertCircle :size="18" /><span><strong>{{ error.message }}</strong><small v-if="error.status === 409">数据已被更新，请刷新列表后重新操作。</small><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button v-if="error.status === 409 || isWriteResultUncertain(error)" class="work-quiet-button" type="button" @click="emit('reload')">刷新列表</button></div>
         <div v-if="formError" class="drawer-error" role="alert"><AlertCircle :size="18" />{{ formError }}</div>
         <form v-if="isType" class="work-form" @submit.prevent="emit('submit')">
           <label for="dictionary-type-code">类型代码</label><input id="dictionary-type-code" v-model="typeForm.typeCode" :disabled="!isCreating" maxlength="64" autocomplete="off" placeholder="例如 display_mode" />

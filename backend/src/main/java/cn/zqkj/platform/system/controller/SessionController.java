@@ -48,7 +48,7 @@ public class SessionController {
      * 创建平台会话控制器。
      *
      * @param authenticationManager 认证管理器
-     * @param contextRepository 会话安全上下文仓储
+     * @param contextRepository 会话中的登录信息存储
      * @param identityService 身份应用服务
      * @param auditService 管理审计服务
      */
@@ -83,7 +83,7 @@ public class SessionController {
      * @param request 登录请求
      * @param servletRequest HTTP请求
      * @param servletResponse HTTP响应
-     * @return 当前认证主体
+     * @return 当前已登录用户
      */
     @PostMapping("/login")
     public ApiResponse<CurrentUserVO> login(
@@ -110,9 +110,9 @@ public class SessionController {
     }
 
     /**
-     * 查询当前会话主体。
+     * 查询当前会话中的登录用户。
      *
-     * @param principal 当前认证主体
+     * @param principal 当前已登录用户
      * @return 当前用户视图
      */
     @GetMapping("/current")
@@ -142,7 +142,7 @@ public class SessionController {
      * 修改当前用户密码并注销当前会话，要求重新登录取得完整权限。
      *
      * @param request 密码修改请求
-     * @param principal 当前认证主体
+     * @param principal 当前已登录用户
      * @param servletRequest HTTP请求
      * @param servletResponse HTTP响应
      * @return 空成功响应

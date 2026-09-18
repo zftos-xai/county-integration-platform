@@ -81,7 +81,7 @@ public class SecurityConfiguration {
         return new ProviderManager(provider);
     }
 
-    /** @return 显式保存到HTTP会话的安全上下文仓储 */
+    /** @return 显式保存到HTTP会话的登录信息存储 */
     @Bean
     SecurityContextRepository securityContextRepository() {
         return new HttpSessionSecurityContextRepository();

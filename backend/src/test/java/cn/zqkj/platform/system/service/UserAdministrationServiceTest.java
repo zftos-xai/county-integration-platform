@@ -152,7 +152,7 @@ class UserAdministrationServiceTest {
         );
     }
 
-    /** @param id 用户主键 @param organizationCode 机构代码 @param enabled 状态 @return 用户快照 */
+    /** @param id 用户主键 @param organizationCode 机构代码 @param enabled 状态 @return 用户记录 */
     private ManagedUserSummary user(long id, String organizationCode, boolean enabled) {
         return new ManagedUserSummary(
                 id, id == 1L ? "admin" : "operator", "User", 10L, organizationCode,
@@ -160,7 +160,7 @@ class UserAdministrationServiceTest {
         );
     }
 
-    /** @param id 机构主键 @param code 机构代码 @return 机构快照 */
+    /** @param id 机构主键 @param code 机构代码 @return 机构记录 */
     private OrganizationVO organization(long id, String code) {
         return new OrganizationVO(
                 id, code, "Organization", "HOSPITAL", null, true,

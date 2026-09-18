@@ -48,7 +48,7 @@ export function validateTemporaryPassword(password: string, loginName: string): 
   return null
 }
 
-/** 将创建表单转换为 API 输入，登录名按契约归一化为小写。 */
+/** 将创建表单转换为 API 输入，登录名按接口定义统一转为小写。 */
 export function toCreateUserInput(form: UserForm): CreateUserInput {
   return {
     loginName: form.loginName.trim().toLowerCase(),

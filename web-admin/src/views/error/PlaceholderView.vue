@@ -1,4 +1,4 @@
-<!-- 未接入真实 API 的路由占位页；不得加入正式导航冒充已完成功能。 -->
+<!-- 未接入真实 API 的页面地址占位页；不得加入正式导航冒充已完成功能。 -->
 <script setup lang="ts">
 import { FileClock } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'

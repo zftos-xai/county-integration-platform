@@ -31,7 +31,7 @@ export const recoveryActions: Record<RecoveryAction, string> = {
   'hold-version': '保持版本拦截', 'request-version': '登记外部处理', 'link-request': '关联新请求',
   stop: '停止后续发送', 'confirm-cleanup': '确认清理范围', 'clean-failed': '登记清理失败', clean: '执行到期清理', handoff: '登记后续责任',
 }
-/** 创建一组相互隔离的合成恢复事项。 */
+/** 创建一组互不影响的合成恢复事项。 */
 export function createRecoveryTasks(): RecoveryTask[] {
   const base = { owner: '平台运维', assignee: '', nextCheckAt: '', externalOwner: '', externalDueAt: '', cleanupScope: '', cleanupScopeConfirmed: false, linkedRequestId: '', originalVersion: '1', latestVersion: '1', checked: false, stopped: false,
     cleanupFailed: false, handoff: false, evidence: '', revision: 0, history: [], policy: 'SIM-POLICY-01（演示规则）' }

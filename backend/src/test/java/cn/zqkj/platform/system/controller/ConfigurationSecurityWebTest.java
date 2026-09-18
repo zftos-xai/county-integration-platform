@@ -60,7 +60,7 @@ class ConfigurationSecurityWebTest {
     }
 
     /**
-     * 验证只有机构范围而没有配置权限的主体被拒绝。
+     * 验证只有机构范围而没有配置权限的用户被拒绝。
      *
      * @throws Exception MockMvc调用失败时抛出
      */
@@ -75,7 +75,7 @@ class ConfigurationSecurityWebTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** @param permission 可选功能权限 @return 测试主体 */
+    /** @param permission 可选功能权限 @return 测试用户 */
     private PlatformUserPrincipal principal(String permission) {
         List<SimpleGrantedAuthority> authorities = permission == null
                 ? List.of(new SimpleGrantedAuthority("ORG:ORG001"))

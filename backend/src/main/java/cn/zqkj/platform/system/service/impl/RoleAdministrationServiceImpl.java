@@ -74,11 +74,11 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
     public RoleVO create(CreateRoleCommand command, AccessActor actor) {
         String roleCode = requireText(command.roleCode(), "roleCode", 64).toUpperCase(Locale.ROOT);
         if (!ROLE_CODE_PATTERN.matcher(roleCode).matches() || "PLATFORM_ADMIN".equals(roleCode)) {
-            throw new InvalidRequestException("roleCode has an invalid or protected value");
+            throw new InvalidRequestException("roleCode 格式无效或属于系统保留值");
         }
         String roleName = requireText(command.roleName(), "roleName", 100);
         if (mapper.roleCodeExists(roleCode)) {
-            throw new ResourceConflictException("Role code already exists");
+            throw new ResourceConflictException("角色代码已存在");
         }
         long roleId = mapper.createRole(new CreateRoleCommand(roleCode, roleName), actor.loginName());
         RoleVO created = get(roleId);
@@ -104,7 +104,7 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
                 requireText(command.roleName(), "roleName", 100), command.enabled(), command.expectedVersion()
         );
         if (mapper.updateRole(roleId, normalized, actor.loginName()) != 1) {
-            throw new ResourceConflictException("Role version no longer matches");
+            throw new ResourceConflictException("角色资料已被他人修改，请刷新后重试");
         }
         RoleVO updated = get(roleId);
         audit(actor, updated, "ROLE_UPDATED", "修改角色名称和启用状态");
@@ -125,11 +125,11 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
         RoleSummary current = requireRole(roleId);
         requireMutable(current);
         if (permissionCodes == null || permissionCodes.stream().anyMatch(code -> code == null || code.isBlank())) {
-            throw new InvalidRequestException("permissionCodes contains an invalid value");
+            throw new InvalidRequestException("permissionCodes 中包含无效值");
         }
         List<String> normalized = permissionCodes.stream().map(String::trim).distinct().sorted().toList();
         if (!normalized.isEmpty() && mapper.countPermissions(normalized) != normalized.size()) {
-            throw new InvalidRequestException("permissionCodes contains an unregistered permission");
+            throw new InvalidRequestException("permissionCodes 中包含后端未登记的权限");
         }
         mapper.replaceRolePermissions(roleId, normalized, actor.loginName());
         RoleVO updated = get(roleId);
@@ -137,13 +137,33 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
         return updated;
     }
 
-    /** @param actor 操作人 @param role 角色 @param action 动作 @param summary 脱敏摘要 */
+    /** {@inheritDoc} */
+    @Transactional
+    @Override
+    public void delete(long roleId, byte[] expectedVersion, AccessActor actor) {
+        RoleSummary current = requireRole(roleId);
+        requireMutable(current);
+        requireVersion(expectedVersion);
+        int assignedUsers = mapper.countUsersByRole(roleId);
+        if (assignedUsers > 0) {
+            throw new ResourceConflictException("该角色仍分配给 " + assignedUsers + " 个用户，请先调整这些用户的角色");
+        }
+        mapper.deleteRolePermissions(roleId);
+        if (mapper.deleteRole(roleId, expectedVersion) != 1) {
+            throw new ResourceConflictException("角色已被他人修改或重新分配，请刷新后重试");
+        }
+        auditService.recordSuccess(new ManagementAuditCommand(actor, null, null, null, "ROLE_DELETED",
+                "ROLE", current.roleCode(), "SUCCESS", "删除未分配给用户的非系统角色",
+                ManagementAuditServiceImpl.currentRequestId()));
+    }
+
+    /** @param actor 操作人 @param role 角色 @param action 动作 @param summary 不含敏感内容的摘要 */
     private void audit(AccessActor actor, RoleVO role, String action, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, null, null, action,
                 "ROLE", role.roleCode(), "SUCCESS", summary, ManagementAuditServiceImpl.currentRequestId()));
     }
 
-    /** @param summary 角色基础快照 @return 完整角色快照 */
+    /** @param summary 角色基础快照 @return 完整角色记录 */
     private RoleVO enrich(RoleSummary summary) {
         return new RoleVO(
                 summary.id(), summary.roleCode(), summary.roleName(), summary.enabled(), summary.systemManaged(),
@@ -155,7 +175,7 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
     /** @param roleId 角色主键 @return 存在角色 */
     private RoleSummary requireRole(long roleId) {
         if (roleId <= 0) {
-            throw new InvalidRequestException("roleId must be positive");
+            throw new InvalidRequestException("roleId 必须大于 0");
         }
         return mapper.findRole(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Platform role was not found"));
@@ -164,7 +184,7 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
     /** @param role 角色 */
     private void requireMutable(RoleSummary role) {
         if (role.systemManaged()) {
-            throw new ResourceConflictException("System-managed role cannot be modified");
+            throw new ResourceConflictException("系统保护角色不能修改");
         }
     }
 
@@ -179,7 +199,7 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
     /** @param version 并发版本 */
     private void requireVersion(byte[] version) {
         if (version == null || version.length != Long.BYTES) {
-            throw new InvalidRequestException("version must be an 8-byte rowversion value");
+            throw new InvalidRequestException("version 必须是 8 字节的 SQL Server 行版本号");
         }
     }
 }

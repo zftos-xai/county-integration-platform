@@ -48,7 +48,7 @@ class AccessSecurityWebTest {
     private UserDetailsService userDetailsService;
 
     /**
-     * 验证具有读取权限和机构范围的主体可进入用户查询服务。
+     * 验证具有读取权限和机构范围的用户可进入用户查询服务。
      *
      * @throws Exception MockMvc调用失败时抛出
      */
@@ -94,7 +94,7 @@ class AccessSecurityWebTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    /** @param permission 可选功能权限 @return 测试主体 */
+    /** @param permission 可选功能权限 @return 测试用户 */
     private PlatformUserPrincipal principal(String permission) {
         List<SimpleGrantedAuthority> authorities = permission == null
                 ? List.of(new SimpleGrantedAuthority("ORG:ORG001"))

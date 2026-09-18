@@ -16,7 +16,7 @@ function enterPrototype(role: PrototypeRole) {
     <section class="prototype-login-context" aria-label="平台说明">
       <div class="prototype-login-brand"><span><Database :size="24" /></span><div><strong>县域接口平台</strong><small>集成运行管理</small></div></div>
       <div class="prototype-login-intro"><span class="prototype-login-eyebrow">交互评审入口</span><h1>让每一次跨机构交换<br />都有依据、有边界、可追溯</h1><p>本入口只展示合成数据和交互流程，不连接正式认证、会话或业务接口。</p></div>
-      <div class="prototype-login-boundaries"><div><ShieldCheck :size="19" /><span><strong>原型隔离</strong><small>所有对象均为合成示例，不代表正式权限</small></span></div><div><Eye :size="19" /><span><strong>视角评审</strong><small>选择管理或运维视角检查对应页面</small></span></div></div>
+      <div class="prototype-login-boundaries"><div><ShieldCheck :size="19" /><span><strong>原型与正式页面分开</strong><small>所有对象均为合成示例，不代表正式权限</small></span></div><div><Eye :size="19" /><span><strong>按角色检查</strong><small>选择管理或运维角色检查对应页面</small></span></div></div>
       <small class="prototype-login-deployment">院内私有化部署 · 合成数据原型</small>
     </section>
     <section class="prototype-login-panel">

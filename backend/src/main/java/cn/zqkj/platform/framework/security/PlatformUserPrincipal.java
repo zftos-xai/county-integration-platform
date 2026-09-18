@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 表示保存于服务端会话中的平台已认证主体。
+ * 表示保存于服务端会话中的平台已登录用户。
  */
 public final class PlatformUserPrincipal implements UserDetails, CredentialsContainer {
 
@@ -28,7 +28,7 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
     private final List<GrantedAuthority> authorities;
 
     /**
-     * 创建不可变平台认证主体。
+     * 创建创建后不能修改的平台登录用户信息。
      *
      * @param userId 用户主键
      * @param username 登录名
@@ -90,7 +90,7 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
     /**
      * 从服务端装载的机构权限标识解析当前机构范围代码。
      *
-     * @return 不可变机构代码集合
+     * @return 调用方不能修改的机构代码集合
      */
     public Set<String> organizationCodes() {
         return authorities.stream()
@@ -113,7 +113,7 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
     }
 
     /**
-     * 认证成功后从会话主体中清除密码哈希副本。
+     * 认证成功后从会话中的登录用户中清除密码哈希副本。
      */
     @Override
     public void eraseCredentials() {

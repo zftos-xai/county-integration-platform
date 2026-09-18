@@ -2,10 +2,10 @@ import { apiRequest } from '@/utils/request'
 import {
   userDetailPath, userEnabledPath, userOrganizationScopesPath,
   userPasswordResetPath, userRolesPath, userWriteRequest,
-} from './userContract'
+} from './userApiPaths'
 import { isNumberArray, isRecord } from '@/utils/validation'
 
-/** 当前主体可管理范围内的用户 API 模型。 */
+/** 当前用户可管理范围内的用户 API 模型。 */
 export type ManagedUser = {
   id: number
   loginName: string
@@ -58,7 +58,7 @@ export function isManagedUserList(value: unknown): value is ManagedUser[] {
   return Array.isArray(value) && value.every(isManagedUser)
 }
 
-/** 查询当前主体可见的用户列表。 */
+/** 查询当前用户可见的用户列表。 */
 export function listUsers(signal?: AbortSignal) {
   return apiRequest<ManagedUser[]>('/users', { signal }, isManagedUserList)
 }

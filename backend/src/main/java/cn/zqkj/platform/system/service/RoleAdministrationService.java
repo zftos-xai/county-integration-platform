@@ -22,12 +22,15 @@ public interface RoleAdministrationService {
     /** @return 后端注册权限清单 */
     List<PermissionVO> findPermissions();
 
-    /** @param command 创建命令 @param actor 操作主体 @return 新角色 */
+    /** @param command 创建命令 @param actor 操作人 @return 新角色 */
     RoleVO create(CreateRoleCommand command, AccessActor actor);
 
-    /** @param roleId 角色主键 @param command 修改命令 @param actor 操作主体 @return 修改后角色 */
+    /** @param roleId 角色主键 @param command 修改命令 @param actor 操作人 @return 修改后角色 */
     RoleVO update(long roleId, UpdateRoleCommand command, AccessActor actor);
 
-    /** @param roleId 角色主键 @param permissionCodes 权限代码 @param actor 操作主体 @return 修改后角色 */
+    /** @param roleId 角色主键 @param permissionCodes 权限代码 @param actor 操作人 @return 修改后角色 */
     RoleVO replacePermissions(long roleId, List<String> permissionCodes, AccessActor actor);
+
+    /** @param roleId 角色主键 @param expectedVersion 并发版本 @param actor 操作人 */
+    void delete(long roleId, byte[] expectedVersion, AccessActor actor);
 }

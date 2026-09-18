@@ -52,14 +52,14 @@ public class UserAdministrationController {
         this.service = service;
     }
 
-    /** @param principal 当前主体 @return 机构范围内用户 */
+    /** @param principal 当前用户 @return 机构范围内用户 */
     @GetMapping
     @PreAuthorize("hasAuthority('identity:read')")
     public ApiResponse<List<ManagedUserVO>> findAll(@AuthenticationPrincipal PlatformUserPrincipal principal) {
         return ApiResponse.success(service.findAll(actor(principal)));
     }
 
-    /** @param userId 用户主键 @param principal 当前主体 @return 用户详情 */
+    /** @param userId 用户主键 @param principal 当前用户 @return 用户详情 */
     @GetMapping("/{userId}")
     @PreAuthorize("hasAuthority('identity:read')")
     public ApiResponse<ManagedUserVO> get(
@@ -69,7 +69,7 @@ public class UserAdministrationController {
         return ApiResponse.success(service.get(userId, actor(principal)));
     }
 
-    /** @param request 创建请求 @param principal 当前主体 @return 新用户 */
+    /** @param request 创建请求 @param principal 当前用户 @return 新用户 */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('identity:write')")
@@ -82,7 +82,7 @@ public class UserAdministrationController {
         ), actor(principal)));
     }
 
-    /** @param userId 用户主键 @param request 修改请求 @param principal 当前主体 @return 修改后用户 */
+    /** @param userId 用户主键 @param request 修改请求 @param principal 当前用户 @return 修改后用户 */
     @PutMapping("/{userId}")
     @PreAuthorize("hasAuthority('identity:write')")
     public ApiResponse<ManagedUserVO> update(
@@ -95,7 +95,7 @@ public class UserAdministrationController {
         ), actor(principal)));
     }
 
-    /** @param userId 用户主键 @param request 启停请求 @param principal 当前主体 @return 修改后用户 */
+    /** @param userId 用户主键 @param request 启停请求 @param principal 当前用户 @return 修改后用户 */
     @PatchMapping("/{userId}/enabled")
     @PreAuthorize("hasAuthority('identity:write')")
     public ApiResponse<ManagedUserVO> setEnabled(
@@ -108,7 +108,7 @@ public class UserAdministrationController {
         ));
     }
 
-    /** @param userId 用户主键 @param request 重置请求 @param principal 当前主体 @return 空成功响应 */
+    /** @param userId 用户主键 @param request 重置请求 @param principal 当前用户 @return 空成功响应 */
     @PostMapping("/{userId}/password-reset")
     @PreAuthorize("hasAuthority('identity:write')")
     public ApiResponse<Void> resetPassword(
@@ -120,7 +120,7 @@ public class UserAdministrationController {
         return ApiResponse.success(null);
     }
 
-    /** @param userId 用户主键 @param request 角色请求 @param principal 当前主体 @return 修改后用户 */
+    /** @param userId 用户主键 @param request 角色请求 @param principal 当前用户 @return 修改后用户 */
     @PutMapping("/{userId}/roles")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<ManagedUserVO> replaceRoles(
@@ -131,7 +131,7 @@ public class UserAdministrationController {
         return ApiResponse.success(service.replaceRoles(userId, request.roleIds(), actor(principal)));
     }
 
-    /** @param userId 用户主键 @param request 范围请求 @param principal 当前主体 @return 修改后用户 */
+    /** @param userId 用户主键 @param request 范围请求 @param principal 当前用户 @return 修改后用户 */
     @PutMapping("/{userId}/organization-scopes")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<ManagedUserVO> replaceOrganizationScopes(
@@ -144,7 +144,7 @@ public class UserAdministrationController {
         ));
     }
 
-    /** @param principal 当前主体 @return 应用服务操作人上下文 */
+    /** @param principal 当前用户 @return 应用服务操作人信息 */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
@@ -154,11 +154,11 @@ public class UserAdministrationController {
         try {
             byte[] version = Base64.getDecoder().decode(value);
             if (version.length != Long.BYTES) {
-                throw new InvalidRequestException("version must represent an 8-byte rowversion value");
+                throw new InvalidRequestException("version 必须表示一个 8 字节的 SQL Server 行版本号");
             }
             return version;
         } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("version must be valid Base64");
+            throw new InvalidRequestException("version 必须是有效的 Base64 文本");
         }
     }
 }

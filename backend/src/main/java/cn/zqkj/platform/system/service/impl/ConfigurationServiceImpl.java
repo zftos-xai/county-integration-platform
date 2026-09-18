@@ -5,6 +5,7 @@ import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.common.exception.ResourceNotFoundException;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryTypeCommand;
+import cn.zqkj.platform.system.domain.dto.DeleteParameterCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.UpsertParameterCommand;
@@ -45,7 +46,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * 实现代码注册参数、作用域校验和平台系统字典管理规则。
+ * 实现代码注册参数、适用范围校验和平台系统字典管理规则。
  */
 @Service
 public class ConfigurationServiceImpl implements ConfigurationService {
@@ -111,7 +112,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         long id;
         if (current == null) {
             if (normalized.expectedVersion() != null) {
-                throw new ResourceConflictException("Parameter value does not yet exist");
+                throw new ResourceConflictException("参数值尚未创建，请刷新后重试");
             }
             id = mapper.createParameterValue(
                     definition.key(), definition.valueType().name(), normalized, actor.loginName()
@@ -121,20 +122,45 @@ public class ConfigurationServiceImpl implements ConfigurationService {
             if (mapper.updateParameterValue(
                     current.id(), definition.valueType().name(), normalized, actor.loginName()
             ) != 1) {
-                throw new ResourceConflictException("Parameter value version no longer matches");
+                throw new ResourceConflictException("参数值已被他人修改，请刷新后重试");
             }
             id = current.id();
         }
-        ParameterValue saved = mapper.findParameterValue(definition.key(), normalized)
+        ParameterValue saved = mapper.findParameterValueById(id)
                 .orElseThrow(() -> new IllegalStateException("Saved parameter value was not found"));
-        if (saved.id() != id) {
-            throw new IllegalStateException("Saved parameter scope resolved to an unexpected record");
+        if (!saved.parameterKey().equals(definition.key())
+                || saved.environment() != normalized.environment()
+                || !java.util.Objects.equals(saved.organizationId(), normalized.organizationId())) {
+            throw new IllegalStateException("保存参数后读取到了不符合环境和机构条件的记录");
         }
         ParameterValueVO result = toParameterValueVO(saved, definition);
         audit(actor, result.organizationId(), result.organizationCode(),
                 current == null ? "PARAMETER_CREATED" : "PARAMETER_UPDATED", "PARAMETER", definition.key(),
-                "已保存参数作用域、环境和启用状态；参数值未写入审计摘要");
+                "已保存参数适用范围、环境和启用状态；参数值未写入审计摘要");
         return result;
+    }
+
+    /** {@inheritDoc} */
+    @Transactional
+    @Override
+    public void deleteParameter(String key, DeleteParameterCommand command, AccessActor actor) {
+        ParameterDefinition definition = requireDefinition(normalizeParameterKey(key));
+        if (command == null) {
+            throw new InvalidRequestException("必须提供要删除的参数适用范围");
+        }
+        UpsertParameterCommand scope = new UpsertParameterCommand(
+                command.environment(), command.organizationId(), "", false, command.expectedVersion()
+        );
+        validateParameterScope(definition, scope, actor);
+        requireVersion(command.expectedVersion());
+        ParameterValue current = mapper.findParameterValue(definition.key(), scope)
+                .orElseThrow(() -> new ResourceNotFoundException("要删除的参数配置不存在"));
+        if (mapper.deleteParameterValue(current.id(), command.expectedVersion()) != 1) {
+            throw new ResourceConflictException("参数配置已被他人修改，请刷新后重试");
+        }
+        audit(actor, current.organizationId(), current.organizationCode(),
+                "PARAMETER_DELETED", "PARAMETER", definition.key(),
+                "已删除指定环境和机构范围的参数配置；参数值未写入审计摘要");
     }
 
     /** {@inheritDoc} */
@@ -150,7 +176,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     public DictionaryTypeVO createDictionaryType(CreateDictionaryTypeCommand command, AccessActor actor) {
         String typeCode = normalizeCode(command.typeCode(), "typeCode");
         if (mapper.dictionaryTypeCodeExists(typeCode)) {
-            throw new ResourceConflictException("Dictionary type code already exists");
+            throw new ResourceConflictException("字典类型代码已存在");
         }
         CreateDictionaryTypeCommand normalized = new CreateDictionaryTypeCommand(
                 typeCode,
@@ -182,12 +208,31 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 command.expectedVersion()
         );
         if (mapper.updateDictionaryType(typeId, normalized, requireActor(actor.loginName())) != 1) {
-            throw new ResourceConflictException("Dictionary type version no longer matches");
+            throw new ResourceConflictException("字典类型已被他人修改，请刷新后重试");
         }
         DictionaryTypeVO result = toDictionaryTypeVO(requireDictionaryType(typeId));
         audit(actor, null, null, "DICTIONARY_TYPE_UPDATED", "DICTIONARY_TYPE", result.typeCode(),
                 "已修改字典类型展示信息和启用状态");
         return result;
+    }
+
+    /** {@inheritDoc} */
+    @Transactional
+    @Override
+    public void deleteDictionaryType(long typeId, byte[] expectedVersion, AccessActor actor) {
+        DictionaryType current = requireDictionaryType(typeId);
+        requireVersion(expectedVersion);
+        long itemCount = mapper.countDictionaryItems(typeId);
+        if (itemCount > 0) {
+            throw new ResourceConflictException(
+                    "该字典类型仍包含" + itemCount + "个字典项，请先逐项确认使用情况并删除字典项"
+            );
+        }
+        if (mapper.deleteDictionaryType(typeId, expectedVersion) != 1) {
+            throw new ResourceConflictException("字典类型已被他人修改或新增了字典项，请刷新后重试");
+        }
+        audit(actor, null, null, "DICTIONARY_TYPE_DELETED", "DICTIONARY_TYPE", current.typeCode(),
+                "已删除不含字典项的字典类型");
     }
 
     /** {@inheritDoc} */
@@ -208,11 +253,11 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     ) {
         DictionaryType type = requireDictionaryType(typeId);
         if (!type.enabled()) {
-            throw new ResourceConflictException("Disabled dictionary type cannot accept new items");
+            throw new ResourceConflictException("已停用的字典类型不能新增字典项");
         }
         String itemCode = normalizeCode(command.itemCode(), "itemCode");
         if (mapper.dictionaryItemCodeExists(typeId, itemCode)) {
-            throw new ResourceConflictException("Dictionary item code already exists in this type");
+            throw new ResourceConflictException("该字典类型中已存在相同的字典项代码");
         }
         validateSortOrder(command.sortOrder());
         CreateDictionaryItemCommand normalized = new CreateDictionaryItemCommand(
@@ -234,7 +279,8 @@ public class ConfigurationServiceImpl implements ConfigurationService {
             UpdateDictionaryItemCommand command,
             AccessActor actor
     ) {
-        requireDictionaryItem(itemId);
+        DictionaryItem current = requireDictionaryItem(itemId);
+        DictionaryType type = requireDictionaryType(current.dictionaryTypeId());
         requireVersion(command.expectedVersion());
         validateSortOrder(command.sortOrder());
         UpdateDictionaryItemCommand normalized = new UpdateDictionaryItemCommand(
@@ -242,12 +288,33 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 command.sortOrder(), command.enabled(), command.expectedVersion()
         );
         if (mapper.updateDictionaryItem(itemId, normalized, requireActor(actor.loginName())) != 1) {
-            throw new ResourceConflictException("Dictionary item version no longer matches");
+            throw new ResourceConflictException("字典项已被他人修改，请刷新后重试");
         }
         DictionaryItemVO result = toDictionaryItemVO(requireDictionaryItem(itemId));
-        audit(actor, null, null, "DICTIONARY_ITEM_UPDATED", "DICTIONARY_ITEM", String.valueOf(itemId),
+        audit(actor, null, null, "DICTIONARY_ITEM_UPDATED", "DICTIONARY_ITEM",
+                type.typeCode() + ":" + result.itemCode(),
                 "已修改字典项文本、顺序和启用状态");
         return result;
+    }
+
+    /** {@inheritDoc} */
+    @Transactional
+    @Override
+    public void deleteDictionaryItem(long itemId, byte[] expectedVersion, AccessActor actor) {
+        DictionaryItem current = requireDictionaryItem(itemId);
+        DictionaryType type = requireDictionaryType(current.dictionaryTypeId());
+        requireVersion(expectedVersion);
+        long referenceCount = mapper.countDictionaryItemReferences(itemId);
+        if (referenceCount > 0) {
+            throw new ResourceConflictException(
+                    "该字典项已被" + referenceCount + "条业务数据使用，不能删除；可以停用，历史数据仍保留原含义"
+            );
+        }
+        if (mapper.deleteDictionaryItem(itemId, expectedVersion) != 1) {
+            throw new ResourceConflictException("字典项已被他人修改或开始被业务使用，请刷新后重试");
+        }
+        audit(actor, null, null, "DICTIONARY_ITEM_DELETED", "DICTIONARY_ITEM",
+                type.typeCode() + ":" + current.itemCode(), "已删除未被业务数据使用的字典项");
     }
 
     /** {@inheritDoc} */
@@ -263,7 +330,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     public ExternalSystemVO createExternalSystem(ExternalSystemCommand command, AccessActor actor) {
         String code = normalizeCode(command.systemCode(), "systemCode");
         if (mapper.externalSystemCodeExists(code)) {
-            throw new ResourceConflictException("External system code already exists");
+            throw new ResourceConflictException("外部系统代码已存在");
         }
         ExternalSystemCommand normalized = new ExternalSystemCommand(
                 code, requireText(command.systemName(), "systemName", 100),
@@ -288,7 +355,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 requireText(command.description(), "description", 500), command.enabled(), command.expectedVersion()
         );
         if (mapper.updateExternalSystem(systemId, normalized, requireActor(actor.loginName())) != 1) {
-            throw new ResourceConflictException("External system version no longer matches");
+            throw new ResourceConflictException("外部系统资料已被他人修改，请刷新后重试");
         }
         ExternalSystemVO result = toExternalSystemVO(requireExternalSystem(systemId));
         audit(actor, null, null, "EXTERNAL_SYSTEM_UPDATED", "EXTERNAL_SYSTEM", result.systemCode(),
@@ -318,18 +385,18 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     ) {
         ExternalSystem system = requireExternalSystem(systemId);
         if (!system.enabled()) {
-            throw new ResourceConflictException("Disabled external system cannot accept new endpoints");
+            throw new ResourceConflictException("外部系统已停用，不能新增服务地址");
         }
         validateEndpointScope(command, actor);
         ExternalEndpointCommand normalized = normalizeEndpoint(command, false, null);
         if (mapper.externalEndpointScopeExists(systemId, normalized)) {
-            throw new ResourceConflictException("External endpoint scope already exists");
+            throw new ResourceConflictException("该外部系统、环境和机构已经配置了服务地址");
         }
         long id = mapper.createExternalEndpoint(systemId, normalized, requireActor(actor.loginName()));
         ExternalEndpointVO result = toExternalEndpointVO(requireExternalEndpoint(id));
         audit(actor, result.organizationId(), result.organizationCode(), "EXTERNAL_ENDPOINT_CREATED",
                 "EXTERNAL_ENDPOINT", String.valueOf(id),
-                "已创建停用端点；地址和凭证引用未写入审计摘要");
+                "已创建停用服务地址；地址和凭证引用未写入审计摘要");
         return result;
     }
 
@@ -351,15 +418,15 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 command.enabled(), command.expectedVersion()
         );
         if (normalized.enabled() && !requireExternalSystem(current.externalSystemId()).enabled()) {
-            throw new ResourceConflictException("Endpoint of a disabled external system cannot be enabled");
+            throw new ResourceConflictException("外部系统已停用，不能启用其服务地址");
         }
         if (mapper.updateExternalEndpoint(endpointId, normalized, requireActor(actor.loginName())) != 1) {
-            throw new ResourceConflictException("External endpoint version no longer matches");
+            throw new ResourceConflictException("服务地址资料已被他人修改，请刷新后重试");
         }
         ExternalEndpointVO result = toExternalEndpointVO(requireExternalEndpoint(endpointId));
         audit(actor, result.organizationId(), result.organizationCode(), "EXTERNAL_ENDPOINT_UPDATED",
                 "EXTERNAL_ENDPOINT", String.valueOf(endpointId),
-                "已修改端点超时和启用状态；地址和凭证引用未写入审计摘要");
+                "已修改服务地址超时和启用状态；地址和凭证引用未写入审计摘要");
         return result;
     }
 
@@ -406,7 +473,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 Base64.getEncoder().encodeToString(system.version()));
     }
 
-    /** @param endpoint 外部端点 @return 不含凭证引用的API输出 */
+    /** @param endpoint 外部服务地址 @return 不含凭证引用的API输出 */
     private ExternalEndpointVO toExternalEndpointVO(ExternalEndpoint endpoint) {
         return new ExternalEndpointVO(endpoint.id(), endpoint.externalSystemId(), endpoint.environment().name(),
                 endpoint.organizationId(), endpoint.organizationCode(), endpoint.baseUrl(),
@@ -430,55 +497,55 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     ) {
         if (command == null || command.environment() == null
                 || !definition.environments().contains(command.environment())) {
-            throw new InvalidRequestException("Parameter environment is not allowed");
+            throw new InvalidRequestException("参数不能用于所选环境");
         }
         if (definition.organizationScoped()) {
             if (command.organizationId() == null || command.organizationId() <= 0) {
-                throw new InvalidRequestException("Organization-scoped parameter requires organizationId");
+                throw new InvalidRequestException("机构专用参数必须提供 organizationId");
             }
             OrganizationVO organization = organizationService.get(command.organizationId());
             if (!actor.canAccess(organization.organizationCode())) {
-                throw new AccessDeniedException("Organization access is not permitted");
+                throw new AccessDeniedException("当前账号无权访问该机构");
             }
         } else if (command.organizationId() != null) {
-            throw new InvalidRequestException("Global parameter must not contain organizationId");
+            throw new InvalidRequestException("全局参数不能包含 organizationId");
         }
     }
 
     /** @param definition 参数定义 @param rawValue 原始值 @return 规范化值 */
     private String validateAndNormalizeValue(ParameterDefinition definition, String rawValue) {
         if (rawValue == null) {
-            throw new InvalidRequestException("Parameter value is required");
+            throw new InvalidRequestException("必须提供参数值");
         }
         String value = rawValue.trim();
         if (value.isEmpty()) {
-            throw new InvalidRequestException("Parameter value must not be blank");
+            throw new InvalidRequestException("参数值不能为空");
         }
         if (definition.valueType() == ParameterValueType.STRING) {
             if (definition.maximumLength() != null && value.length() > definition.maximumLength()) {
-                throw new InvalidRequestException("Parameter value exceeds maximum length");
+                throw new InvalidRequestException("参数值超过允许的最大长度");
             }
             validatePattern(definition.pattern(), value);
             return value;
         }
         if (definition.valueType() == ParameterValueType.BOOLEAN) {
             if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
-                throw new InvalidRequestException("Parameter value must be boolean");
+                throw new InvalidRequestException("参数值必须是 true 或 false");
             }
             return value.toLowerCase(Locale.ROOT);
         }
         try {
             BigDecimal number = new BigDecimal(value);
             if (definition.valueType() == ParameterValueType.INTEGER && number.stripTrailingZeros().scale() > 0) {
-                throw new InvalidRequestException("Parameter value must be an integer");
+                throw new InvalidRequestException("参数值必须是整数");
             }
             if (definition.minimumNumber() != null && number.compareTo(definition.minimumNumber()) < 0
                     || definition.maximumNumber() != null && number.compareTo(definition.maximumNumber()) > 0) {
-                throw new InvalidRequestException("Parameter value is outside the registered range");
+                throw new InvalidRequestException("参数值超出登记的允许范围");
             }
             return number.stripTrailingZeros().toPlainString();
         } catch (NumberFormatException exception) {
-            throw new InvalidRequestException("Parameter value has the wrong numeric type");
+            throw new InvalidRequestException("参数值的数字类型不正确");
         }
     }
 
@@ -489,17 +556,17 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         }
         try {
             if (!Pattern.matches(expression, value)) {
-                throw new InvalidRequestException("Parameter value does not match the registered format");
+                throw new InvalidRequestException("参数值不符合登记的格式");
             }
         } catch (PatternSyntaxException exception) {
-            throw new IllegalStateException("Registered parameter pattern is invalid", exception);
+            throw new IllegalStateException("代码中登记的参数格式规则无效", exception);
         }
     }
 
     /** @param typeId 类型主键 @return 存在的字典类型 */
     private DictionaryType requireDictionaryType(long typeId) {
         if (typeId <= 0) {
-            throw new InvalidRequestException("dictionaryTypeId must be positive");
+            throw new InvalidRequestException("dictionaryTypeId 必须大于 0");
         }
         return mapper.findDictionaryType(typeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dictionary type was not found"));
@@ -508,7 +575,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     /** @param itemId 字典项主键 @return 存在的字典项 */
     private DictionaryItem requireDictionaryItem(long itemId) {
         if (itemId <= 0) {
-            throw new InvalidRequestException("dictionaryItemId must be positive");
+            throw new InvalidRequestException("dictionaryItemId 必须大于 0");
         }
         return mapper.findDictionaryItem(itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dictionary item was not found"));
@@ -517,38 +584,38 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     /** @param systemId 外部系统主键 @return 已存在系统 */
     private ExternalSystem requireExternalSystem(long systemId) {
         if (systemId <= 0) {
-            throw new InvalidRequestException("externalSystemId must be positive");
+            throw new InvalidRequestException("externalSystemId 必须大于 0");
         }
         return mapper.findExternalSystem(systemId)
                 .orElseThrow(() -> new ResourceNotFoundException("External system was not found"));
     }
 
-    /** @param endpointId 外部端点主键 @return 已存在端点 */
+    /** @param endpointId 外部服务地址主键 @return 已存在服务地址 */
     private ExternalEndpoint requireExternalEndpoint(long endpointId) {
         if (endpointId <= 0) {
-            throw new InvalidRequestException("externalEndpointId must be positive");
+            throw new InvalidRequestException("externalEndpointId 必须大于 0");
         }
         return mapper.findExternalEndpoint(endpointId)
                 .orElseThrow(() -> new ResourceNotFoundException("External endpoint was not found"));
     }
 
-    /** @param command 端点命令 @param actor 操作人 */
+    /** @param command 服务地址命令 @param actor 操作人 */
     private void validateEndpointScope(ExternalEndpointCommand command, AccessActor actor) {
         if (command == null || command.environment() == null) {
-            throw new InvalidRequestException("External endpoint environment is required");
+            throw new InvalidRequestException("必须选择外部系统服务地址的使用环境");
         }
         if (command.organizationId() != null) {
             OrganizationVO organization = organizationService.get(command.organizationId());
             if (!actor.canAccess(organization.organizationCode())) {
-                throw new AccessDeniedException("Organization access is not permitted");
+                throw new AccessDeniedException("当前账号无权访问该机构");
             }
         }
     }
 
-    /** @param endpoint 端点 @param actor 操作人 */
+    /** @param endpoint 服务地址 @param actor 操作人 */
     private void requireEndpointAccess(ExternalEndpoint endpoint, AccessActor actor) {
         if (endpoint.organizationCode() != null && !actor.canAccess(endpoint.organizationCode())) {
-            throw new AccessDeniedException("Organization access is not permitted");
+            throw new AccessDeniedException("当前账号无权访问该机构");
         }
     }
 
@@ -560,17 +627,17 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     ) {
         String baseUrl = requireHttpsUrl(command.baseUrl());
         if (command.connectTimeoutMs() < 100 || command.connectTimeoutMs() > 60000) {
-            throw new InvalidRequestException("connectTimeoutMs is outside the allowed range");
+            throw new InvalidRequestException("connectTimeoutMs 超出允许范围");
         }
         if (command.readTimeoutMs() < command.connectTimeoutMs() || command.readTimeoutMs() > 300000) {
-            throw new InvalidRequestException("readTimeoutMs is outside the allowed range");
+            throw new InvalidRequestException("readTimeoutMs 超出允许范围");
         }
         String reference = requireCredentialReference(command.credentialReference());
         return new ExternalEndpointCommand(command.environment(), command.organizationId(), baseUrl,
                 command.connectTimeoutMs(), command.readTimeoutMs(), reference, enabled, version);
     }
 
-    /** @param actor 操作人 @param organizationId 机构主键 @param organizationCode 机构代码 @param action 动作 @param targetType 目标类型 @param targetId 目标标识 @param summary 脱敏摘要 */
+    /** @param actor 操作人 @param organizationId 机构主键 @param organizationCode 机构代码 @param action 动作 @param targetType 目标类型 @param targetId 目标标识 @param summary 不含敏感内容的摘要 */
     private void audit(AccessActor actor, Long organizationId, String organizationCode, String action,
                        String targetType, String targetId, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, organizationId, organizationCode,
@@ -585,11 +652,11 @@ public class ConfigurationServiceImpl implements ConfigurationService {
             URI uri = new URI(normalized);
             if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null
                     || uri.getQuery() != null || uri.getFragment() != null) {
-                throw new InvalidRequestException("baseUrl must be an HTTPS base URL without credentials or query");
+                throw new InvalidRequestException("baseUrl 必须是 HTTPS 基础地址，且不能包含账号、密码或查询参数");
             }
             return uri.normalize().toASCIIString();
         } catch (URISyntaxException exception) {
-            throw new InvalidRequestException("baseUrl is invalid");
+            throw new InvalidRequestException("baseUrl 格式无效");
         }
     }
 
@@ -597,7 +664,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     private String requireCredentialReference(String value) {
         String reference = requireText(value, "credentialReference", 200);
         if (!reference.matches("[a-z][a-z0-9+.-]*://\\S+")) {
-            throw new InvalidRequestException("credentialReference must use an approved reference URI");
+            throw new InvalidRequestException("credentialReference 必须使用获准的凭证引用地址");
         }
         return reference;
     }
@@ -615,7 +682,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     private String normalizeParameterKey(String value) {
         String key = requireText(value, "parameterKey", 64).toLowerCase(Locale.ROOT);
         if (!PARAMETER_KEY_PATTERN.matcher(key).matches()) {
-            throw new InvalidRequestException("parameterKey has an invalid format");
+            throw new InvalidRequestException("parameterKey 格式无效");
         }
         return key;
     }
@@ -636,14 +703,14 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     /** @param version SQL Server并发版本 */
     private void requireVersion(byte[] version) {
         if (version == null || version.length != Long.BYTES) {
-            throw new InvalidRequestException("version must be an 8-byte rowversion value");
+            throw new InvalidRequestException("version 必须是 8 字节的 SQL Server 行版本号");
         }
     }
 
     /** @param sortOrder 展示顺序 */
     private void validateSortOrder(int sortOrder) {
         if (sortOrder < 0 || sortOrder > 999999) {
-            throw new InvalidRequestException("sortOrder is outside the allowed range");
+            throw new InvalidRequestException("sortOrder 超出允许范围");
         }
     }
 }

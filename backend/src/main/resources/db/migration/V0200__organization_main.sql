@@ -1,14 +1,14 @@
 -- 业务域: organization
 -- 主版本: V0200
 -- 脚本类型: MAIN
--- 变更说明: 建立平台机构档案、层级、启停和并发控制基线
+-- 变更说明: 建立平台机构档案、层级、启停和并发控制初始结构
 -- 需求依据: 项目开发PRD第4章、开发批次任务计划DEV-005
 -- 数据边界: 仅保存平台管理机构，不保存100-008上游机构原始数据或医疗业务正文
--- 时间口径: valid_from、valid_to、created_at和updated_at保存UTC时间
+-- 时间规则: valid_from、valid_to、created_at和updated_at保存UTC时间
 -- 回退方案: 首次部署失败时删除本脚本建立的索引、外键、约束和表；共享环境执行前由DBA复核
 
 -- 表中文名称: 机构表
--- 表用途: 保存平台权限、用户归属和配置作用域使用的受控机构档案；不承载上游机构同步原始记录
+-- 表用途: 保存平台权限、用户归属和配置适用范围使用的受控机构档案；不承载上游机构同步原始记录
 CREATE TABLE org_organization (
     id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_org_organization PRIMARY KEY, -- 机构主键：平台内部机构主键
     organization_code NVARCHAR(64) NOT NULL, -- 机构代码：平台统一、稳定且对外使用的机构编码
@@ -18,13 +18,13 @@ CREATE TABLE org_organization (
     is_enabled BIT NOT NULL CONSTRAINT df_org_organization_enabled DEFAULT 1, -- 启用标志：机构是否可用；停用不删除历史档案
     valid_from DATETIME2(3) NULL, -- 有效开始时间：可选业务有效起始UTC时间；空值表示未限定起始时间
     valid_to DATETIME2(3) NULL, -- 有效结束时间：可选业务有效结束UTC时间；空值表示未限定结束时间
-    created_by NVARCHAR(64) NOT NULL, -- 创建人标识：创建人稳定主体标识快照；安全引导期不强制外键
+    created_by NVARCHAR(64) NOT NULL, -- 创建人标识：创建人稳定用户标识快照；安全引导期不强制外键
     created_at DATETIME2(3) NOT NULL CONSTRAINT df_org_organization_created DEFAULT SYSUTCDATETIME(), -- 创建时间：机构档案创建UTC时间
-    updated_by NVARCHAR(64) NOT NULL, -- 更新人标识：最后修改人稳定主体标识快照
+    updated_by NVARCHAR(64) NOT NULL, -- 更新人标识：最后修改人稳定用户标识快照
     updated_at DATETIME2(3) NOT NULL CONSTRAINT df_org_organization_updated DEFAULT SYSUTCDATETIME(), -- 更新时间：机构档案最后修改UTC时间
     row_version ROWVERSION, -- 并发版本：SQL Server并发版本，由客户端回传以防止无感知覆盖
     CONSTRAINT uq_org_organization_code UNIQUE (organization_code), -- 保证平台机构编码唯一
-    CONSTRAINT fk_org_organization_parent FOREIGN KEY (parent_id) REFERENCES org_organization(id), -- 保证父机构存在；循环由应用层阻断
+    CONSTRAINT fk_org_organization_parent FOREIGN KEY (parent_id) REFERENCES org_organization(id), -- 保证父机构存在；循环由应用层拒绝
     CONSTRAINT ck_org_organization_not_self CHECK (parent_id IS NULL OR parent_id <> id), -- 禁止机构直接引用自身为父机构
     CONSTRAINT ck_org_organization_code_not_blank CHECK (LEN(LTRIM(RTRIM(organization_code))) > 0), -- 禁止空白机构编码
     CONSTRAINT ck_org_organization_name_not_blank CHECK (LEN(LTRIM(RTRIM(organization_name))) > 0), -- 禁止空白机构名称
@@ -67,7 +67,7 @@ VALUES
     (N'COLUMN', N'org_organization', N'row_version', N'并发版本'),
     (N'CONSTRAINT', N'org_organization', N'pk_org_organization', N'保证每个机构档案具有唯一的平台内部主键。'),
     (N'CONSTRAINT', N'org_organization', N'uq_org_organization_code', N'保证平台机构编码唯一。'),
-    (N'CONSTRAINT', N'org_organization', N'fk_org_organization_parent', N'保证父机构存在；机构层级循环由应用层阻断。'),
+    (N'CONSTRAINT', N'org_organization', N'fk_org_organization_parent', N'保证父机构存在；机构层级循环由应用层拒绝。'),
     (N'CONSTRAINT', N'org_organization', N'ck_org_organization_not_self', N'禁止机构直接引用自身为父机构。'),
     (N'CONSTRAINT', N'org_organization', N'ck_org_organization_code_not_blank', N'禁止保存空白机构编码。'),
     (N'CONSTRAINT', N'org_organization', N'ck_org_organization_name_not_blank', N'禁止保存空白机构名称。'),

@@ -41,8 +41,8 @@ public class OrganizationServiceImpl implements OrganizationService {
      * 创建机构并验证编码、时间和父机构。
      *
      * @param command 创建命令
-     * @param actor 操作主体稳定标识
-     * @return 新建机构快照
+     * @param actor 操作人稳定标识
+     * @return 新建机构记录
      */
     @Transactional
     @Override
@@ -53,7 +53,7 @@ public class OrganizationServiceImpl implements OrganizationService {
         validateText(command.organizationType(), "organizationType", 32);
         validateTimeRange(command.validFrom(), command.validTo());
         if (mapper.countByCode(command.organizationCode().trim()) > 0) {
-            throw new ResourceConflictException("Organization code already exists");
+            throw new ResourceConflictException("机构编码已存在");
         }
         validateParentChain(-1L, command.parentId());
         CreateOrganizationCommand normalized = new CreateOrganizationCommand(
@@ -72,7 +72,7 @@ public class OrganizationServiceImpl implements OrganizationService {
      * 读取指定机构。
      *
      * @param id 机构主键
-     * @return 机构快照
+     * @return 机构记录
      */
     @Transactional(readOnly = true)
     @Override
@@ -98,8 +98,8 @@ public class OrganizationServiceImpl implements OrganizationService {
      *
      * @param id 机构主键
      * @param command 修改命令
-     * @param actor 操作主体稳定标识
-     * @return 修改后机构快照
+     * @param actor 操作人稳定标识
+     * @return 修改后机构记录
      */
     @Transactional
     @Override
@@ -121,19 +121,19 @@ public class OrganizationServiceImpl implements OrganizationService {
                 command.expectedVersion()
         );
         if (mapper.update(id, normalized, actor.trim()) != 1) {
-            throw new ResourceConflictException("Organization version no longer matches");
+            throw new ResourceConflictException("机构资料已被他人修改，请刷新后重试");
         }
         return get(id);
     }
 
     /**
-     * 使用并发版本启用或停用机构。
+     * 使用并发版本恢复或撤销机构。
      *
      * @param id 机构主键
      * @param enabled 目标启用状态
      * @param expectedVersion 客户端上次读取的并发版本
-     * @param actor 操作主体稳定标识
-     * @return 修改后机构快照
+     * @param actor 操作人稳定标识
+     * @return 修改后机构记录
      */
     @Transactional
     @Override
@@ -143,10 +143,10 @@ public class OrganizationServiceImpl implements OrganizationService {
         requireVersion(expectedVersion);
         get(id);
         if (!enabled && mapper.countEnabledChildren(id) > 0) {
-            throw new ResourceConflictException("Organization has enabled child organizations");
+            throw new ResourceConflictException("该机构仍有正常使用的下级机构，不能撤销；请先逐个撤销下级机构");
         }
         if (mapper.setEnabled(id, enabled, expectedVersion, actor.trim()) != 1) {
-            throw new ResourceConflictException("Organization version no longer matches");
+            throw new ResourceConflictException("机构资料已被他人修改，请刷新后重试");
         }
         return get(id);
     }
@@ -163,29 +163,29 @@ public class OrganizationServiceImpl implements OrganizationService {
         int depth = 0;
         while (currentId != null) {
             if (currentId == organizationId || !visited.add(currentId)) {
-                throw new ResourceConflictException("Organization hierarchy would contain a cycle");
+                throw new ResourceConflictException("上级机构设置会造成机构相互包含");
             }
             if (++depth > MAX_HIERARCHY_DEPTH) {
-                throw new ResourceConflictException("Organization hierarchy exceeds the supported depth");
+                throw new ResourceConflictException("机构层级超过系统允许的最大层数");
             }
             OrganizationVO current = get(currentId);
             if (!current.enabled()) {
-                throw new ResourceConflictException("Parent organization is disabled");
+                throw new ResourceConflictException("上级机构已停用");
             }
             currentId = current.parentId();
         }
     }
 
     /**
-     * 读取必须存在的机构快照。
+     * 读取必须存在的机构记录。
      *
      * @param id 机构主键
-     * @return 机构快照
+     * @return 机构记录
      */
     private OrganizationVO requireOrganization(long id) {
         OrganizationVO organization = mapper.findById(id);
         if (organization == null) {
-            throw new ResourceNotFoundException("Organization was not found");
+            throw new ResourceNotFoundException("未找到机构");
         }
         return organization;
     }
@@ -197,7 +197,7 @@ public class OrganizationServiceImpl implements OrganizationService {
      */
     private void validateCode(String code) {
         if (code == null || !CODE_PATTERN.matcher(code.trim()).matches()) {
-            throw new InvalidRequestException("organizationCode has an invalid format");
+            throw new InvalidRequestException("organizationCode 格式无效");
         }
     }
 
@@ -222,7 +222,7 @@ public class OrganizationServiceImpl implements OrganizationService {
      */
     private void validateTimeRange(LocalDateTime validFrom, LocalDateTime validTo) {
         if (validFrom != null && validTo != null && validTo.isBefore(validFrom)) {
-            throw new InvalidRequestException("validTo must not be earlier than validFrom");
+            throw new InvalidRequestException("validTo 不能早于 validFrom");
         }
     }
 
@@ -233,14 +233,14 @@ public class OrganizationServiceImpl implements OrganizationService {
      */
     private void requirePositiveId(long id) {
         if (id <= 0) {
-            throw new InvalidRequestException("id must be positive");
+            throw new InvalidRequestException("id 必须大于 0");
         }
     }
 
     /**
-     * 校验操作主体标识存在且长度受控。
+     * 校验操作人标识存在且长度受控。
      *
-     * @param actor 操作主体标识
+     * @param actor 操作人标识
      */
     private void requireActor(String actor) {
         validateText(actor, "actor", 64);
@@ -253,7 +253,7 @@ public class OrganizationServiceImpl implements OrganizationService {
      */
     private void requireVersion(byte[] version) {
         if (version == null || version.length != Long.BYTES) {
-            throw new InvalidRequestException("version must be an 8-byte rowversion value");
+            throw new InvalidRequestException("version 必须是 8 字节的 SQL Server 行版本号");
         }
     }
 }

@@ -24,14 +24,17 @@ import java.util.Optional;
 @Mapper
 public interface ConfigurationMapper {
 
-    /** @return 按参数键和作用域稳定排序的全部参数值 */
+    /** @return 按参数键和适用范围稳定排序的全部参数值 */
     List<ParameterValue> findParameterValues();
 
-    /** @param key 参数键 @param command 作用域命令 @return 匹配作用域值；不存在时为空 */
+    /** @param key 参数键 @param command 适用范围命令 @return 匹配按适用范围保存的值；不存在时为空 */
     Optional<ParameterValue> findParameterValue(
             @Param("key") String key,
             @Param("command") UpsertParameterCommand command
     );
+
+    /** @param id 参数值主键 @return 匹配主键的参数值；不存在时为空 */
+    Optional<ParameterValue> findParameterValueById(long id);
 
     /** @param key 参数键 @param valueType 注册类型 @param command 写入命令 @param actor 操作人 @return 新主键 */
     long createParameterValue(
@@ -48,6 +51,9 @@ public interface ConfigurationMapper {
             @Param("command") UpsertParameterCommand command,
             @Param("actor") String actor
     );
+
+    /** @param id 参数值主键 @param expectedVersion 当前并发版本 @return 删除行数 */
+    int deleteParameterValue(@Param("id") long id, @Param("expectedVersion") byte[] expectedVersion);
 
     /** @return 按类型代码稳定排序的字典类型 */
     List<DictionaryType> findDictionaryTypes();
@@ -70,6 +76,12 @@ public interface ConfigurationMapper {
             @Param("command") UpdateDictionaryTypeCommand command,
             @Param("actor") String actor
     );
+
+    /** @param typeId 类型主键 @return 类型下的字典项数量 */
+    long countDictionaryItems(long typeId);
+
+    /** @param typeId 类型主键 @param expectedVersion 当前并发版本 @return 删除行数 */
+    int deleteDictionaryType(@Param("typeId") long typeId, @Param("expectedVersion") byte[] expectedVersion);
 
     /** @param typeId 类型主键 @param includeDisabled 是否包含停用项 @return 按顺序和代码排序的字典项 */
     List<DictionaryItem> findDictionaryItems(
@@ -97,6 +109,15 @@ public interface ConfigurationMapper {
             @Param("actor") String actor
     );
 
+    /**
+     * @param itemId 字典项主键
+     * @return 数据库中通过外键实际引用该字典项的业务记录数量
+     */
+    long countDictionaryItemReferences(long itemId);
+
+    /** @param itemId 字典项主键 @param expectedVersion 当前并发版本 @return 删除行数 */
+    int deleteDictionaryItem(@Param("itemId") long itemId, @Param("expectedVersion") byte[] expectedVersion);
+
     /** @return 稳定排序外部系统 */
     List<ExternalSystem> findExternalSystems();
 
@@ -114,13 +135,13 @@ public interface ConfigurationMapper {
                              @Param("command") ExternalSystemCommand command,
                              @Param("actor") String actor);
 
-    /** @param systemId 系统主键 @return 稳定排序端点 */
+    /** @param systemId 系统主键 @return 稳定排序服务地址 */
     List<ExternalEndpoint> findExternalEndpoints(long systemId);
 
-    /** @param endpointId 主键 @return 端点 */
+    /** @param endpointId 主键 @return 服务地址 */
     Optional<ExternalEndpoint> findExternalEndpoint(long endpointId);
 
-    /** @param systemId 系统主键 @param command 作用域命令 @return 是否存在 */
+    /** @param systemId 系统主键 @param command 适用范围命令 @return 是否存在 */
     boolean externalEndpointScopeExists(@Param("systemId") long systemId,
                                         @Param("command") ExternalEndpointCommand command);
 

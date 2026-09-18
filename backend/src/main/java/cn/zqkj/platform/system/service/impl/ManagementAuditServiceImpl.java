@@ -2,6 +2,7 @@ package cn.zqkj.platform.system.service.impl;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.system.domain.dto.ManagementAuditCommand;
+import cn.zqkj.platform.system.domain.dto.ManagementAuditQuery;
 import cn.zqkj.platform.system.domain.model.AccessActor;
 import cn.zqkj.platform.system.domain.model.ManagementAuditEvent;
 import cn.zqkj.platform.system.domain.vo.ManagementAuditEventVO;
@@ -47,21 +48,31 @@ public class ManagementAuditServiceImpl implements ManagementAuditService {
     @Override
     public List<ManagementAuditEventVO> findVisible(
             AccessActor actor,
-            String targetType,
-            String targetId,
-            int limit
+            ManagementAuditQuery query
     ) {
-        if (limit < 1 || limit > 200) {
-            throw new InvalidRequestException("limit must be between 1 and 200");
+        if (query == null || query.limit() < 1 || query.limit() > 200) {
+            throw new InvalidRequestException("limit 必须在 1 到 200 之间");
         }
-        return mapper.findVisible(actor.organizationCodes(), normalizeFilter(targetType),
-                        normalizeFilter(targetId), limit).stream().map(this::toVO).toList();
+        if (query.occurredFrom() != null && query.occurredTo() != null
+                && query.occurredFrom().isAfter(query.occurredTo())) {
+            throw new InvalidRequestException("开始时间不能晚于结束时间");
+        }
+        if ((query.beforeOccurredAt() == null) != (query.beforeId() == null)) {
+            throw new InvalidRequestException("继续查询历史记录时必须同时提供时间和记录编号");
+        }
+        ManagementAuditQuery normalized = new ManagementAuditQuery(normalizeFilter(query.actorLogin()),
+                normalizeFilter(query.actionCode()), normalizeFilter(query.targetType()),
+                normalizeFilter(query.targetId()), normalizeFilter(query.requestId()),
+                normalizeResult(query.resultCode()),
+                query.occurredFrom(), query.occurredTo(), query.beforeOccurredAt(), query.beforeId(),
+                query.limit());
+        return mapper.findVisible(actor.organizationCodes(), normalized).stream().map(this::toVO).toList();
     }
 
     /** @param command 命令 @param expectedResult 预期结果 */
     private void validate(ManagementAuditCommand command, String expectedResult) {
         if (command == null || command.actor() == null || !expectedResult.equals(command.resultCode())) {
-            throw new InvalidRequestException("Trusted audit actor and result are required");
+            throw new InvalidRequestException("写入审计记录时必须提供可信的操作人和操作结果");
         }
         requireText(command.actionCode(), "actionCode", 64);
         requireText(command.targetType(), "targetType", 64);
@@ -72,6 +83,18 @@ public class ManagementAuditServiceImpl implements ManagementAuditService {
     /** @param value 可选筛选值 @return 裁剪值 */
     private String normalizeFilter(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /** @param value 可选结果代码 @return 规范结果代码 */
+    private String normalizeResult(String value) {
+        String normalized = normalizeFilter(value);
+        if (normalized == null) {
+            return null;
+        }
+        if (!"SUCCESS".equals(normalized) && !"FAILURE".equals(normalized)) {
+            throw new InvalidRequestException("处理结果只能是成功或失败");
+        }
+        return normalized;
     }
 
     /** @param value 文本 @param field 字段 @param max 最大长度 */

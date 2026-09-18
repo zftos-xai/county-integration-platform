@@ -83,7 +83,7 @@ export function utcToLocalInput(value: string | null): string {
   return new Date(instant.getTime() - offset).toISOString().slice(0, 16)
 }
 
-/** 将 datetime-local 值转换为带时区语义的 ISO 时间；空值保持为 null。 */
+/** 将 datetime-local 值转换为带时区含义的 ISO 时间；空值保持为 null。 */
 export function localInputToOffset(value: string): string | null {
   if (!value) return null
   return new Date(value).toISOString()

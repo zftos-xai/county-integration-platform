@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 表示用户管理边界可返回的平台用户快照。
+ * 表示用户管理边界可返回的平台用户记录。
  *
  * @param id 用户主键
  * @param loginName 登录名

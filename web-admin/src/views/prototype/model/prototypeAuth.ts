@@ -10,7 +10,7 @@ export type PrototypeSession = {
 
 /**
  * 创建不具备认证含义的原型视角。
- * 原型不接受账号密码，避免把硬编码演示凭据误解为可用的身份合同。
+ * 原型不接受账号密码，避免把硬编码演示凭据误解为可用的登录设计。
  */
 export function createPrototypeSession(role: PrototypeRole): PrototypeSession {
   return role === 'manager'

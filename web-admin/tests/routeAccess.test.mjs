@@ -13,12 +13,12 @@ const user = {
   organizationCodes: ['ORG001'],
 }
 
-test('未登录主体只能进入公开页面', () => {
+test('未登录用户只能进入公开页面', () => {
   assert.equal(resolveRouteAccess(null, { path: '/prototype', publicPage: true, guestOnly: false }), 'allow')
   assert.equal(resolveRouteAccess(null, { path: '/organizations', publicPage: false, guestOnly: false }), 'login')
 })
 
-test('首次登录主体被限制在修改密码页面', () => {
+test('首次登录用户被限制在修改密码页面', () => {
   const firstLogin = { ...user, mustChangePassword: true, permissions: ['password:change'] }
   assert.equal(resolveRouteAccess(firstLogin, { path: '/', publicPage: false, guestOnly: false }), 'change-password')
   assert.equal(resolveRouteAccess(firstLogin, { path: '/change-password', publicPage: false, guestOnly: false }), 'allow')

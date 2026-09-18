@@ -1,4 +1,4 @@
-/** 原型状态徽标可使用的视觉语义。 */
+/** 原型状态徽标可使用的视觉含义。 */
 export type StatusTone = 'success' | 'primary' | 'warning' | 'danger' | 'neutral'
 
 const businessResultNames: Record<string, string> = {

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 验证代码注册参数基线保持最小、稳定且可供管理端构建明确表单。 */
+/** 验证代码注册参数默认配置保持最小、稳定且可供管理端构建明确表单。 */
 class CodeParameterDefinitionRegistryTest {
 
     private final CodeParameterDefinitionRegistry registry = new CodeParameterDefinitionRegistry();

@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 验证身份入口的匿名范围、CSRF门禁和未登录默认拒绝行为。
+ * 验证身份入口的匿名范围、CSRF强制检查和未登录默认拒绝行为。
  */
 @WebMvcTest(controllers = {BootstrapController.class, SessionController.class})
 @Import({SecurityConfiguration.class, GlobalExceptionHandler.class})
@@ -106,7 +106,7 @@ class IdentitySecurityWebTest {
     }
 
     /**
-     * 验证未登录主体不能读取当前用户。
+     * 验证未登录用户不能读取当前用户。
      *
      * @throws Exception MockMvc调用失败时抛出
      */
@@ -117,7 +117,7 @@ class IdentitySecurityWebTest {
     }
 
     /**
-     * 验证合法登录建立服务端会话且后续请求可读取同一当前主体。
+     * 验证合法登录建立服务端会话且后续请求可读取同一当前用户。
      *
      * @throws Exception MockMvc调用失败时抛出
      */

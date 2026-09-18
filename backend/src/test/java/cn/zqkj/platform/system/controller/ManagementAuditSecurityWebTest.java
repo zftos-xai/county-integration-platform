@@ -18,13 +18,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** 验证管理审计查询只允许具有audit:read权限的有效主体。 */
+/** 验证管理审计查询只允许具有audit:read权限的有效登录用户。 */
 @WebMvcTest(controllers = ManagementAuditController.class)
 @Import({SecurityConfiguration.class, GlobalExceptionHandler.class})
 class ManagementAuditSecurityWebTest {
@@ -39,8 +38,7 @@ class ManagementAuditSecurityWebTest {
     void enforcesAuditReadPermission() throws Exception {
         prepareAccount(List.of("audit:read"));
         PlatformUserPrincipal reader = principal(List.of("audit:read"));
-        when(service.findVisible(any(), isNull(), isNull(), org.mockito.ArgumentMatchers.eq(100)))
-                .thenReturn(List.of());
+        when(service.findVisible(any(), any())).thenReturn(List.of());
         mockMvc.perform(get("/api/v1/audit/events").with(user(reader))).andExpect(status().isOk());
 
         prepareAccount(List.of());
@@ -57,7 +55,7 @@ class ManagementAuditSecurityWebTest {
         when(identityMapper.findOrganizationCodes(1L)).thenReturn(List.of("ORG001"));
     }
 
-    /** @param permissions 权限 @return 测试主体 */
+    /** @param permissions 权限 @return 测试用户 */
     private PlatformUserPrincipal principal(List<String> permissions) {
         List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
         permissions.forEach(value -> authorities.add(new SimpleGrantedAuthority(value)));

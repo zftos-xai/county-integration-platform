@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 验证身份Mapper XML及显式机构管理范围语义。
+ * 验证身份Mapper XML及显式机构管理范围含义。
  */
 class IdentityMapperXmlTest {
 

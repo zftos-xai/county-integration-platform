@@ -1,4 +1,4 @@
-<!-- 原型异常恢复面板：演示不同恢复场景的状态迁移与阻断规则。 -->
+<!-- 原型异常恢复面板：演示不同恢复场景的状态迁移与禁止继续的规则。 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { IconArrowRight, IconCalendar, IconCheck, IconCopy, IconEdit, IconFile, IconFileText, IconInfoCircle, IconListDetails, IconSearch, IconServer, IconX } from '@tabler/icons-vue'
@@ -122,7 +122,7 @@ function handlingMode(t: RecoveryTask) {
   if (!requiresHuman(t)) return { label: '系统处理', detail: t.kind === 'expiry' ? '系统按既定范围执行清理' : '系统按状态规则继续处理' }
   if (t.kind === 'expiry') return { label: '运维处理', detail: '仅处理自动清理失败，不重新选择业务范围' }
   if (t.kind === 'version') return { label: '外部协同', detail: '平台登记处理人、期限和新请求关联' }
-  return { label: '人工核查', detail: '人工只登记目标系统证据和后续时间' }
+  return { label: '人工核查', detail: '人工只登记目标系统查询结果和下次核查时间' }
 }
 function currentWork(t?: RecoveryTask) {
   if (t?.kind === 'expiry' && !t.cleanupFailed && t.dataStatus === '已到期') return { title: '等待系统清理', sub: '无需人工操作' }
@@ -144,7 +144,7 @@ function followupSummary(t: RecoveryTask) {
   return { label: '恢复检查', value: t.checked ? '检查已完成' : '待执行恢复检查' }
 }
 function stateRule(t: RecoveryTask) {
-  if (t.kind === 'unknown') return { enteredBy: '请求已发出，但未取得明确业务响应', allowed: '查询目标系统并登记有效证据；结果未知时安排下次核查', forbidden: '在结果未知时再次发送或直接登记成功' }
+  if (t.kind === 'unknown') return { enteredBy: '请求已发出，但未取得明确业务响应', allowed: '查询目标系统并登记查询结果；结果未知时安排下次核查', forbidden: '在结果未知时再次发送或直接登记成功' }
   if (t.kind === 'version') return { enteredBy: `受理版本 v${t.originalVersion}.0 与来源最新版本 v${t.latestVersion}.0 不一致`, allowed: '登记来源系统处理人和期限，并关联来源系统重新提交的新请求', forbidden: '用最新版本覆盖原请求或恢复原版本发送' }
   if (t.kind === 'expiry') return { enteredBy: `临时数据已到期，业务结果仍为“${businessResultLabel(t.target)}”`, allowed: '停止发送后按批准范围清理；失败时由运维受控重试', forbidden: '清理与发送并发执行，或用清理结果改写业务结果' }
   return { enteredBy: '平台重启后发现受理记录未完成', allowed: '先检查原数据和发送状态，再决定是否恢复到待发送', forbidden: '跳过恢复检查或把恢复动作解释为目标端成功' }
@@ -153,7 +153,7 @@ function sendAttemptStatus(t: RecoveryTask) {
   if (t.kind === 'restart') return t.checked ? '恢复检查已完成' : '尚未发送，等待恢复检查'
   if (t.kind === 'unknown' || t.kind === 'expiry') return '请求已发出，响应不明确'
   if (t.kind === 'version') return '发送前版本校验已拦截'
-  return '见发送证据'
+  return '见发送记录'
 }
 function sendAttempts(t: RecoveryTask, item: Scenario) {
   const suffix = item.requestId.slice(-4)
@@ -162,11 +162,11 @@ function sendAttempts(t: RecoveryTask, item: Scenario) {
   return [{ id: `SIM-SEND-${suffix}-01`, startedAt: item.occurredAt, stage: '发送并等待响应', result: '等待响应超时', response: '未收到可判定业务结果的响应', evidence: `SIM-LOG-${suffix}` }]
 }
 function resultEvidenceRule(t: RecoveryTask) {
-  if (t.status === '处理成功' || t.target.includes('已写入')) return { conclusion: '已确认写入', current: t.evidence || '已有目标端回执摘要', required: '目标系统业务成功码及回执编号，或按相同业务键查询到相同版本', state: '证据已具备' }
-  if (t.status === '明确未写入') return { conclusion: '可确认未写入', current: t.evidence || '已有目标端查询记录', required: '目标系统按业务键和版本查询的无记录结果，或明确失败回执', state: '证据已具备' }
-  if (t.kind === 'version') return { conclusion: '仅确认发送被阻止', current: '版本校验记录；未调用目标系统', required: '校验记录可证明未发送，但不能用于证明目标系统业务成功', state: '业务成功证据不适用' }
-  if (t.kind === 'restart') return { conclusion: '仅确认恢复检查状态', current: t.checked ? '恢复检查记录' : '尚无完成证据', required: '恢复检查只能决定是否恢复待发送，不能证明目标系统已处理', state: t.checked ? '恢复证据已具备' : '待补充' }
-  return { conclusion: '结果未知', current: '只有发送日志，未收到明确业务回执', required: '目标系统回执，或按相同业务键和版本查询形成的结果记录', state: '证据不足' }
+  if (t.status === '处理成功' || t.target.includes('已写入')) return { conclusion: '已确认写入', current: t.evidence || '已有目标系统返回结果摘要', required: '目标系统业务成功码及返回结果编号，或按相同业务键查询到相同版本', state: '依据充分' }
+  if (t.status === '明确未写入') return { conclusion: '可确认未写入', current: t.evidence || '已有目标系统查询记录', required: '目标系统按业务键和版本查询的无记录结果，或明确失败的返回结果', state: '依据充分' }
+  if (t.kind === 'version') return { conclusion: '仅确认发送被阻止', current: '版本校验记录；未调用目标系统', required: '校验记录可证明未发送，但不能证明目标系统业务成功', state: '无需判断业务成功' }
+  if (t.kind === 'restart') return { conclusion: '仅确认恢复检查状态', current: t.checked ? '恢复检查记录' : '尚无完成记录', required: '恢复检查只能决定是否恢复待发送，不能证明目标系统已处理', state: t.checked ? '记录完整' : '待补充' }
+  return { conclusion: '结果未知', current: '只有发送日志，未收到明确的业务返回结果', required: '目标系统返回结果，或按相同业务键和版本查询形成的结果记录', state: '依据不足' }
 }
 function openRow(item: typeof dataRows.value[number], work = false) {
   if (!item.recovery) { emit('record', item.id, 'overview'); return }
@@ -235,7 +235,7 @@ watch([selected, () => task.value?.revision, () => props.role], () => { evidence
 function selectVerification(value: 'written' | 'not-written' | 'uncertain') {
   verificationOutcome.value = value
   action.value = value
-  note.value = value === 'written' ? '已在目标系统查到本次请求对应记录' : value === 'not-written' ? '目标系统确认未接收本次请求数据' : '当前证据仍不足以确认目标端处理结果'
+  note.value = value === 'written' ? '已在目标系统查到本次请求对应记录' : value === 'not-written' ? '目标系统确认未接收本次请求数据' : '当前信息仍不足以确认目标系统处理结果'
 }
 function saveVerification() {
   if (!task.value || task.value.kind !== 'unknown') return
@@ -287,14 +287,14 @@ function submit() {
             <section class="detail-section state-rule-section"><h3>当前状态规则</h3><dl class="reference-facts"><div><dt>处理方式</dt><dd><strong>{{ handlingMode(task).label }}</strong> · {{ handlingMode(task).detail }}</dd></div><div><dt>进入原因</dt><dd>{{ stateRule(task).enteredBy }}</dd></div><div><dt>当前允许</dt><dd>{{ stateRule(task).allowed }}</dd></div><div><dt>当前禁止</dt><dd class="text-red">{{ stateRule(task).forbidden }}</dd></div></dl></section>
 
             <template v-if="task.kind === 'unknown'">
-              <section class="detail-section reference-section"><div class="section-heading"><h3>证据信息</h3><span class="section-help"><IconInfoCircle :size="15" /> 说明</span></div><div class="evidence-card"><div><IconFileText :size="17" /><span>已发送请求</span><strong>{{ scenario.occurredAt }}</strong><button class="btn btn-link btn-sm" @click="emit('exchange', scenario.id)">查看请求报文</button></div><div><IconServer :size="17" /><span>接收系统响应</span><strong>{{ task.target.includes('无法') || task.target.includes('未知') ? '未收到明确响应' : task.target }}</strong></div><div><IconFile :size="17" /><span>本地数据文件</span><strong>{{ task.dataStatus === '暂存可用' ? `request_${scenario.requestId.slice(-4)}.xml（演示文件）` : '未保存业务正文' }}</strong></div><div><IconListDetails :size="17" /><span>相关日志</span><strong>应用日志 {{ scenario.steps.length + 4 }} 条</strong><button class="btn btn-link btn-sm" @click="emit('audit', scenario.requestId)">查看日志</button></div></div></section>
+              <section class="detail-section reference-section"><div class="section-heading"><h3>可供核查的信息</h3><span class="section-help"><IconInfoCircle :size="15" /> 说明</span></div><div class="evidence-card"><div><IconFileText :size="17" /><span>已发送请求</span><strong>{{ scenario.occurredAt }}</strong><button class="btn btn-link btn-sm" @click="emit('exchange', scenario.id)">查看请求报文</button></div><div><IconServer :size="17" /><span>接收系统响应</span><strong>{{ task.target.includes('无法') || task.target.includes('未知') ? '未收到明确响应' : task.target }}</strong></div><div><IconFile :size="17" /><span>本地数据文件</span><strong>{{ task.dataStatus === '暂存可用' ? `request_${scenario.requestId.slice(-4)}.xml（演示文件）` : '未保存业务正文' }}</strong></div><div><IconListDetails :size="17" /><span>相关日志</span><strong>应用日志 {{ scenario.steps.length + 4 }} 条</strong><button class="btn btn-link btn-sm" @click="emit('audit', scenario.requestId)">查看日志</button></div></div></section>
 
               <section class="detail-section reference-section verification-section"><h3>核查结果 <small>（请选择或登记当前核查结论）</small></h3><div v-if="role !== 'operator'" class="claim-strip"><strong>管理视角只读</strong><span>切换到运维视角后，可以领取并登记核查结论。</span></div><div v-else-if="!task.assignee" class="claim-strip"><strong>该记录尚未领取</strong><span>先领取后才能登记目标系统核查结论。</span></div><div class="verification-options" role="radiogroup" aria-label="核查结果"><button :class="{ selected: verificationOutcome === 'written' }" role="radio" :aria-checked="verificationOutcome === 'written'" :disabled="role !== 'operator' || !task.assignee || Boolean(recoveryBlock(task, 'written', 'operator'))" @click="selectVerification('written')"><span class="choice-dot"><IconCheck v-if="verificationOutcome === 'written'" :size="13" /></span><strong>已确认写入</strong><small>已在对方系统中查到</small></button><button :class="{ selected: verificationOutcome === 'not-written' }" role="radio" :aria-checked="verificationOutcome === 'not-written'" :disabled="role !== 'operator' || !task.assignee || Boolean(recoveryBlock(task, 'not-written', 'operator'))" @click="selectVerification('not-written')"><span class="choice-dot"><IconCheck v-if="verificationOutcome === 'not-written'" :size="13" /></span><strong>明确未写入</strong><small>确认未接收到数据</small></button><button :class="{ selected: verificationOutcome === 'uncertain' }" role="radio" :aria-checked="verificationOutcome === 'uncertain'" :disabled="role !== 'operator' || !task.assignee || Boolean(recoveryBlock(task, 'uncertain', 'operator'))" @click="selectVerification('uncertain')"><span class="choice-dot"><IconCheck v-if="verificationOutcome === 'uncertain'" :size="13" /></span><strong>结果未知</strong><small>需进一步核查</small></button></div></section>
 
               <section class="detail-section reference-section"><h3>其他信息</h3><div class="reference-form"><label>外部记录编号<input v-model="evidence" class="form-control" :disabled="!task.assignee || role !== 'operator'" placeholder="请输入外部系统记录编号" /></label><label>下次核查时间<div class="input-with-icon"><input v-model="nextCheckAt" class="form-control" :disabled="!task.assignee || role !== 'operator' || verificationOutcome !== 'uncertain'" /><IconCalendar :size="17" /></div></label></div></section>
               <div class="reference-actions"><button class="btn btn-primary" :disabled="role === 'operator' && Boolean(task.assignee) && (!evidence.trim() || verificationOutcome === 'uncertain' && !nextCheckAt.trim())" @click="role === 'operator' ? saveVerification() : emit('operate')">{{ role !== 'operator' ? '切换运维视角' : task.assignee ? '保存核查结果' : '确认领取' }}</button><button class="btn btn-outline-secondary" @click="closeDetail">关闭</button></div>
             </template>
-            <template v-else><section class="detail-section"><h3>当前判断</h3><p class="alert alert-warning mb-0">{{ task.title }}。{{ scenario.receipt }}</p></section><section v-if="task.kind === 'expiry'" class="detail-section"><h3>清理执行证据</h3><dl class="reference-facts"><div><dt>发送控制</dt><dd>{{ task.stopped ? '已停止发送' : '待停止发送' }}</dd></div><div><dt>清理范围</dt><dd>{{ task.cleanupScope || '待按既定规则确认' }}</dd></div><div><dt>数据状态</dt><dd>{{ dataStatusLabel(task.dataStatus) }}</dd></div><div><dt>执行次数</dt><dd>{{ task.cleanupFailed ? '第 1 次自动清理失败' : '尚未执行或已完成' }}</dd></div><div><dt>最近错误</dt><dd>{{ task.cleanupFailed ? 'TEMP_DATA_DELETE_TIMEOUT（合成演示）' : '—' }}</dd></div><div><dt>到期时间</dt><dd>{{ task.deadline }}</dd></div></dl><div class="alert alert-info mb-0">清理只处理批准范围内的临时数据，不改变业务结果；失败后保留执行证据并生成运维事项。</div></section></template>
+            <template v-else><section class="detail-section"><h3>当前判断</h3><p class="alert alert-warning mb-0">{{ task.title }}。{{ scenario.receipt }}</p></section><section v-if="task.kind === 'expiry'" class="detail-section"><h3>清理执行记录</h3><dl class="reference-facts"><div><dt>发送控制</dt><dd>{{ task.stopped ? '已停止发送' : '待停止发送' }}</dd></div><div><dt>清理范围</dt><dd>{{ task.cleanupScope || '待按既定规则确认' }}</dd></div><div><dt>数据状态</dt><dd>{{ dataStatusLabel(task.dataStatus) }}</dd></div><div><dt>执行次数</dt><dd>{{ task.cleanupFailed ? '第 1 次自动清理失败' : '尚未执行或已完成' }}</dd></div><div><dt>最近错误</dt><dd>{{ task.cleanupFailed ? 'TEMP_DATA_DELETE_TIMEOUT（合成演示）' : '—' }}</dd></div><div><dt>到期时间</dt><dd>{{ task.deadline }}</dd></div></dl><div class="alert alert-info mb-0">清理只处理批准范围内的临时数据，不改变业务结果；失败后保留执行记录并生成运维事项。</div></section></template>
           </template>
 
           <template v-else-if="detailTab === 'version'">
@@ -302,11 +302,11 @@ function submit() {
             <section v-else class="detail-section"><h3>数据版本</h3><dl class="reference-facts"><div><dt>本次请求版本</dt><dd>v{{ task.originalVersion }}.0</dd></div><div><dt>来源最新版本</dt><dd>v{{ task.latestVersion }}.0</dd></div><div><dt>版本判断</dt><dd>{{ task.originalVersion === task.latestVersion ? '版本一致' : '版本不一致' }}</dd></div></dl></section>
           </template>
 
-          <section v-else-if="detailTab === 'request'" class="detail-section request-evidence"><h3>逐次发送记录</h3><p class="section-help">一次交换请求可以产生多次技术执行；每次尝试单独保存阶段、结果和证据编号。</p><div class="table-responsive"><table class="table table-sm send-attempt-table"><thead><tr><th>尝试编号</th><th>开始时间</th><th>执行阶段</th><th>技术结果</th><th>目标响应</th><th>证据编号</th></tr></thead><tbody><tr v-for="attempt in sendAttempts(task, scenario)" :key="attempt.id"><td><strong>{{ attempt.id }}</strong></td><td>{{ attempt.startedAt }}</td><td>{{ attempt.stage }}</td><td>{{ attempt.result }}</td><td>{{ attempt.response }}</td><td>{{ attempt.evidence }}</td></tr></tbody></table></div><h3>业务结果证据标准</h3><dl class="reference-facts evidence-standard"><div><dt>当前结论</dt><dd><strong>{{ resultEvidenceRule(task).conclusion }}</strong></dd></div><div><dt>现有证据</dt><dd>{{ resultEvidenceRule(task).current }}</dd></div><div><dt>确认要求</dt><dd>{{ resultEvidenceRule(task).required }}</dd></div><div><dt>充分性</dt><dd>{{ resultEvidenceRule(task).state }}</dd></div><div><dt>数据保存</dt><dd>{{ dataStatusLabel(task.dataStatus) }}；截止 {{ task.deadline }}</dd></div></dl><div class="alert alert-info mt-3 mb-0">发送成功、网络成功或恢复检查通过，都不能单独证明目标系统已完成业务处理。</div><button class="btn btn-link px-0" @click="emit('exchange', scenario.id)">查看交换处理轨迹</button></section>
-          <section v-else class="detail-section"><h3>处理记录</h3><p v-if="!task.history.length" class="text-secondary">暂无人工处理记录。</p><ol v-else class="audit-timeline"><li v-for="(event, index) in task.history" :key="index"><span><IconCheck :size="13" /></span><div><strong>{{ event.action }}</strong><p>{{ event.note }}</p><small>{{ event.time }} · 证据 {{ event.evidence }}</small></div></li></ol><button class="btn btn-link px-0" @click="emit('audit', scenario.requestId)">查看操作审计</button></section>
+          <section v-else-if="detailTab === 'request'" class="detail-section request-evidence"><h3>逐次发送记录</h3><p class="section-help">一次交换请求可以产生多次技术执行；每次尝试单独保存阶段、结果和记录编号。</p><div class="table-responsive"><table class="table table-sm send-attempt-table"><thead><tr><th>尝试编号</th><th>开始时间</th><th>执行阶段</th><th>技术结果</th><th>目标响应</th><th>记录编号</th></tr></thead><tbody><tr v-for="attempt in sendAttempts(task, scenario)" :key="attempt.id"><td><strong>{{ attempt.id }}</strong></td><td>{{ attempt.startedAt }}</td><td>{{ attempt.stage }}</td><td>{{ attempt.result }}</td><td>{{ attempt.response }}</td><td>{{ attempt.evidence }}</td></tr></tbody></table></div><h3>确认业务结果需要什么</h3><dl class="reference-facts evidence-standard"><div><dt>当前结论</dt><dd><strong>{{ resultEvidenceRule(task).conclusion }}</strong></dd></div><div><dt>现有依据</dt><dd>{{ resultEvidenceRule(task).current }}</dd></div><div><dt>确认要求</dt><dd>{{ resultEvidenceRule(task).required }}</dd></div><div><dt>是否足够</dt><dd>{{ resultEvidenceRule(task).state }}</dd></div><div><dt>数据保存</dt><dd>{{ dataStatusLabel(task.dataStatus) }}；截止 {{ task.deadline }}</dd></div></dl><div class="alert alert-info mt-3 mb-0">发送成功、网络成功或恢复检查通过，都不能单独证明目标系统已完成业务处理。</div><button class="btn btn-link px-0" @click="emit('exchange', scenario.id)">查看每次交换的处理记录</button></section>
+          <section v-else class="detail-section"><h3>处理记录</h3><p v-if="!task.history.length" class="text-secondary">暂无人工处理记录。</p><ol v-else class="audit-timeline"><li v-for="(event, index) in task.history" :key="index"><span><IconCheck :size="13" /></span><div><strong>{{ event.action }}</strong><p>{{ event.note }}</p><small>{{ event.time }} · 相关记录 {{ event.evidence }}</small></div></li></ol><button class="btn btn-link px-0" @click="emit('audit', scenario.requestId)">查看操作审计</button></section>
 
           <section v-if="(detailTab === 'overview' && task.kind !== 'unknown' && task.kind !== 'version') || (detailTab === 'version' && task.kind === 'version')" class="detail-section action-section"><h3>下一步处理</h3>
-              <div v-if="!requiresHuman(task)" class="alert alert-info mb-0"><strong>本记录无需人工办理。</strong><br />平台按既定规则自动检查、停止、恢复或清理；本页只展示执行结果和证据。自动处理失败时，系统会生成待处理事项。</div>
+              <div v-if="!requiresHuman(task)" class="alert alert-info mb-0"><strong>本记录无需人工办理。</strong><br />平台按既定规则自动检查、停止、恢复或清理；本页只展示执行结果和记录。自动处理失败时，系统会生成待处理事项。</div>
               <div v-else-if="role === 'manager'" class="alert alert-info">管理视角可查看进度；例外事项由运维人员处理。<button class="btn btn-primary btn-sm ms-2" @click="emit('operate')">切换运维</button></div>
               <template v-else-if="available.length"><div class="action-choice"><button v-for="choice in available" :key="choice" :class="['btn btn-sm', action === choice ? 'btn-primary' : 'btn-outline-secondary']" @click="action = choice">{{ recoveryActions[choice] }}</button></div>
                 <form v-if="action" class="action-form" @submit.prevent="submit">
@@ -316,12 +316,12 @@ function submit() {
                   <template v-if="needsExternal"><label>外部处理人<input v-model="externalOwner" class="form-control" required placeholder="姓名 / 单位 / 联系方式" /></label><label>完成期限<input v-model="externalDueAt" class="form-control" required /></label></template>
                   <label v-if="needsCleanup">清理范围<input v-model="cleanupScope" class="form-control" required /></label>
                   <label v-if="needsLink">新请求编号<input v-model="linkedRequestId" class="form-control" required placeholder="输入源系统重新提交的请求编号" /></label>
-                  <label>证据编号<input v-model="evidence" class="form-control" required placeholder="查询记录、回执、审批或工单编号" /></label>
+                  <label>相关记录编号<input v-model="evidence" class="form-control" required placeholder="查询记录、目标系统返回结果、审批或工单编号" /></label>
                   <label>处理说明<textarea v-model="note" class="form-control" required rows="3" placeholder="记录核查对象、结论和后续安排"></textarea></label>
                   </template>
                   <div><button class="btn btn-primary" :disabled="!ready"><IconCheck :size="16" /> {{ action === 'claim' ? '确认领取' : '保存处理结果' }}</button><button type="button" class="btn btn-ghost-secondary ms-2" @click="action = null">取消</button></div>
                 </form>
-              </template><p v-else class="text-secondary">当前记录已完成本页处理，可在处理记录中查看证据。</p>
+              </template><p v-else class="text-secondary">当前记录已完成本页处理，可在处理记录中查看相关记录。</p>
           </section>
         </div>
         <footer v-if="task.kind !== 'unknown'" class="drawer-footer"><span>演示数据，操作不会触发真实发送或清理</span><button class="btn btn-outline-secondary btn-sm" @click="emit('rehearse', task.id)">重新演练</button></footer>

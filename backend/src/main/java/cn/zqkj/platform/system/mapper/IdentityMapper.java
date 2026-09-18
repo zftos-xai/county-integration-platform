@@ -53,7 +53,7 @@ public interface IdentityMapper {
     /**
      * @param roleCode 角色代码
      * @param roleName 角色名称
-     * @param actor 操作主体快照
+     * @param actor 操作时记录的用户信息
      * @return 新角色主键
      */
     long createRole(@Param("roleCode") String roleCode, @Param("roleName") String roleName, @Param("actor") String actor);
@@ -62,7 +62,7 @@ public interface IdentityMapper {
      * @param command 安全引导输入
      * @param passwordHash 密码强哈希
      * @param organizationId 主机构主键
-     * @param actor 操作主体快照
+     * @param actor 操作时记录的用户信息
      * @return 新用户主键
      */
     long createUser(
@@ -75,7 +75,7 @@ public interface IdentityMapper {
     /**
      * @param roleId 角色主键
      * @param permissionCode 权限代码
-     * @param actor 操作主体快照
+     * @param actor 操作时记录的用户信息
      * @return 实际影响行数
      */
     int grantPermission(
@@ -87,7 +87,7 @@ public interface IdentityMapper {
     /**
      * @param userId 用户主键
      * @param roleId 角色主键
-     * @param actor 操作主体快照
+     * @param actor 操作时记录的用户信息
      * @return 实际影响行数
      */
     int grantRole(@Param("userId") long userId, @Param("roleId") long roleId, @Param("actor") String actor);
@@ -95,7 +95,7 @@ public interface IdentityMapper {
     /**
      * @param userId 用户主键
      * @param organizationId 机构主键
-     * @param actor 操作主体快照
+     * @param actor 操作时记录的用户信息
      * @return 实际影响行数
      */
     int grantOrganization(
@@ -107,7 +107,7 @@ public interface IdentityMapper {
     /**
      * @param userId 用户主键
      * @param passwordHash 新密码强哈希
-     * @param actor 操作主体快照
+     * @param actor 操作时记录的用户信息
      * @return 实际影响行数
      */
     int changePassword(

@@ -1,11 +1,11 @@
 <!-- 用户管理页面：接入真实资料、启停、密码重置、角色和机构范围接口。 -->
 <script setup lang="ts">
 import {
-  AlertCircle, Check, ChevronRight, LoaderCircle, Pencil,
-  Plus, RefreshCw, Search, UserRound, X,
+  AlertCircle, ChevronRight, LoaderCircle, Pencil,
+  Plus, RefreshCw, Search, UserRound,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { listOrganizations } from '@/api/system/organization'
 import type { Organization } from '@/api/system/organization'
 import { listRoles } from '@/api/system/role'
@@ -16,7 +16,10 @@ import {
 } from '@/api/system/user'
 import type { ManagedUser } from '@/api/system/user'
 import { authState, hasPermission } from '@/store/modules/auth'
-import { ApiClientError } from '@/utils/request'
+import { ApiClientError, asUncertainWriteError } from '@/utils/request'
+import AdminPagination from '@/components/AdminPagination.vue'
+import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
+import { useClientPagination } from '@/composables/useClientPagination'
 import UserEditorDrawer from './components/UserEditorDrawer.vue'
 import {
   emptyUserForm, toCreateUserInput, toUpdateUserInput, userToForm,
@@ -27,6 +30,7 @@ type EditorMode = 'closed' | 'view' | 'create' | 'edit'
 
 // 角色与机构范围使用独立草稿，避免基本资料保存时意外扩大授权。
 const router = useRouter()
+const route = useRoute()
 const users = ref<ManagedUser[]>([])
 const organizations = ref<Organization[]>([])
 const roles = ref<Role[]>([])
@@ -35,8 +39,12 @@ const isRefreshing = ref(false)
 const error = ref<ApiClientError | null>(null)
 const operationError = ref<ApiClientError | null>(null)
 const notice = ref('')
-const query = ref('')
+const auditTarget = ref<{ targetType: string; targetId: string } | null>(null)
+const query = ref(typeof route.query.query === 'string' ? route.query.query : '')
 const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all')
+const organizationFilter = ref('all')
+const roleFilter = ref('all')
+const attentionFilter = ref<'all' | 'needsAttention'>(route.query.attention === 'needsAttention' ? 'needsAttention' : 'all')
 const mode = ref<EditorMode>('closed')
 const selected = ref<ManagedUser | null>(null)
 const form = ref(emptyUserForm())
@@ -66,13 +74,29 @@ const filtered = computed(() => {
   return users.value.filter(user => {
     if (statusFilter.value === 'enabled' && !user.enabled) return false
     if (statusFilter.value === 'disabled' && user.enabled) return false
+    if (organizationFilter.value !== 'all' && user.primaryOrganizationId !== Number(organizationFilter.value)) return false
+    if (roleFilter.value !== 'all' && !user.roleIds.includes(Number(roleFilter.value))) return false
+    if (attentionFilter.value === 'needsAttention' && user.roleIds.length > 0 && !user.mustChangePassword && isPrimaryOrganizationAvailable(user)) return false
     if (!keyword) return true
     return [user.loginName, user.displayName, user.organizationCode]
       .some(value => value.toLocaleLowerCase('zh-CN').includes(keyword))
   })
 })
+const { page, pageSize, pagedRows } = useClientPagination(filtered)
 function currentEditorSnapshot() {
   return JSON.stringify({ form: form.value, roles: roleDraft.value, scopes: scopeDraft.value, temporaryPassword: temporaryPassword.value })
+}
+
+function isPrimaryOrganizationAvailable(user: ManagedUser) {
+  return organizationById.value.get(user.primaryOrganizationId)?.enabled !== false
+}
+
+function scopeSummary(user: ManagedUser) {
+  const names = user.organizationScopeIds
+    .map(id => organizationById.value.get(id)?.organizationName ?? `机构 #${id}`)
+  if (names.length === 0) return '未设置可查看机构'
+  if (names.length <= 2) return names.join('、')
+  return `${names.slice(0, 2).join('、')}等 ${names.length} 个机构`
 }
 
 function captureEditorSnapshot() {
@@ -153,6 +177,11 @@ function applySelected(user: ManagedUser) {
   captureEditorSnapshot()
 }
 
+function showSuccess(message: string, user: ManagedUser) {
+  notice.value = message
+  auditTarget.value = { targetType: 'USER', targetId: user.loginName }
+}
+
 function openCreate() {
   selected.value = null
   form.value = emptyUserForm()
@@ -190,6 +219,17 @@ async function openUser(user: ManagedUser, edit = false) {
   }
 }
 
+async function reloadDetail() {
+  if (selected.value) {
+    await openUser(selected.value, mode.value === 'edit')
+    return
+  }
+  await loadPage(true)
+  const created = users.value.find(user => user.loginName === form.value.loginName.trim())
+  if (created) await openUser(created)
+  else operationError.value = null
+}
+
 async function submitBase() {
   const creating = mode.value === 'create'
   formError.value = validateUserForm(form.value, creating) ?? ''
@@ -204,11 +244,11 @@ async function submitBase() {
     applySelected(updated)
     form.value.temporaryPassword = ''
     mode.value = 'view'
-    notice.value = creating
+    showSuccess(creating
       ? '用户已创建；临时密码不会再次显示，请通过安全渠道交付。'
-      : '用户基础信息已保存。'
+      : '用户基础信息已保存。', updated)
   } catch (caught) {
-    const apiError = asApiError(caught)
+    const apiError = asUncertainWriteError(asApiError(caught))
     if (!await handleUnauthorized(apiError)) operationError.value = apiError
   } finally {
     isSaving.value = false
@@ -227,9 +267,9 @@ async function saveRoles() {
       await returnToLogin('authorizationChanged')
       return
     }
-    notice.value = '用户角色已更新。'
+    showSuccess('用户角色已更新。', updated)
   } catch (caught) {
-    const apiError = asApiError(caught, '无法保存用户角色')
+    const apiError = asUncertainWriteError(asApiError(caught, '无法保存用户角色'))
     if (!await handleUnauthorized(apiError)) operationError.value = apiError
   } finally {
     isSaving.value = false
@@ -253,9 +293,9 @@ async function saveScopes() {
       await returnToLogin('authorizationChanged')
       return
     }
-    notice.value = '用户机构范围已更新。'
+    showSuccess('用户机构范围已更新。', updated)
   } catch (caught) {
-    const apiError = asApiError(caught, '无法保存用户机构范围')
+    const apiError = asUncertainWriteError(asApiError(caught, '无法保存用户机构范围'))
     if (!await handleUnauthorized(apiError)) operationError.value = apiError
   } finally {
     isSaving.value = false
@@ -278,9 +318,9 @@ async function submitPasswordReset() {
       return
     }
     applySelected({ ...selected.value, mustChangePassword: true })
-    notice.value = '临时密码已重置；用户下次登录必须修改密码。'
+    showSuccess('临时密码已重置；用户下次登录必须修改密码。', selected.value)
   } catch (caught) {
-    const apiError = asApiError(caught, '无法重置临时密码')
+    const apiError = asUncertainWriteError(asApiError(caught, '无法重置临时密码'))
     if (!await handleUnauthorized(apiError)) operationError.value = apiError
   } finally {
     isSaving.value = false
@@ -288,6 +328,7 @@ async function submitPasswordReset() {
 }
 
 async function changeStatus(user: ManagedUser) {
+  // 注销本人（立即退出）仍由二次确认保护；按钮保持短文案，避免撑宽操作列。
   if (!canWrite.value || statusSavingId.value !== null) return
   if (confirmStatusId.value !== user.id) {
     confirmStatusId.value = user.id
@@ -303,9 +344,11 @@ async function changeStatus(user: ManagedUser) {
       await returnToLogin('accountChanged')
       return
     }
-    notice.value = `${updated.displayName}已${updated.enabled ? '启用' : '停用'}。`
+    showSuccess(updated.enabled
+      ? `${updated.displayName}的账号已恢复使用。`
+      : `${updated.displayName}的账号已注销，现有登录状态将失效。`, updated)
   } catch (caught) {
-    const apiError = asApiError(caught, '无法修改用户状态')
+    const apiError = asUncertainWriteError(asApiError(caught, '无法修改用户状态'))
     if (!await handleUnauthorized(apiError)) {
       if (apiError.status === 409) await loadPage(true)
       error.value = apiError
@@ -333,36 +376,40 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="content user-page">
-    <div v-if="notice" class="feedback success" role="status"><Check :size="18" /><span>{{ notice }}</span><button aria-label="关闭提示" @click="notice = ''"><X :size="16" /></button></div>
+    <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
 
     <div class="work-toolbar">
       <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="姓名、登录名或机构编码" aria-label="搜索用户" /></label>
+      <select v-model="statusFilter" aria-label="用户状态"><option value="all">全部状态</option><option value="enabled">正常使用</option><option value="disabled">已注销</option></select>
+      <select v-model="organizationFilter" aria-label="主要机构"><option value="all">全部主要机构</option><option v-for="organization in organizations" :key="organization.id" :value="String(organization.id)">{{ organization.organizationName }}</option></select>
+      <select v-model="roleFilter" aria-label="用户角色"><option value="all">全部角色</option><option v-for="role in roles" :key="role.id" :value="String(role.id)">{{ role.roleName }}</option></select>
+      <select v-model="attentionFilter" aria-label="需要处理的用户"><option value="all">全部情况</option><option value="needsAttention">只看需要处理</option></select>
       <span>{{ filtered.length }} / {{ users.length }} 个用户</span>
-      <select v-model="statusFilter" aria-label="用户状态"><option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select>
       <button class="work-quiet-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" :class="{ spinning: isRefreshing }" />刷新</button>
       <button v-if="canCreate" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增用户</button>
     </div>
 
-    <section class="prototype-section work-table-section user-panel">
+    <section class="prototype-section work-table-section user-panel action-column-table">
       <div v-if="isLoading" class="page-state" aria-live="polite"><LoaderCircle class="spinning" :size="28" /><strong>正在加载用户数据</strong></div>
       <div v-else-if="!error && users.length === 0" class="page-state"><UserRound :size="30" /><strong>当前范围内暂无用户</strong></div>
       <div v-else-if="users.length" class="prototype-table-wrap">
         <table class="work-table user-table">
-          <thead><tr><th>用户</th><th>主要机构</th><th>角色</th><th>机构范围</th><th>登录要求</th><th>状态</th><th>最近更新</th><th><span class="visually-hidden">操作</span></th></tr></thead>
-          <tbody><tr v-for="user in filtered" :key="user.id">
+          <thead><tr><th>用户</th><th>主要机构</th><th>角色</th><th>机构范围</th><th>登录要求</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
+          <tbody><tr v-for="user in pagedRows" :key="user.id">
             <td><button class="work-row-link" type="button" @click="openUser(user)">{{ user.displayName }}</button><small>{{ user.loginName }}</small></td>
             <td>{{ organizationById.get(user.primaryOrganizationId)?.organizationName ?? user.organizationCode }}<small>{{ user.organizationCode }}</small></td>
             <td>{{ user.roleIds.length ? user.roleIds.map(id => roleById.get(id)?.roleName ?? `#${id}`).join('、') : '未分配' }}</td>
-            <td>{{ user.organizationScopeIds.length }} 个机构</td>
-            <td><span v-if="user.mustChangePassword" class="prototype-tag">下次登录改密</span><span v-else>正常</span></td>
-            <td><span class="prototype-tag" :class="user.enabled ? 'success' : 'neutral'">{{ user.enabled ? '已启用' : '已停用' }}</span></td>
+            <td>{{ scopeSummary(user) }}<small v-if="!user.organizationScopeIds.includes(user.primaryOrganizationId)" class="attention-text">未包含主要机构</small></td>
+            <td class="user-attention"><span v-if="user.roleIds.length === 0" class="prototype-tag warning">未分配角色</span><span v-if="user.mustChangePassword" class="prototype-tag warning">下次登录需改密</span><span v-if="!isPrimaryOrganizationAvailable(user)" class="prototype-tag danger">主要机构已停用</span><span v-if="user.roleIds.length && !user.mustChangePassword && isPrimaryOrganizationAvailable(user)">无需处理</span></td>
+            <td><span class="prototype-tag" :class="user.enabled ? 'success' : 'neutral'">{{ user.enabled ? '正常使用' : '已注销' }}</span></td>
             <td>{{ formatTime(user.updatedAt) }}</td>
-            <td class="user-actions"><button v-if="canWrite" class="prototype-icon" type="button" aria-label="编辑用户" title="编辑" @click="openUser(user, true)"><Pencil :size="15" /></button><button v-if="canWrite" class="status-action" :class="{ confirm: confirmStatusId === user.id }" type="button" :disabled="statusSavingId !== null" @blur="confirmStatusId = null" @click="changeStatus(user)">{{ statusSavingId === user.id ? '处理中…' : confirmStatusId === user.id ? `确认${user.enabled ? '停用' : '启用'}` : user.enabled ? '停用' : '启用' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看用户详情" title="查看详情" @click="openUser(user)"><ChevronRight :size="16" /></button></td>
+            <td class="user-actions"><button v-if="canWrite" class="prototype-icon" type="button" aria-label="修改用户" title="修改" @click="openUser(user, true)"><Pencil :size="15" /></button><button v-if="canWrite" class="status-action" :class="{ confirm: confirmStatusId === user.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === user.id && user.enabled ? user.id === authState.user?.userId ? '注销后当前账号会立即退出登录' : '注销后该用户将不能登录，历史记录继续保留' : ''" @blur="confirmStatusId = null" @click="changeStatus(user)">{{ statusSavingId === user.id ? '处理中…' : confirmStatusId === user.id ? user.enabled ? '确认注销' : '确认恢复' : user.enabled ? '注销账号' : '恢复使用' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看用户详情" title="查看详情" @click="openUser(user)"><ChevronRight :size="16" /></button></td>
           </tr></tbody>
         </table>
         <div v-if="filtered.length === 0" class="prototype-empty">没有符合当前条件的用户</div>
       </div>
+      <AdminPagination v-if="!isLoading && users.length" :total="filtered.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
     </section>
 
     <UserEditorDrawer
@@ -389,15 +436,19 @@ onBeforeUnmount(() => {
       @save-roles="saveRoles"
       @save-scopes="saveScopes"
       @submit-password-reset="submitPasswordReset"
+      @reload="reloadDetail"
     />
   </section>
 </template>
 
 <style scoped>
 .user-page { color: #263341; }
-.user-panel { min-height: 390px; }
+.user-panel { min-height: 390px; --action-column-width: 140px; }
 .page-state { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55766d; }
 .user-table { min-width: 1120px; }
+.user-table td small { display: block; margin-top: 3px; color: #7c8993; font-size: 10px; }
+.user-table .attention-text { color: #a45437; }
+.user-attention { display: flex; flex-wrap: wrap; gap: 4px; }
 .user-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .status-action { min-height: 32px; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 5px; background: white; color: #53636b; font-size: 11px; white-space: nowrap; }
 .status-action.confirm { border-color: #a94b42; background: #a94b42; color: white; }

@@ -1,10 +1,10 @@
 openapi: 3.0.3
 info:
-  title: County Integration Platform API
+  title: 县域系统集成平台管理接口
   version: 0.1.0
   description: >-
-    Internal management API baseline. Business interfaces may be implemented only
-    after their formal contracts, de-identified samples, network access and owners are confirmed.
+    OpenAPI 是用机器可读文件说明 HTTP 接口的通用规范。本文件描述当前平台内部管理接口。
+    业务接口只有在接口规范、已删除或遮盖敏感字段的样例、网络条件和负责人均确认后才能开发。
 servers:
   - url: /api/v1
 security:
@@ -14,10 +14,10 @@ paths:
     get:
       security: []
       operationId: getBootstrapStatus
-      summary: Read whether one-time platform bootstrap is available
+      summary: 查询是否可以创建首个机构和管理员
       responses:
         '200':
-          description: Bootstrap status without credential content
+          description: 是否可以初始化，不包含凭证内容
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BootstrapStatusResponse' }
@@ -25,12 +25,12 @@ paths:
     post:
       security: []
       operationId: bootstrapPlatform
-      summary: Create the first organization and local administrator exactly once
+      summary: 仅创建一次首个机构和本地管理员
       parameters:
         - name: X-Platform-Bootstrap-Secret
           in: header
           required: true
-          description: One-time secret supplied only through the approved deployment channel
+          description: 仅通过获准部署渠道提供的一次性密码
           schema: { type: string, minLength: 32 }
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -39,18 +39,18 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/BootstrapRequest' }
       responses:
-        '201': { description: Initial organization and administrator created }
+        '201': { description: 已创建首个机构和管理员 }
         '400': { $ref: '#/components/responses/InvalidRequest' }
-        '403': { description: Bootstrap is unavailable or the one-time secret is invalid }
+        '403': { description: 当前不能初始化，或一次性密码无效 }
         '409': { $ref: '#/components/responses/ResourceConflict' }
   /session/csrf:
     get:
       security: []
       operationId: getCsrfToken
-      summary: Obtain the CSRF token required for state-changing management requests
+      summary: 获取修改数据请求所需的跨站请求伪造防护令牌（CSRF Token）
       responses:
         '200':
-          description: CSRF token and request header name
+          description: CSRF Token 及其请求头名称
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CsrfTokenResponse' }
@@ -58,7 +58,7 @@ paths:
     post:
       security: []
       operationId: login
-      summary: Establish a server-side local-management session
+      summary: 登录并建立服务端管理会话
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -68,19 +68,19 @@ paths:
             schema: { $ref: '#/components/schemas/LoginRequest' }
       responses:
         '200':
-          description: Authenticated current user
+          description: 已登录的当前用户
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUserResponse' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
-        '401': { description: Login name or password is invalid }
+        '401': { description: 登录名或密码错误 }
   /session/current:
     get:
       operationId: getCurrentUser
-      summary: Read the current authenticated management user
+      summary: 查询当前登录的管理用户
       responses:
         '200':
-          description: Current user without password or session identifier
+          description: 当前用户，不包含密码或会话编号
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUserResponse' }
@@ -88,16 +88,16 @@ paths:
   /session/logout:
     post:
       operationId: logout
-      summary: Invalidate the current management session
+      summary: 退出并使当前管理会话失效
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       responses:
-        '200': { description: Session invalidated }
+        '200': { description: 当前会话已失效 }
         '401': { $ref: '#/components/responses/Unauthorized' }
   /session/password:
     post:
       operationId: changeCurrentPassword
-      summary: Change the current local password and invalidate the current session
+      summary: 修改当前本地密码并使当前会话失效
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -106,23 +106,23 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
       responses:
-        '200': { description: Password changed; the user must log in again }
+        '200': { description: 密码已修改，用户必须重新登录 }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
   /users:
     get:
       operationId: listUsers
-      summary: List users whose primary organization is in the current organization scope
+      summary: 查询主要机构在当前账号可访问范围内的用户
       responses:
         '200':
-          description: Visible platform users
+          description: 当前账号可查看的平台用户
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserListResponse' }
         '403': { description: 'identity:read permission is required' }
     post:
       operationId: createUser
-      summary: Create a local user in an authorized organization
+      summary: 在当前账号可管理的机构中创建本地用户
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -130,7 +130,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateUserRequest' }
       responses:
-        '201': { description: User created with mandatory password change }
+        '201': { description: 已创建用户，首次登录必须修改密码 }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'identity:write permission and organization scope are required' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
@@ -142,10 +142,10 @@ paths:
         schema: { type: integer, format: int64, minimum: 1 }
     get:
       operationId: getUser
-      summary: Read an authorized platform user
+      summary: 查询当前账号有权查看的平台用户
       responses:
         '200':
-          description: User detail
+          description: 用户详情
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserResponse' }
@@ -153,7 +153,7 @@ paths:
         '404': { $ref: '#/components/responses/ResourceNotFound' }
     put:
       operationId: updateUser
-      summary: Update user display name and primary organization
+      summary: 修改用户显示名称和主要机构
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -161,14 +161,14 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UpdateUserRequest' }
       responses:
-        '200': { description: User updated }
+        '200': { description: 已修改用户 }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'identity:write permission and both organization scopes are required' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
   /users/{userId}/enabled:
     patch:
       operationId: changeUserEnabled
-      summary: Enable or disable a user while protecting the last administrator
+      summary: 启用或停用用户，同时保留至少一个可用管理员
       parameters:
         - name: userId
           in: path
@@ -181,13 +181,13 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ChangeEnabledRequest' }
       responses:
-        '200': { description: User state changed }
+        '200': { description: 已修改用户状态 }
         '403': { description: 'identity:write permission and organization scope are required' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
   /users/{userId}/password-reset:
     post:
       operationId: resetUserPassword
-      summary: Set a temporary password and invalidate the user's effective session permissions
+      summary: 设置临时密码并使该用户的现有会话权限失效
       parameters:
         - name: userId
           in: path
@@ -200,12 +200,12 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
       responses:
-        '200': { description: Temporary password set }
+        '200': { description: 已设置临时密码 }
         '403': { description: 'identity:write permission and organization scope are required' }
   /users/{userId}/roles:
     put:
       operationId: replaceUserRoles
-      summary: Atomically replace user roles while protecting the last administrator
+      summary: 一次性替换用户角色，同时保留至少一个可用管理员
       parameters:
         - name: userId
           in: path
@@ -218,13 +218,13 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ReplaceRoleIdsRequest' }
       responses:
-        '200': { description: User roles replaced }
+        '200': { description: 已替换用户角色 }
         '403': { description: 'access:write permission and organization scope are required' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
   /users/{userId}/organization-scopes:
     put:
       operationId: replaceUserOrganizationScopes
-      summary: Atomically replace explicit organization scopes within the actor's own scope
+      summary: 在当前操作人可访问的机构内一次性替换用户可访问机构
       parameters:
         - name: userId
           in: path
@@ -237,22 +237,22 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ReplaceOrganizationIdsRequest' }
       responses:
-        '200': { description: Organization scopes replaced }
+        '200': { description: 已替换用户可访问机构 }
         '403': { description: 'access:write permission and all organization scopes are required' }
   /roles:
     get:
       operationId: listRoles
-      summary: List platform roles and registered permissions
+      summary: 查询平台角色和后端已登记权限
       responses:
         '200':
-          description: Platform roles
+          description: 平台角色
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RoleListResponse' }
         '403': { description: 'access:read permission is required' }
     post:
       operationId: createRole
-      summary: Create a non-system platform role
+      summary: 创建非系统保护角色
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -260,7 +260,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateRoleRequest' }
       responses:
-        '201': { description: Role created }
+        '201': { description: 已创建角色 }
         '403': { description: 'access:write permission is required' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
   /roles/{roleId}:
@@ -271,13 +271,13 @@ paths:
         schema: { type: integer, format: int64, minimum: 1 }
     get:
       operationId: getRole
-      summary: Read a platform role
+      summary: 查询平台角色
       responses:
-        '200': { description: Role detail }
+        '200': { description: 角色详情 }
         '403': { description: 'access:read permission is required' }
     put:
       operationId: updateRole
-      summary: Update a non-system role
+      summary: 修改非系统保护角色
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -285,13 +285,27 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UpdateRoleRequest' }
       responses:
-        '200': { description: Role updated }
+        '200': { description: 已修改角色 }
         '403': { description: 'access:write permission is required' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+    delete:
+      operationId: deleteRole
+      summary: 删除未分配给用户的非系统保护角色
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteVersionRequest' }
+      responses:
+        '200': { description: 角色已删除 }
+        '403': { description: 'access:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
   /roles/{roleId}/permissions:
     put:
       operationId: replaceRolePermissions
-      summary: Replace registered permissions on a non-system role
+      summary: 替换非系统保护角色的已登记权限
       parameters:
         - name: roleId
           in: path
@@ -304,23 +318,23 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ReplacePermissionCodesRequest' }
       responses:
-        '200': { description: Role permissions replaced }
+        '200': { description: 已替换角色权限 }
         '403': { description: 'access:write permission is required' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
   /permissions:
     get:
       operationId: listRegisteredPermissions
-      summary: List permissions registered by backend code
+      summary: 查询后端代码已登记的权限
       responses:
-        '200': { description: Registered permission list }
+        '200': { description: 后端已登记的权限列表 }
         '403': { description: 'access:read permission is required' }
   /system/info:
     get:
       operationId: getPlatformInfo
-      summary: Read the running platform baseline
+      summary: 查询当前运行的平台版本和数据库信息
       responses:
         '200':
-          description: Platform information
+          description: 平台信息
           content:
             application/json:
               schema:
@@ -330,7 +344,7 @@ paths:
   /exchange-records:
     get:
       operationId: findRecentExchangeRecords
-      summary: List recent exchange records for an authorized organization
+      summary: 查询当前账号有权访问机构的近期交换记录
       parameters:
         - name: organizationCode
           in: query
@@ -339,12 +353,12 @@ paths:
         - name: receivedFrom
           in: query
           required: false
-          description: UTC lower bound of the record received time, inclusive
+          description: 接收时间下限，使用协调世界时（UTC），包含该时刻
           schema: { type: string, format: date-time }
         - name: receivedTo
           in: query
           required: false
-          description: UTC upper bound of the record received time, inclusive
+          description: 接收时间上限，使用协调世界时（UTC），包含该时刻
           schema: { type: string, format: date-time }
         - name: interfaceCode
           in: query
@@ -353,7 +367,7 @@ paths:
         - name: sourceRecordId
           in: query
           required: false
-          description: Business record reference without clinical content
+          description: 不包含临床正文的业务记录编号
           schema: { type: string, maxLength: 128 }
         - name: requestId
           in: query
@@ -369,7 +383,7 @@ paths:
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         '200':
-          description: Exchange records
+          description: 交换记录
           content:
             application/json:
               schema:
@@ -379,11 +393,11 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Organization or data scope is not authorized
+          description: 当前账号无权访问该机构或数据范围
   /organizations:
     get:
       operationId: listOrganizations
-      summary: List platform-managed organizations
+      summary: 查询平台管理的机构
       parameters:
         - name: enabled
           in: query
@@ -391,7 +405,7 @@ paths:
           schema: { type: boolean }
       responses:
         '200':
-          description: Organizations visible to the authenticated administrator
+          description: 当前管理员可查看的机构
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationListResponse' }
@@ -399,7 +413,7 @@ paths:
         '403': { description: 'organization:read permission is required' }
     post:
       operationId: createOrganization
-      summary: Create a platform-managed organization
+      summary: 创建平台管理的机构
       requestBody:
         required: true
         content:
@@ -407,7 +421,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateOrganizationRequest' }
       responses:
         '201':
-          description: Organization created
+          description: 已创建机构
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationResponse' }
@@ -423,10 +437,10 @@ paths:
         schema: { type: integer, format: int64, minimum: 1 }
     get:
       operationId: getOrganization
-      summary: Read a platform-managed organization
+      summary: 查询平台管理的机构
       responses:
         '200':
-          description: Organization found
+          description: 已找到机构
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationResponse' }
@@ -435,7 +449,7 @@ paths:
         '404': { $ref: '#/components/responses/ResourceNotFound' }
     put:
       operationId: updateOrganization
-      summary: Update a platform-managed organization using optimistic concurrency
+      summary: 修改机构；如果期间已被他人修改则拒绝保存
       requestBody:
         required: true
         content:
@@ -443,7 +457,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateOrganizationRequest' }
       responses:
         '200':
-          description: Organization updated
+          description: 已修改机构
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationResponse' }
@@ -460,7 +474,7 @@ paths:
         schema: { type: integer, format: int64, minimum: 1 }
     patch:
       operationId: changeOrganizationEnabled
-      summary: Enable or disable a platform-managed organization
+      summary: 启用或停用平台管理的机构
       requestBody:
         required: true
         content:
@@ -468,7 +482,7 @@ paths:
             schema: { $ref: '#/components/schemas/ChangeOrganizationEnabledRequest' }
       responses:
         '200':
-          description: Organization state changed
+          description: 已修改机构状态
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationResponse' }
@@ -480,10 +494,10 @@ paths:
   /configuration/parameter-definitions:
     get:
       operationId: listParameterDefinitions
-      summary: List code-registered platform parameter metadata
+      summary: 查询代码中登记的平台参数定义
       responses:
         '200':
-          description: Registered metadata used to build explicit management forms
+          description: 用于生成明确管理表单的已登记参数定义
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ParameterDefinitionListResponse' }
@@ -491,10 +505,10 @@ paths:
   /configuration/parameters:
     get:
       operationId: listParameterValues
-      summary: List global and authorized organization-scoped parameter values
+      summary: 查询全局参数值和当前账号有权访问的机构参数值
       responses:
         '200':
-          description: Parameter values visible to the authenticated administrator
+          description: 当前管理员可查看的参数值
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ParameterValueListResponse' }
@@ -507,7 +521,7 @@ paths:
         schema: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_.-]*$' }
     put:
       operationId: upsertParameterValue
-      summary: Create or concurrently update a value for a code-registered parameter
+      summary: 新增或修改代码中已登记的参数值；如果期间已被他人修改则拒绝保存
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -516,27 +530,42 @@ paths:
             schema: { $ref: '#/components/schemas/UpsertParameterRequest' }
       responses:
         '200':
-          description: Parameter value saved; sensitive values are masked
+          description: 参数值已保存；敏感值仅返回固定遮盖符号
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ParameterValueResponse' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'configuration:write permission and organization scope are required' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
+    delete:
+      operationId: deleteParameterValue
+      summary: 删除当前环境和机构范围的参数值，使该范围恢复为尚未配置
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteParameterRequest' }
+      responses:
+        '200': { description: 当前范围的参数值已删除 }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission and organization scope are required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
   /configuration/dictionaries:
     get:
       operationId: listDictionaryTypes
-      summary: List platform system dictionary types
+      summary: 查询平台数据字典类型
       responses:
         '200':
-          description: Platform system dictionary types
+          description: 平台数据字典类型
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DictionaryTypeListResponse' }
         '403': { description: 'configuration:read permission is required' }
     post:
       operationId: createDictionaryType
-      summary: Create a platform system dictionary type
+      summary: 创建平台数据字典类型
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -545,7 +574,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateDictionaryTypeRequest' }
       responses:
         '201':
-          description: Dictionary type created
+          description: 已创建字典类型
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DictionaryTypeResponse' }
@@ -560,7 +589,7 @@ paths:
         schema: { type: integer, format: int64, minimum: 1 }
     put:
       operationId: updateDictionaryType
-      summary: Concurrently update or disable a platform system dictionary type
+      summary: 修改或停用字典类型；如果期间已被他人修改则拒绝保存
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -569,11 +598,25 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateDictionaryTypeRequest' }
       responses:
         '200':
-          description: Dictionary type updated
+          description: 已修改字典类型
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DictionaryTypeResponse' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
+    delete:
+      operationId: deleteDictionaryType
+      summary: 删除不含任何字典项的字典类型
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteVersionRequest' }
+      responses:
+        '200': { description: 字典类型已删除 }
         '403': { description: 'configuration:write permission is required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
@@ -585,7 +628,7 @@ paths:
         schema: { type: integer, format: int64, minimum: 1 }
     get:
       operationId: listDictionaryItems
-      summary: List items in a platform system dictionary type
+      summary: 查询指定字典类型中的字典项
       parameters:
         - name: includeDisabled
           in: query
@@ -593,7 +636,7 @@ paths:
           schema: { type: boolean, default: false }
       responses:
         '200':
-          description: Dictionary items ordered by sort order and item code
+          description: 按显示顺序和字典项代码排列的字典项
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DictionaryItemListResponse' }
@@ -601,7 +644,7 @@ paths:
         '404': { $ref: '#/components/responses/ResourceNotFound' }
     post:
       operationId: createDictionaryItem
-      summary: Add an item to an enabled platform system dictionary type
+      summary: 向已启用的字典类型新增字典项
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -610,7 +653,7 @@ paths:
             schema: { $ref: '#/components/schemas/CreateDictionaryItemRequest' }
       responses:
         '201':
-          description: Dictionary item created
+          description: 已创建字典项
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DictionaryItemResponse' }
@@ -626,7 +669,7 @@ paths:
         schema: { type: integer, format: int64, minimum: 1 }
     put:
       operationId: updateDictionaryItem
-      summary: Concurrently update or disable a platform system dictionary item
+      summary: 修改或停用字典项；如果期间已被他人修改则拒绝保存
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody:
         required: true
@@ -635,7 +678,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateDictionaryItemRequest' }
       responses:
         '200':
-          description: Dictionary item updated
+          description: 已修改字典项
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DictionaryItemResponse' }
@@ -643,20 +686,34 @@ paths:
         '403': { description: 'configuration:write permission is required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
+    delete:
+      operationId: deleteDictionaryItem
+      summary: 删除未被业务数据引用的字典项
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteVersionRequest' }
+      responses:
+        '200': { description: 字典项已删除 }
+        '403': { description: 'configuration:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
   /configuration/external-systems:
     get:
       operationId: listExternalSystems
-      summary: List confirmed external systems
+      summary: 查询已确认的外部系统
       responses:
-        '200': { description: External systems, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemListResponse' } } } }
+        '200': { description: 外部系统列表, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemListResponse' } } } }
         '403': { description: 'configuration:read permission is required' }
     post:
       operationId: createExternalSystem
-      summary: Register a confirmed external system
+      summary: 登记已确认的外部系统
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateExternalSystemRequest' } } } }
       responses:
-        '201': { description: External system created, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemResponse' } } } }
+        '201': { description: 已创建外部系统, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemResponse' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'configuration:write permission is required' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
@@ -665,11 +722,11 @@ paths:
       - { name: systemId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     put:
       operationId: updateExternalSystem
-      summary: Concurrently update or disable an external system
+      summary: 修改或停用外部系统；如果期间已被他人修改则拒绝保存
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateExternalSystemRequest' } } } }
       responses:
-        '200': { description: External system updated, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemResponse' } } } }
+        '200': { description: 已修改外部系统, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalSystemResponse' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'configuration:write permission is required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
@@ -679,18 +736,18 @@ paths:
       - { name: systemId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     get:
       operationId: listExternalEndpoints
-      summary: List global and authorized organization-scoped endpoints
+      summary: 查询全局服务地址和当前账号有权访问的机构服务地址
       responses:
-        '200': { description: Safe endpoint metadata without credential references, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointListResponse' } } } }
+        '200': { description: 不包含凭证引用的服务地址资料, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointListResponse' } } } }
         '403': { description: 'configuration:read permission and organization scope are required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
     post:
       operationId: createExternalEndpoint
-      summary: Create a disabled endpoint for later review and enablement
+      summary: 创建默认停用的服务地址，待检查后再启用
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateExternalEndpointRequest' } } } }
       responses:
-        '201': { description: Disabled endpoint created, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
+        '201': { description: 已创建默认停用的服务地址, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'configuration:write permission and organization scope are required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
@@ -700,11 +757,11 @@ paths:
       - { name: endpointId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     put:
       operationId: updateExternalEndpoint
-      summary: Concurrently update or enable an authorized endpoint
+      summary: 修改或启用当前账号有权管理的服务地址；如果期间已被他人修改则拒绝保存
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateExternalEndpointRequest' } } } }
       responses:
-        '200': { description: Safe endpoint metadata without credential reference, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
+        '200': { description: 不包含凭证引用的服务地址资料, content: { application/json: { schema: { $ref: '#/components/schemas/ExternalEndpointResponse' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '403': { description: 'configuration:write permission and organization scope are required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
@@ -712,13 +769,21 @@ paths:
   /audit/events:
     get:
       operationId: listManagementAuditEvents
-      summary: List management audit events visible in the current organization scope
+      summary: 查询当前账号可访问机构内的管理操作审计记录
       parameters:
+        - { name: actorLogin, in: query, required: false, schema: { type: string, maxLength: 128 } }
+        - { name: actionCode, in: query, required: false, schema: { type: string, maxLength: 64 } }
         - { name: targetType, in: query, required: false, schema: { type: string, maxLength: 64 } }
         - { name: targetId, in: query, required: false, schema: { type: string, maxLength: 128 } }
+        - { name: requestId, in: query, required: false, description: 精确查询同一次请求留下的记录, schema: { type: string, maxLength: 128 } }
+        - { name: resultCode, in: query, required: false, schema: { type: string, enum: [SUCCESS, FAILURE] } }
+        - { name: occurredFrom, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: occurredTo, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: beforeOccurredAt, in: query, required: false, description: 与beforeId同时提供，用于继续读取更早记录, schema: { type: string, format: date-time } }
+        - { name: beforeId, in: query, required: false, description: 与beforeOccurredAt同时提供，用于处理相同时间的稳定排序, schema: { type: integer, format: int64, minimum: 1 } }
         - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
       responses:
-        '200': { description: Time-descending, redacted audit events, content: { application/json: { schema: { $ref: '#/components/schemas/ManagementAuditEventListResponse' } } } }
+        '200': { description: 按时间倒序排列且已删除或遮盖敏感字段的审计记录, content: { application/json: { schema: { $ref: '#/components/schemas/ManagementAuditEventListResponse' } } } }
         '403': { description: 'audit:read permission is required' }
 components:
   parameters:
@@ -726,7 +791,7 @@ components:
       name: X-XSRF-TOKEN
       in: header
       required: true
-      description: Token returned by GET /session/csrf and paired with the XSRF-TOKEN cookie
+      description: 由 GET /session/csrf 返回，并与 XSRF-TOKEN Cookie 配套使用的令牌
       schema: { type: string }
   securitySchemes:
     hospitalIdentity:
@@ -734,24 +799,24 @@ components:
       in: cookie
       name: JSESSIONID
       description: >-
-        Contract marker for an authenticated management session. The first development
+        Cookie marker for an authenticated management session. The first development
         phase uses a server-side local-management session and secure HttpOnly cookie;
         production identity must be reviewed by the hospital before activation.
   responses:
     InvalidRequest:
-      description: Request validation failed
+      description: 请求参数校验未通过
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
     Unauthorized:
-      description: Authentication is required
+      description: 必须先登录
     ResourceNotFound:
-      description: The requested platform resource does not exist or is not visible
+      description: 请求的平台数据不存在，或当前账号无权查看
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
     ResourceConflict:
-      description: Unique data, current state, or optimistic concurrency version conflicts
+      description: 唯一值重复、当前状态不允许操作，或数据已被他人修改
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
@@ -812,7 +877,7 @@ components:
           items: { type: string }
         organizationCodes:
           type: array
-          description: Explicit enabled organization scopes; parent scope does not imply descendant scope
+          description: 明确列出的已启用机构；可访问上级机构不表示自动获得下级机构权限
           items: { type: string }
     CsrfTokenResponse:
       type: object
@@ -928,6 +993,11 @@ components:
         roleName: { type: string, minLength: 1, maxLength: 100 }
         enabled: { type: boolean }
         version: { type: string, format: byte }
+    DeleteVersionRequest:
+      type: object
+      required: [version]
+      properties:
+        version: { type: string, format: byte, description: 由 8 字节 SQL Server 行版本号编码得到的 Base64 文本 }
     ReplacePermissionCodesRequest:
       type: object
       required: [permissionCodes]
@@ -974,23 +1044,23 @@ components:
           allOf:
             - $ref: '#/components/schemas/ExchangeResult'
           nullable: true
-          description: Null only for legacy records that predate the final-result migration
+          description: 仅在增加最终结果字段之前创建的历史记录中可以为空
         targetResultCode: { type: string, nullable: true }
         resultMessage: { type: string, nullable: true }
         durationMs: { type: integer, format: int64, minimum: 0, nullable: true }
         requestSummary:
           type: string
           nullable: true
-          description: De-identified summary without complete clinical payload
+          description: 已删除或遮盖身份和敏感字段的摘要，不包含完整临床正文
         communicationErrorSummary:
           type: string
           nullable: true
-          description: Communication error without credentials or internal address details
+          description: 通信错误摘要，不包含凭证或内部地址详情
         receivedAt: { type: string, format: date-time }
         processedAt: { type: string, format: date-time, nullable: true }
     ExchangeResult:
       type: string
-      description: Final exchange fact; never a transport-process state
+      description: 交换的最终处理结果，不表示发送过程进行到哪一步
       enum: [SUCCESS, FAILURE, NO_RESPONSE]
     OrganizationListResponse:
       type: object
@@ -1026,7 +1096,7 @@ components:
         organizationType:
           type: string
           maxLength: 32
-          description: Project-confirmed organization type code; values are not invented by this contract
+          description: 项目已确认的机构类型代码；本接口定义不自行增加取值
         parentId: { type: integer, format: int64, nullable: true }
         enabled: { type: boolean }
         validFrom: { type: string, format: date-time, nullable: true, description: UTC }
@@ -1036,7 +1106,7 @@ components:
         version:
           type: string
           format: byte
-          description: Base64-encoded 8-byte SQL Server rowversion
+          description: 由 8 字节 SQL Server 行版本号编码得到的 Base64 文本
     CreateOrganizationRequest:
       type: object
       required: [organizationCode, organizationName, organizationType, parentId]
@@ -1048,7 +1118,7 @@ components:
           type: integer
           format: int64
           minimum: 1
-          description: Required for normal management; only one-time bootstrap creates the root organization
+          description: 日常管理必须提供；只有一次性初始化可以创建根机构
         validFrom: { type: string, format: date-time, nullable: true }
         validTo: { type: string, format: date-time, nullable: true }
     UpdateOrganizationRequest:
@@ -1060,13 +1130,13 @@ components:
         parentId: { type: integer, format: int64, minimum: 1, nullable: true }
         validFrom: { type: string, format: date-time, nullable: true }
         validTo: { type: string, format: date-time, nullable: true }
-        version: { type: string, format: byte, description: Base64-encoded 8-byte SQL Server rowversion }
+        version: { type: string, format: byte, description: 由 8 字节 SQL Server 行版本号编码得到的 Base64 文本 }
     ChangeOrganizationEnabledRequest:
       type: object
       required: [enabled, version]
       properties:
         enabled: { type: boolean }
-        version: { type: string, format: byte, description: Base64-encoded 8-byte SQL Server rowversion }
+        version: { type: string, format: byte, description: 由 8 字节 SQL Server 行版本号编码得到的 Base64 文本 }
     ParameterDefinitionListResponse:
       type: object
       required: [code, message, data]
@@ -1101,13 +1171,20 @@ components:
           type: string
           maxLength: 1000
           writeOnly: true
-          description: Validated against code-registered metadata; must never contain an external-system plaintext credential
+          description: 按代码中登记的参数定义校验；不得包含外部系统的明文凭证
         enabled: { type: boolean }
         version:
           type: string
           format: byte
           nullable: true
-          description: Omit only when creating a previously absent scope value
+          description: 仅在首次创建该环境和机构对应的参数值时可以省略
+    DeleteParameterRequest:
+      type: object
+      required: [environment, version]
+      properties:
+        environment: { type: string, enum: [DEVELOPMENT, TEST, PRODUCTION] }
+        organizationId: { type: integer, format: int64, minimum: 1, nullable: true }
+        version: { type: string, format: byte, description: 由 8 字节 SQL Server 行版本号编码得到的 Base64 文本 }
     ParameterValueListResponse:
       type: object
       required: [code, message, data]
@@ -1134,7 +1211,7 @@ components:
         organizationCode: { type: string, nullable: true }
         value:
           type: string
-          description: Fixed mask for sensitive definitions; never use this field to recover a secret
+          description: 敏感参数固定返回的遮盖符号；不能通过该字段恢复原值
         configured: { type: boolean }
         enabled: { type: boolean }
         updatedAt: { type: string, format: date-time, description: UTC }
@@ -1289,7 +1366,7 @@ components:
         baseUrl: { type: string, format: uri, pattern: '^https://' }
         connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
         readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
-        credentialConfigured: { type: boolean, description: The credential reference itself is never returned }
+        credentialConfigured: { type: boolean, description: 是否已配置凭证；接口从不返回凭证引用本身 }
         enabled: { type: boolean }
         createdAt: { type: string, format: date-time, description: UTC }
         updatedAt: { type: string, format: date-time, description: UTC }
@@ -1303,7 +1380,7 @@ components:
         baseUrl: { type: string, format: uri, maxLength: 500, pattern: '^https://' }
         connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
         readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
-        credentialReference: { type: string, minLength: 1, maxLength: 200, writeOnly: true, description: Approved secret-store reference URI; never a plaintext credential }
+        credentialReference: { type: string, minLength: 1, maxLength: 200, writeOnly: true, description: 获准的凭证保管系统引用地址，不能填写明文凭证 }
     UpdateExternalEndpointRequest:
       type: object
       required: [baseUrl, connectTimeoutMs, readTimeoutMs, credentialReference, enabled, version]
@@ -1311,7 +1388,7 @@ components:
         baseUrl: { type: string, format: uri, maxLength: 500, pattern: '^https://' }
         connectTimeoutMs: { type: integer, minimum: 100, maximum: 60000 }
         readTimeoutMs: { type: integer, minimum: 100, maximum: 300000 }
-        credentialReference: { type: string, minLength: 1, maxLength: 200, writeOnly: true, description: Approved secret-store reference URI; never returned }
+        credentialReference: { type: string, minLength: 1, maxLength: 200, writeOnly: true, description: 获准的凭证保管系统引用地址，接口从不返回该值 }
         enabled: { type: boolean }
         version: { type: string, format: byte }
     ManagementAuditEventListResponse:
@@ -1327,13 +1404,13 @@ components:
       properties:
         id: { type: integer, format: int64 }
         occurredAt: { type: string, format: date-time, description: UTC }
-        actorLogin: { type: string, description: Trusted login snapshot or masked hint for an authentication failure }
+        actorLogin: { type: string, description: 操作发生时保存的登录名；登录失败时仅保存遮盖后的提示 }
         organizationCode: { type: string, nullable: true }
         actionCode: { type: string, maxLength: 64 }
         targetType: { type: string, maxLength: 64 }
         targetId: { type: string, maxLength: 128 }
         resultCode: { type: string, enum: [SUCCESS, FAILURE] }
-        changeSummary: { type: string, maxLength: 1000, description: Redacted summary without credentials or business content }
+        changeSummary: { type: string, maxLength: 1000, description: 已删除或遮盖敏感字段的变更摘要，不包含凭证或业务正文 }
         requestId: { type: string, maxLength: 64, nullable: true }
     ApiError:
       type: object

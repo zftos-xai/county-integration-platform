@@ -3,7 +3,10 @@
 import { computed, watch } from 'vue'
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-vue'
 
-const props = withDefaults(defineProps<{ total: number; page: number; pageSize: number; pageSizes?: number[] }>(), { pageSizes: () => [10, 20, 50] })
+const props = withDefaults(defineProps<{ total: number; page: number; pageSize: number; pageSizes?: number[]; compact?: boolean }>(), {
+  pageSizes: () => [10, 20, 50],
+  compact: false,
+})
 const emit = defineEmits<{ 'update:page': [value: number]; 'update:pageSize': [value: number] }>()
 const pageCount = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)))
 const pages = computed(() => {
@@ -21,7 +24,7 @@ function changePageSize(event: Event) {
 </script>
 
 <template>
-  <footer class="standard-pagination" aria-label="列表分页">
+  <footer class="standard-pagination" :class="{ compact }" aria-label="列表分页">
     <nav aria-label="分页导航"><ul class="pagination pagination-sm m-0">
       <li :class="['page-item', { disabled: page <= 1 }]"><button class="page-link" aria-label="上一页" :disabled="page <= 1" @click="changePage(page - 1)"><IconChevronLeft :size="15" /></button></li>
       <li v-for="number in pages" :key="number" :class="['page-item', { active: number === page }]"><button class="page-link" :aria-label="`第 ${number} 页`" :aria-current="number === page ? 'page' : undefined" @click="changePage(number)">{{ number }}</button></li>

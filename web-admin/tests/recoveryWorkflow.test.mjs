@@ -117,7 +117,7 @@ test('S07：同业务号但版本不匹配，只能继续核查，不能确认�
   assert.equal(next.target, 'HIS仅确认第1版')
 })
 
-test('三条优先链路保存责任、期限、清理范围与新请求关联', () => {
+test('三条优先数据传递过程保存责任、期限、清理范围与新请求关联', () => {
   const unknown = act(claim(initial('unknown')), 'uncertain')
   assert.equal(unknown.assignee, '当前运维')
   assert.equal(unknown.nextCheckAt, details.nextCheckAt)

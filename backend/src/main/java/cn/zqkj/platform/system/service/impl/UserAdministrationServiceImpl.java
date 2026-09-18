@@ -62,8 +62,8 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     /**
      * 查询操作人机构范围内的用户。
      *
-     * @param actor 操作人上下文
-     * @return 用户快照
+     * @param actor 操作人信息
+     * @return 用户记录
      */
     @Transactional(readOnly = true)
     @Override
@@ -78,8 +78,8 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
      * 查询机构范围内的指定用户。
      *
      * @param userId 用户主键
-     * @param actor 操作人上下文
-     * @return 用户快照
+     * @param actor 操作人信息
+     * @return 用户记录
      */
     @Transactional(readOnly = true)
     @Override
@@ -93,8 +93,8 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
      * 创建归属获批机构且必须首次改密的平台用户。
      *
      * @param command 创建命令
-     * @param actor 操作人上下文
-     * @return 新用户快照
+     * @param actor 操作人信息
+     * @return 新用户记录
      */
     @Transactional
     @Override
@@ -105,7 +105,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         OrganizationVO organization = requireEnabledOrganization(command.primaryOrganizationId());
         requireAccess(actor, organization.organizationCode());
         if (mapper.userLoginExists(loginName)) {
-            throw new ResourceConflictException("User login name already exists");
+            throw new ResourceConflictException("登录名已存在");
         }
         CreateUserCommand normalized = new CreateUserCommand(
                 loginName, displayName, organization.id(), command.temporaryPassword()
@@ -124,8 +124,8 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
      *
      * @param userId 用户主键
      * @param command 修改命令
-     * @param actor 操作人上下文
-     * @return 修改后用户快照
+     * @param actor 操作人信息
+     * @return 修改后用户记录
      */
     @Transactional
     @Override
@@ -139,7 +139,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
                 requireText(command.displayName(), "displayName", 100), organization.id(), command.expectedVersion()
         );
         if (mapper.updateUser(userId, normalized, actor.loginName()) != 1) {
-            throw new ResourceConflictException("User version no longer matches");
+            throw new ResourceConflictException("用户资料已被他人修改，请刷新后重试");
         }
         List<Long> scopes = mapper.findUserOrganizationIds(userId);
         if (!scopes.contains(organization.id())) {
@@ -153,13 +153,13 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     }
 
     /**
-     * 启用或停用用户并保护最后一个平台管理员。
+     * 恢复或注销用户账号，并保护最后一个平台管理员。
      *
      * @param userId 用户主键
      * @param enabled 目标状态
      * @param expectedVersion 并发版本
-     * @param actor 操作人上下文
-     * @return 修改后用户快照
+     * @param actor 操作人信息
+     * @return 修改后用户记录
      */
     @Transactional
     @Override
@@ -169,14 +169,14 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         requireVersion(expectedVersion);
         if (!enabled && mapper.isEnabledPlatformAdministrator(userId)
                 && mapper.countOtherEnabledPlatformAdministrators(userId) == 0) {
-            throw new ResourceConflictException("The last enabled platform administrator cannot be disabled");
+            throw new ResourceConflictException("不能注销最后一个可登录的平台管理员；请先为另一名用户分配管理员角色");
         }
         if (mapper.setUserEnabled(userId, enabled, expectedVersion, actor.loginName()) != 1) {
-            throw new ResourceConflictException("User version no longer matches");
+            throw new ResourceConflictException("用户资料已被他人修改，请刷新后重试");
         }
         ManagedUserVO updated = get(userId, actor);
         audit(actor, updated, enabled ? "USER_ENABLED" : "USER_DISABLED",
-                enabled ? "启用用户" : "停用用户");
+                enabled ? "恢复用户账号使用" : "注销用户账号；历史操作记录继续保留");
         return updated;
     }
 
@@ -185,7 +185,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
      *
      * @param userId 用户主键
      * @param temporaryPassword 新临时密码
-     * @param actor 操作人上下文
+     * @param actor 操作人信息
      */
     @Transactional
     @Override
@@ -196,7 +196,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         if (mapper.resetPassword(
                 userId, passwordEncoder.encode(temporaryPassword), actor.loginName()
         ) != 1) {
-            throw new ResourceConflictException("User password reset failed");
+            throw new ResourceConflictException("密码重置失败，请刷新用户资料后重试");
         }
         audit(actor, current, "USER_PASSWORD_RESET", "重置临时密码并要求下次登录修改；未记录密码");
     }
@@ -206,8 +206,8 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
      *
      * @param userId 用户主键
      * @param roleIds 目标角色主键
-     * @param actor 操作人上下文
-     * @return 修改后用户快照
+     * @param actor 操作人信息
+     * @return 修改后用户记录
      */
     @Transactional
     @Override
@@ -216,7 +216,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         requireAccess(actor, current.organizationCode());
         List<Long> normalized = distinctPositiveIds(roleIds);
         if (!normalized.isEmpty() && mapper.countEnabledRoles(normalized) != normalized.size()) {
-            throw new InvalidRequestException("roleIds contains a missing or disabled role");
+            throw new InvalidRequestException("roleIds 中包含不存在或已停用的角色");
         }
         Long platformAdminRoleId = mapper.findRoles().stream()
                 .filter(role -> "PLATFORM_ADMIN".equals(role.roleCode()))
@@ -226,7 +226,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         if (mapper.isEnabledPlatformAdministrator(userId)
                 && !normalized.contains(platformAdminRoleId)
                 && mapper.countOtherEnabledPlatformAdministrators(userId) == 0) {
-            throw new ResourceConflictException("The last enabled platform administrator must retain its role");
+            throw new ResourceConflictException("最后一个已启用的平台管理员必须保留管理员角色");
         }
         mapper.replaceUserRoles(userId, normalized, actor.loginName());
         ManagedUserVO updated = get(userId, actor);
@@ -239,8 +239,8 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
      *
      * @param userId 用户主键
      * @param organizationIds 目标机构主键
-     * @param actor 操作人上下文
-     * @return 修改后用户快照
+     * @param actor 操作人信息
+     * @return 修改后用户记录
      */
     @Transactional
     @Override
@@ -253,7 +253,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         requireAccess(actor, current.organizationCode());
         List<Long> normalized = distinctPositiveIds(organizationIds);
         if (!normalized.contains(current.primaryOrganizationId())) {
-            throw new InvalidRequestException("Organization scope must include the primary organization");
+            throw new InvalidRequestException("可访问机构必须包含用户的主要机构");
         }
         for (Long organizationId : normalized) {
             OrganizationVO organization = requireEnabledOrganization(organizationId);
@@ -266,14 +266,14 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         return updated;
     }
 
-    /** @param actor 操作人 @param user 用户 @param action 动作 @param summary 脱敏摘要 */
+    /** @param actor 操作人 @param user 用户 @param action 动作 @param summary 不含敏感内容的摘要 */
     private void audit(AccessActor actor, ManagedUserVO user, String action, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, user.primaryOrganizationId(),
                 user.organizationCode(), action, "USER", user.loginName(), "SUCCESS", summary,
                 ManagementAuditServiceImpl.currentRequestId()));
     }
 
-    /** @param actor 操作人 @param user 用户 @param action 动作 @param summary 脱敏摘要 */
+    /** @param actor 操作人 @param user 用户 @param action 动作 @param summary 不含敏感内容的摘要 */
     private void audit(AccessActor actor, ManagedUserSummary user, String action, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, user.primaryOrganizationId(),
                 user.organizationCode(), action, "USER", user.loginName(), "SUCCESS", summary,
@@ -284,7 +284,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
      * 组装用户及关联关系快照。
      *
      * @param user 用户基础快照
-     * @return 完整用户快照
+     * @return 完整用户记录
      */
     private ManagedUserVO enrich(ManagedUserSummary user) {
         return new ManagedUserVO(
@@ -298,7 +298,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     /** @param userId 用户主键 @return 存在的用户 */
     private ManagedUserSummary requireUser(long userId) {
         if (userId <= 0) {
-            throw new InvalidRequestException("userId must be positive");
+            throw new InvalidRequestException("userId 必须大于 0");
         }
         return mapper.findUser(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Platform user was not found"));
@@ -308,7 +308,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     private OrganizationVO requireEnabledOrganization(long organizationId) {
         OrganizationVO organization = organizationService.get(organizationId);
         if (!organization.enabled()) {
-            throw new ResourceConflictException("Organization is disabled");
+            throw new ResourceConflictException("机构已停用");
         }
         return organization;
     }
@@ -316,7 +316,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     /** @param actor 操作人 @param organizationCode 机构代码 */
     private void requireAccess(AccessActor actor, String organizationCode) {
         if (!actor.canAccess(organizationCode)) {
-            throw new AccessDeniedException("Organization access is not permitted");
+            throw new AccessDeniedException("当前账号无权访问该机构");
         }
     }
 
@@ -324,7 +324,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     private String normalizeLogin(String value) {
         String loginName = requireText(value, "loginName", 64).toLowerCase(Locale.ROOT);
         if (!LOGIN_PATTERN.matcher(loginName).matches()) {
-            throw new InvalidRequestException("loginName has an invalid format");
+            throw new InvalidRequestException("loginName 格式无效");
         }
         return loginName;
     }
@@ -333,10 +333,10 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     private void validatePassword(String password, String loginName) {
         if (password == null || password.length() < MINIMUM_PASSWORD_LENGTH
                 || password.length() > MAXIMUM_PASSWORD_LENGTH) {
-            throw new InvalidRequestException("Password length is outside the allowed range");
+            throw new InvalidRequestException("密码长度不符合要求");
         }
         if (password.toLowerCase(Locale.ROOT).contains(loginName.toLowerCase(Locale.ROOT))) {
-            throw new InvalidRequestException("Password must not contain the login name");
+            throw new InvalidRequestException("密码不能包含登录名");
         }
     }
 
@@ -351,7 +351,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     /** @param ids 原始主键 @return 去重后的正数主键 */
     private List<Long> distinctPositiveIds(List<Long> ids) {
         if (ids == null || ids.stream().anyMatch(id -> id == null || id <= 0)) {
-            throw new InvalidRequestException("Identifier list contains an invalid value");
+            throw new InvalidRequestException("编号列表中包含无效值");
         }
         return ids.stream().distinct().sorted().toList();
     }
@@ -359,7 +359,7 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
     /** @param version 并发版本 */
     private void requireVersion(byte[] version) {
         if (version == null || version.length != Long.BYTES) {
-            throw new InvalidRequestException("version must be an 8-byte rowversion value");
+            throw new InvalidRequestException("version 必须是 8 字节的 SQL Server 行版本号");
         }
     }
 }

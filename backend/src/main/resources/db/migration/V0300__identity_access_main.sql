@@ -1,10 +1,10 @@
 -- 业务域: identity_access
 -- 主版本: V0300
 -- 脚本类型: MAIN
--- 变更说明: 建立平台本地身份、角色权限和机构数据范围基线
--- 需求依据: 开发批次任务计划DEV-004和DEV-006、平台管理底座技术设计
+-- 变更说明: 建立平台本地身份、角色权限和机构数据已确认的范围
+-- 需求依据: 开发批次任务计划DEV-004和DEV-006、平台基础管理功能技术设计
 -- 数据边界: 仅保存平台管理身份和授权关系，不保存外部业务账号、明文密码、会话标识或医疗数据
--- 时间口径: created_at、updated_at和password_changed_at保存UTC时间
+-- 时间规则: created_at、updated_at和password_changed_at保存UTC时间
 -- 回退方案: 首次部署失败时按外键逆序删除本脚本对象；共享环境执行后只允许新增归属V0300的版本化补丁
 
 -- 表中文名称: 平台用户表
@@ -18,9 +18,9 @@ CREATE TABLE sys_user (
     is_enabled BIT NOT NULL CONSTRAINT df_sys_user_enabled DEFAULT 1, -- 启用标志：用户是否允许建立和继续管理会话
     must_change_password BIT NOT NULL CONSTRAINT df_sys_user_must_change_password DEFAULT 1, -- 强制修改密码标志：是否必须在使用管理功能前修改初始密码
     password_changed_at DATETIME2(3) NULL, -- 密码修改时间：最近一次完成密码修改的UTC时间；初始密码尚未修改时为空
-    created_by NVARCHAR(64) NOT NULL, -- 创建人标识：创建人稳定主体标识快照；安全引导使用bootstrap标识
+    created_by NVARCHAR(64) NOT NULL, -- 创建人标识：创建人稳定用户标识快照；安全引导使用bootstrap标识
     created_at DATETIME2(3) NOT NULL CONSTRAINT df_sys_user_created DEFAULT SYSUTCDATETIME(), -- 创建时间：用户创建UTC时间
-    updated_by NVARCHAR(64) NOT NULL, -- 更新人标识：最后修改人稳定主体标识快照
+    updated_by NVARCHAR(64) NOT NULL, -- 更新人标识：最后修改人稳定用户标识快照
     updated_at DATETIME2(3) NOT NULL CONSTRAINT df_sys_user_updated DEFAULT SYSUTCDATETIME(), -- 更新时间：用户最后修改UTC时间
     row_version ROWVERSION, -- 并发版本：SQL Server并发版本，用于后续用户管理防止覆盖
     CONSTRAINT uq_sys_user_login_name UNIQUE (login_name), -- 保证本地登录名唯一
@@ -43,9 +43,9 @@ CREATE TABLE sys_role (
     role_name NVARCHAR(100) NOT NULL, -- 角色名称：管理页面展示的角色名称
     is_enabled BIT NOT NULL CONSTRAINT df_sys_role_enabled DEFAULT 1, -- 启用标志：角色是否可用于授权判定
     is_system_managed BIT NOT NULL CONSTRAINT df_sys_role_system_managed DEFAULT 0, -- 系统管理标志：是否为平台保护的系统角色
-    created_by NVARCHAR(64) NOT NULL, -- 创建人标识：创建人稳定主体标识快照
+    created_by NVARCHAR(64) NOT NULL, -- 创建人标识：创建人稳定用户标识快照
     created_at DATETIME2(3) NOT NULL CONSTRAINT df_sys_role_created DEFAULT SYSUTCDATETIME(), -- 创建时间：角色创建UTC时间
-    updated_by NVARCHAR(64) NOT NULL, -- 更新人标识：最后修改人稳定主体标识快照
+    updated_by NVARCHAR(64) NOT NULL, -- 更新人标识：最后修改人稳定用户标识快照
     updated_at DATETIME2(3) NOT NULL CONSTRAINT df_sys_role_updated DEFAULT SYSUTCDATETIME(), -- 更新时间：角色最后修改UTC时间
     row_version ROWVERSION, -- 并发版本：SQL Server并发版本
     CONSTRAINT uq_sys_role_code UNIQUE (role_code), -- 保证角色代码唯一
@@ -68,7 +68,7 @@ CREATE TABLE sys_permission (
 CREATE TABLE sys_user_role (
     user_id BIGINT NOT NULL, -- 用户主键：被授予角色的平台用户主键
     role_id BIGINT NOT NULL, -- 角色主键：授予的平台角色主键
-    granted_by NVARCHAR(64) NOT NULL, -- 授权人标识：授权人稳定主体标识快照
+    granted_by NVARCHAR(64) NOT NULL, -- 授权人标识：授权人稳定用户标识快照
     granted_at DATETIME2(3) NOT NULL CONSTRAINT df_sys_user_role_granted DEFAULT SYSUTCDATETIME(), -- 授权时间：授权UTC时间
     CONSTRAINT pk_sys_user_role PRIMARY KEY (user_id, role_id), -- 防止同一用户重复获得同一角色
     CONSTRAINT fk_sys_user_role_user FOREIGN KEY (user_id) REFERENCES sys_user(id), -- 保证授权用户存在
@@ -84,7 +84,7 @@ CREATE INDEX ix_sys_user_role_role
 CREATE TABLE sys_role_permission (
     role_id BIGINT NOT NULL, -- 角色主键：获得权限的平台角色主键
     permission_code NVARCHAR(64) NOT NULL, -- 权限代码：被授予的代码注册权限
-    granted_by NVARCHAR(64) NOT NULL, -- 授权人标识：授权人稳定主体标识快照
+    granted_by NVARCHAR(64) NOT NULL, -- 授权人标识：授权人稳定用户标识快照
     granted_at DATETIME2(3) NOT NULL CONSTRAINT df_sys_role_permission_granted DEFAULT SYSUTCDATETIME(), -- 授权时间：授权UTC时间
     CONSTRAINT pk_sys_role_permission PRIMARY KEY (role_id, permission_code), -- 防止同一角色重复获得同一权限
     CONSTRAINT fk_sys_role_permission_role FOREIGN KEY (role_id) REFERENCES sys_role(id), -- 保证角色存在
@@ -100,7 +100,7 @@ CREATE INDEX ix_sys_role_permission_permission
 CREATE TABLE sys_user_organization_scope (
     user_id BIGINT NOT NULL, -- 用户主键：获得机构数据范围的平台用户主键
     organization_id BIGINT NOT NULL, -- 机构主键：被授权访问的平台机构主键
-    granted_by NVARCHAR(64) NOT NULL, -- 授权人标识：授权人稳定主体标识快照
+    granted_by NVARCHAR(64) NOT NULL, -- 授权人标识：授权人稳定用户标识快照
     granted_at DATETIME2(3) NOT NULL CONSTRAINT df_sys_user_org_scope_granted DEFAULT SYSUTCDATETIME(), -- 授权时间：授权UTC时间
     CONSTRAINT pk_sys_user_org_scope PRIMARY KEY (user_id, organization_id), -- 防止同一用户重复获得同一机构范围
     CONSTRAINT fk_sys_user_org_scope_user FOREIGN KEY (user_id) REFERENCES sys_user(id), -- 保证授权用户存在

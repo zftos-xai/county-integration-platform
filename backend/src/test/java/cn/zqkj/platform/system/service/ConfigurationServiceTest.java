@@ -4,11 +4,13 @@ import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryTypeCommand;
+import cn.zqkj.platform.system.domain.dto.DeleteParameterCommand;
 import cn.zqkj.platform.system.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.UpsertParameterCommand;
 import cn.zqkj.platform.system.domain.dto.ExternalEndpointCommand;
 import cn.zqkj.platform.system.domain.model.AccessActor;
 import cn.zqkj.platform.system.domain.model.DictionaryType;
+import cn.zqkj.platform.system.domain.model.DictionaryItem;
 import cn.zqkj.platform.system.domain.model.ParameterDefinition;
 import cn.zqkj.platform.system.domain.model.ParameterEnvironment;
 import cn.zqkj.platform.system.domain.model.ParameterValue;
@@ -39,7 +41,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 验证平台注册参数、机构作用域和系统字典管理边界。
+ * 验证平台注册参数、适用机构和系统字典管理边界。
  */
 class ConfigurationServiceTest {
 
@@ -98,11 +100,51 @@ class ConfigurationServiceTest {
         );
         UpsertParameterCommand command = command(ParameterEnvironment.PRODUCTION, null, "secret-value", null);
         ParameterValue saved = parameterValue(9L, definition.key(), "secret-value");
-        when(mapper.findParameterValue(eq(definition.key()), any())).thenReturn(Optional.empty(), Optional.of(saved));
+        when(mapper.findParameterValue(eq(definition.key()), any())).thenReturn(Optional.empty());
         when(mapper.createParameterValue(eq(definition.key()), eq("STRING"), any(), eq("admin"))).thenReturn(9L);
+        when(mapper.findParameterValueById(9L)).thenReturn(Optional.of(saved));
         ConfigurationService service = service(mapper, List.of(definition), mock(OrganizationService.class));
 
         assertEquals("******", service.upsertParameter(definition.key(), command, actor()).value());
+    }
+
+    /** 验证删除参数配置时按适用范围和并发版本删除唯一记录。 */
+    @Test
+    void deletesParameterConfigurationByScopeAndVersion() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        ParameterDefinition definition = definition(
+                "platform.display.mode", ParameterValueType.STRING, false, false, null, null
+        );
+        ParameterValue current = parameterValue(9L, definition.key(), "compact");
+        when(mapper.findParameterValue(eq(definition.key()), any())).thenReturn(Optional.of(current));
+        when(mapper.deleteParameterValue(9L, current.version())).thenReturn(1);
+        ConfigurationService service = service(mapper, List.of(definition), mock(OrganizationService.class));
+
+        service.deleteParameter(
+                definition.key(),
+                new DeleteParameterCommand(ParameterEnvironment.PRODUCTION, null, current.version()),
+                actor()
+        );
+
+        verify(mapper).deleteParameterValue(9L, current.version());
+    }
+
+    /** 验证参数配置被他人修改后不能使用旧版本删除。 */
+    @Test
+    void reportsParameterDeleteConflict() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        ParameterDefinition definition = definition(
+                "platform.display.mode", ParameterValueType.STRING, false, false, null, null
+        );
+        ParameterValue current = parameterValue(9L, definition.key(), "compact");
+        when(mapper.findParameterValue(eq(definition.key()), any())).thenReturn(Optional.of(current));
+        ConfigurationService service = service(mapper, List.of(definition), mock(OrganizationService.class));
+
+        assertThrows(ResourceConflictException.class, () -> service.deleteParameter(
+                definition.key(),
+                new DeleteParameterCommand(ParameterEnvironment.PRODUCTION, null, current.version()),
+                actor()
+        ));
     }
 
     /** 验证重复系统字典类型代码在写入前被拒绝。 */
@@ -170,7 +212,52 @@ class ConfigurationServiceTest {
         verify(mapper).updateDictionaryType(1L, command, "admin");
     }
 
-    /** 验证端点只接受不含凭证和查询串的HTTPS基础地址。 */
+    /** 验证包含字典项的类型不能删除，并直接说明需先处理的数量。 */
+    @Test
+    void rejectsDeletingDictionaryTypeWithItems() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        DictionaryType type = dictionaryType(true);
+        when(mapper.findDictionaryType(1L)).thenReturn(Optional.of(type));
+        when(mapper.countDictionaryItems(1L)).thenReturn(2L);
+        ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
+
+        assertThrows(ResourceConflictException.class,
+                () -> service.deleteDictionaryType(1L, type.version(), actor()));
+        verify(mapper, never()).deleteDictionaryType(anyLong(), any());
+    }
+
+    /** 验证未被业务数据引用的字典项可以按并发版本删除。 */
+    @Test
+    void deletesUnusedDictionaryItem() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        DictionaryItem item = dictionaryItem();
+        when(mapper.findDictionaryItem(9L)).thenReturn(Optional.of(item));
+        when(mapper.findDictionaryType(1L)).thenReturn(Optional.of(dictionaryType(true)));
+        when(mapper.countDictionaryItemReferences(9L)).thenReturn(0L);
+        when(mapper.deleteDictionaryItem(9L, item.version())).thenReturn(1);
+        ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
+
+        service.deleteDictionaryItem(9L, item.version(), actor());
+
+        verify(mapper).deleteDictionaryItem(9L, item.version());
+    }
+
+    /** 验证已被业务数据引用的字典项只能停用，不能物理删除。 */
+    @Test
+    void rejectsDeletingReferencedDictionaryItem() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        DictionaryItem item = dictionaryItem();
+        when(mapper.findDictionaryItem(9L)).thenReturn(Optional.of(item));
+        when(mapper.findDictionaryType(1L)).thenReturn(Optional.of(dictionaryType(true)));
+        when(mapper.countDictionaryItemReferences(9L)).thenReturn(3L);
+        ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
+
+        assertThrows(ResourceConflictException.class,
+                () -> service.deleteDictionaryItem(9L, item.version(), actor()));
+        verify(mapper, never()).deleteDictionaryItem(anyLong(), any());
+    }
+
+    /** 验证服务地址只接受不含凭证和查询串的HTTPS基础地址。 */
     @Test
     void rejectsInsecureExternalEndpointUrl() {
         ConfigurationMapper mapper = mock(ConfigurationMapper.class);
@@ -186,7 +273,7 @@ class ConfigurationServiceTest {
         verify(mapper, never()).createExternalEndpoint(anyLong(), any(), any());
     }
 
-    /** 验证机构级端点不能越过当前主体显式机构范围。 */
+    /** 验证机构级服务地址不能越过当前用户显式机构范围。 */
     @Test
     void rejectsExternalEndpointOutsideActorScope() {
         ConfigurationMapper mapper = mock(ConfigurationMapper.class);
@@ -268,26 +355,34 @@ class ConfigurationServiceTest {
         );
     }
 
+    /** @return 未被引用的字典项快照 */
+    private DictionaryItem dictionaryItem() {
+        return new DictionaryItem(
+                9L, 1L, "COMPACT", "紧凑", 10, true,
+                LocalDateTime.now(), LocalDateTime.now(), version()
+        );
+    }
+
     /** @param enabled 启用状态 @return 外部系统快照 */
     private ExternalSystem externalSystem(boolean enabled) {
         return new ExternalSystem(1L, "COUNTY_HIS", "县医院HIS", "测试用途", enabled,
                 LocalDateTime.now(), LocalDateTime.now(), version());
     }
 
-    /** @return 外部端点快照 */
+    /** @return 外部服务地址快照 */
     private ExternalEndpoint externalEndpoint() {
         return new ExternalEndpoint(9L, 1L, ParameterEnvironment.TEST, null, null,
                 "https://his.example.invalid/api", 3000, 15000, "secret-store://his/test", false,
                 LocalDateTime.now(), LocalDateTime.now(), version());
     }
 
-    /** @param url 地址 @param organizationId 可选机构 @return 端点创建命令 */
+    /** @param url 地址 @param organizationId 可选机构 @return 服务地址创建命令 */
     private ExternalEndpointCommand endpointCommand(String url, Long organizationId) {
         return new ExternalEndpointCommand(ParameterEnvironment.TEST, organizationId, url, 3000, 15000,
                 "secret-store://his/test", false, null);
     }
 
-    /** @param id 机构主键 @param code 机构代码 @return 机构快照 */
+    /** @param id 机构主键 @param code 机构代码 @return 机构记录 */
     private OrganizationVO organization(long id, String code) {
         return new OrganizationVO(
                 id, code, "测试机构", "HOSPITAL", null, true, null, null,

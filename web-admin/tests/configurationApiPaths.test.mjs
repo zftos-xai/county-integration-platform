@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   configurationWriteRequest, dictionaryItemPath, dictionaryItemsPath, dictionaryTypePath, parameterValuePath,
-} from '../src/api/system/configurationContract.ts'
+} from '../src/api/system/configurationApiPaths.ts'
 
-test('配置管理路径按 OpenAPI 契约生成', () => {
+test('配置管理路径按 OpenAPI 接口定义生成', () => {
   assert.equal(parameterValuePath('display.mode'), '/configuration/parameters/display.mode')
   assert.equal(parameterValuePath('name/unsafe'), '/configuration/parameters/name%2Funsafe')
   assert.equal(dictionaryTypePath(8), '/configuration/dictionaries/8')
@@ -17,4 +17,12 @@ test('配置写请求保留 rowversion 和明确方法', () => {
   const request = configurationWriteRequest('PUT', { enabled: false, version: 'AAAAAAAAAAE=' })
   assert.equal(request.method, 'PUT')
   assert.deepEqual(JSON.parse(request.body), { enabled: false, version: 'AAAAAAAAAAE=' })
+
+  const deletion = configurationWriteRequest('DELETE', {
+    environment: 'PRODUCTION', organizationId: null, version: 'AAAAAAAAAAE=',
+  })
+  assert.equal(deletion.method, 'DELETE')
+  assert.deepEqual(JSON.parse(deletion.body), {
+    environment: 'PRODUCTION', organizationId: null, version: 'AAAAAAAAAAE=',
+  })
 })

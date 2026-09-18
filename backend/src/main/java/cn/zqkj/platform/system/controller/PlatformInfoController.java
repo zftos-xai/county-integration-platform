@@ -28,7 +28,7 @@ public class PlatformInfoController {
     }
 
     /**
-     * 返回应用名称、Java 运行时基线和当前工程状态。
+     * 返回应用名称、Java 运行时版本和当前工程状态。
      *
      * @return 只包含平台基础信息的统一成功响应
      */

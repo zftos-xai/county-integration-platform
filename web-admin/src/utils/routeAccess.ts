@@ -1,9 +1,9 @@
 import type { CurrentUser } from '@/api/session'
 
-/** 路由守卫可执行的归一化导航决策。 */
+/** 页面访问权限检查可执行的标准化的页面跳转决定。 */
 export type RouteAccessDecision = 'allow' | 'login' | 'home' | 'change-password' | 'forbidden'
 
-/** 权限决策所需的最小路由信息，避免工具层依赖 Vue Router 对象。 */
+/** 权限决策所需的目标页面的最少信息，避免工具层依赖 Vue Router 对象。 */
 export type RouteAccessTarget = {
   path: string
   publicPage: boolean

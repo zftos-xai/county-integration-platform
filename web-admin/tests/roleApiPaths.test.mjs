@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { roleDetailPath, rolePermissionsPath, roleWriteRequest } from '../src/api/system/roleContract.ts'
+import { roleDetailPath, rolePermissionsPath, roleWriteRequest } from '../src/api/system/roleApiPaths.ts'
 
-test('角色详情与权限路径按稳定契约生成', () => {
+test('角色详情与权限路径按稳定接口定义生成', () => {
   assert.equal(roleDetailPath(7), '/roles/7')
   assert.equal(rolePermissionsPath(7), '/roles/7/permissions')
 })
