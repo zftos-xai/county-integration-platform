@@ -3,6 +3,7 @@ package cn.zqkj.platform.system.controller;
 import cn.zqkj.platform.common.core.ApiResponse;
 import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.common.exception.InvalidRequestException;
+import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.system.domain.dto.CreateOrganizationCommand;
 import cn.zqkj.platform.system.domain.dto.CreateOrganizationRequest;
 import cn.zqkj.platform.system.domain.dto.ChangeOrganizationEnabledRequest;
@@ -28,8 +29,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
 
@@ -103,8 +102,8 @@ public class OrganizationController {
                 request.organizationName(),
                 request.organizationType(),
                 request.parentId(),
-                toUtc(request.validFrom()),
-                toUtc(request.validTo())
+                Func.toUtc(request.validFrom()),
+                Func.toUtc(request.validTo())
         );
         return ApiResponse.success(service.create(command, actor(principal)));
     }
@@ -128,8 +127,8 @@ public class OrganizationController {
                 request.organizationName(),
                 request.organizationType(),
                 request.parentId(),
-                toUtc(request.validFrom()),
-                toUtc(request.validTo()),
+                Func.toUtc(request.validFrom()),
+                Func.toUtc(request.validTo()),
                 decodeVersion(request.version())
         );
         return ApiResponse.success(service.update(id, command, actor(principal)));
@@ -161,16 +160,6 @@ public class OrganizationController {
     /** @param principal 当前用户 @return 应用服务操作人信息 */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
-    }
-
-    /**
-     * 将API带偏移时间转换为数据库使用的UTC本地时间。
-     *
-     * @param value 可选带偏移时间
-     * @return UTC本地时间；输入为空时返回空
-     */
-    private java.time.LocalDateTime toUtc(OffsetDateTime value) {
-        return value == null ? null : value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
     }
 
     /**
