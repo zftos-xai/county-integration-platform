@@ -11,7 +11,7 @@
       "page": "web-admin/src/views/dashboard/DashboardView.vue",
       "api": "web-admin/src/api/health.ts",
       "tests": ["web-admin/tests/dashboardBusiness.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/controller/ManagementAuditController.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/audit/controller/ManagementAuditController.java",
       "auditActions": ["/api/v1/audit", "/events"]
     },
     {
@@ -24,7 +24,7 @@
       "page": "web-admin/src/views/master-data/directory/HospitalDirectoryView.vue",
       "api": "web-admin/src/api/master-data/directory.ts",
       "tests": ["web-admin/tests/hospitalDirectoryPage.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/masterdata/service/impl/HospitalDirectoryCatalogServiceImpl.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/masterdata/service/hospitaldirectory/impl/HospitalDirectoryCatalogServiceImpl.java",
       "auditActions": [],
       "evidence": "docs/verification/2026-09-20-hospital-directory-live-sync.md"
     },
@@ -40,7 +40,7 @@
       "form": "web-admin/src/views/master-data/batch/form.ts",
       "editor": "web-admin/src/views/master-data/batch/components/StartBatchDrawer.vue",
       "tests": ["web-admin/tests/masterDataBatchApiPaths.test.mjs", "web-admin/tests/masterDataBatchPage.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/masterdata/service/impl/MasterDataBatchServiceImpl.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/masterdata/service/batch/impl/MasterDataBatchServiceImpl.java",
       "auditActions": ["MASTER_DATA_BATCH_CREATED"],
       "evidence": "docs/verification/2026-09-20-hospital-directory-live-sync.md"
     },
@@ -56,7 +56,7 @@
       "form": "web-admin/src/views/system/organization/form.ts",
       "editor": "web-admin/src/views/system/organization/components/OrganizationEditorDrawer.vue",
       "tests": ["web-admin/tests/organizationApiPaths.test.mjs", "web-admin/tests/organizationForm.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/service/impl/OrganizationAdministrationServiceImpl.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/organization/service/impl/OrganizationAdministrationServiceImpl.java",
       "auditActions": ["ORGANIZATION_CREATED", "ORGANIZATION_UPDATED", "ORGANIZATION_ENABLED", "ORGANIZATION_DISABLED"],
       "evidence": "docs/verification/dev010-frontend-api-integration.md"
     },
@@ -72,7 +72,7 @@
       "form": "web-admin/src/views/system/user/form.ts",
       "editor": "web-admin/src/views/system/user/components/UserEditorDrawer.vue",
       "tests": ["web-admin/tests/userApiPaths.test.mjs", "web-admin/tests/userForm.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/service/impl/UserAdministrationServiceImpl.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/identity/service/impl/UserAdministrationServiceImpl.java",
       "auditActions": ["USER_CREATED", "USER_UPDATED", "USER_ENABLED", "USER_DISABLED", "USER_PASSWORD_RESET", "USER_ROLES_REPLACED", "USER_ORGANIZATION_SCOPES_REPLACED"]
     },
     {
@@ -87,7 +87,7 @@
       "form": "web-admin/src/views/system/role/form.ts",
       "editor": "web-admin/src/views/system/role/components/RoleEditorDrawer.vue",
       "tests": ["web-admin/tests/roleApiPaths.test.mjs", "web-admin/tests/roleForm.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/service/impl/RoleAdministrationServiceImpl.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/identity/service/impl/RoleAdministrationServiceImpl.java",
       "auditActions": ["ROLE_CREATED", "ROLE_UPDATED", "ROLE_PERMISSIONS_REPLACED"]
     },
     {
@@ -102,7 +102,7 @@
       "form": "web-admin/src/views/configuration/parameter/form.ts",
       "editor": "web-admin/src/views/configuration/parameter/components/ParameterEditorDrawer.vue",
       "tests": ["web-admin/tests/configurationApiPaths.test.mjs", "web-admin/tests/configurationForm.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/service/impl/ConfigurationServiceImpl.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/configuration/service/impl/ConfigurationServiceImpl.java",
       "auditActions": ["PARAMETER_CREATED", "PARAMETER_UPDATED"]
     },
     {
@@ -117,7 +117,7 @@
       "form": "web-admin/src/views/configuration/dictionary/form.ts",
       "editor": "web-admin/src/views/configuration/dictionary/components/DictionaryEditorDrawer.vue",
       "tests": ["web-admin/tests/configurationApiPaths.test.mjs", "web-admin/tests/configurationForm.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/service/impl/ConfigurationServiceImpl.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/configuration/service/impl/ConfigurationServiceImpl.java",
       "auditActions": ["DICTIONARY_TYPE_CREATED", "DICTIONARY_TYPE_UPDATED", "DICTIONARY_ITEM_CREATED", "DICTIONARY_ITEM_UPDATED"]
     },
     {
@@ -145,7 +145,7 @@
       "page": "web-admin/src/views/audit/management/AuditView.vue",
       "api": "web-admin/src/api/system/audit.ts",
       "tests": ["web-admin/tests/auditApiPaths.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/controller/ManagementAuditController.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/audit/controller/ManagementAuditController.java",
       "auditActions": ["/api/v1/audit", "/events"]
     },
     {
@@ -160,7 +160,7 @@
       "form": "web-admin/src/views/configuration/external-system/form.ts",
       "editor": "web-admin/src/views/configuration/external-system/components/ExternalEndpointEditorDrawer.vue",
       "tests": ["web-admin/tests/configurationApiPaths.test.mjs", "web-admin/tests/externalSystemForm.test.mjs"],
-      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/service/impl/ConfigurationServiceImpl.java",
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/system/configuration/service/impl/ConfigurationServiceImpl.java",
       "auditActions": ["EXTERNAL_SYSTEM_CREATED", "EXTERNAL_SYSTEM_UPDATED", "EXTERNAL_ENDPOINT_CREATED", "EXTERNAL_ENDPOINT_UPDATED"]
     }
   ]

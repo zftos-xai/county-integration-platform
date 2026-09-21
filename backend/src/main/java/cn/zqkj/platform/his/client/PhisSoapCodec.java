@@ -1,6 +1,6 @@
 package cn.zqkj.platform.his.client;
 
-import cn.zqkj.platform.his.domain.model.PhisResponse;
+import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
 import cn.zqkj.platform.his.exception.PhisProtocolException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;

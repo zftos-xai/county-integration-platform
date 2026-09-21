@@ -17,22 +17,22 @@ import java.util.Map;
 public class MapperModelContractValidator {
 
     private static final Map<String, String> COLUMN_NAME_OVERRIDES = Map.ofEntries(
-            Map.entry("cn.zqkj.platform.system.domain.model.UserAccount#enabled", "account_enabled"),
-            Map.entry("cn.zqkj.platform.masterdata.domain.model.PlatformOrganizationSnapshot#code",
+            Map.entry("cn.zqkj.platform.system.identity.domain.model.UserAccount#enabled", "account_enabled"),
+            Map.entry("cn.zqkj.platform.masterdata.domain.batch.model.PlatformOrganizationSnapshot#code",
                     "organization_code"),
-            Map.entry("cn.zqkj.platform.masterdata.domain.model.PlatformOrganizationSnapshot#name",
+            Map.entry("cn.zqkj.platform.masterdata.domain.batch.model.PlatformOrganizationSnapshot#name",
                     "organization_name"),
-            Map.entry("cn.zqkj.platform.masterdata.domain.model.MasterDataBatchSnapshot#environment",
+            Map.entry("cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot#environment",
                     "environment_code"),
-            Map.entry("cn.zqkj.platform.masterdata.domain.model.MasterDataBatchSnapshot#category",
+            Map.entry("cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot#category",
                     "data_category"),
-            Map.entry("cn.zqkj.platform.masterdata.domain.model.MasterDataBatchSnapshot#rangeStart",
+            Map.entry("cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot#rangeStart",
                     "query_started_at"),
-            Map.entry("cn.zqkj.platform.masterdata.domain.model.MasterDataBatchSnapshot#rangeEnd",
+            Map.entry("cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot#rangeEnd",
                     "query_ended_at"),
-            Map.entry("cn.zqkj.platform.masterdata.domain.model.MasterDataBatchSnapshot#status",
+            Map.entry("cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot#status",
                     "batch_status"),
-            Map.entry("cn.zqkj.platform.masterdata.domain.model.MasterDataBatchSnapshot#version",
+            Map.entry("cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot#version",
                     "row_version")
     );
     private static final Map<String, String> COMPONENT_COLUMN_CONVENTIONS = Map.of(

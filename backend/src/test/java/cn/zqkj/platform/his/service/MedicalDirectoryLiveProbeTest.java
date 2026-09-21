@@ -1,16 +1,17 @@
 package cn.zqkj.platform.his.service;
 
-import cn.zqkj.platform.his.domain.dto.MedicalDirectoryCountQuery;
-import cn.zqkj.platform.his.domain.dto.MedicalDirectoryQuery;
-import cn.zqkj.platform.his.domain.model.MedicalDirectoryEntry;
-import cn.zqkj.platform.his.domain.model.MedicalDirectoryType;
-import cn.zqkj.platform.his.domain.model.PhisResponse;
-import cn.zqkj.platform.masterdata.mapper.MasterDataBatchMapper;
-import cn.zqkj.platform.masterdata.domain.model.SourcePagination;
-import cn.zqkj.platform.masterdata.domain.model.SourcePage;
-import cn.zqkj.platform.masterdata.domain.model.MedicalDirectorySourceRecord;
-import cn.zqkj.platform.masterdata.service.MedicalDirectoryValidationService;
-import cn.zqkj.platform.system.domain.model.ParameterEnvironment;
+import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
+import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
+import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
+import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryType;
+import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
+import cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper;
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.SourcePagination;
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.SourcePage;
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySourceRecord;
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySourceEntry;
+import cn.zqkj.platform.masterdata.service.medicaldirectory.MedicalDirectoryValidationService;
+import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -130,7 +131,14 @@ class MedicalDirectoryLiveProbeTest {
             returned += response.data().size();
             response.data().forEach(entry -> {
                 assertTrue(stableCodes.add(entry.directoryCode()), "耗材目录出现重复编码：" + entry.directoryCode());
-                records.add(new MedicalDirectorySourceRecord(MedicalDirectoryType.CONSUMABLE, entry));
+                records.add(new MedicalDirectorySourceRecord(
+                        cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType.CONSUMABLE,
+                        new MedicalDirectorySourceEntry(entry.directoryCode(), entry.directoryName(), entry.mnemonicCode(),
+                                entry.categoryName(), entry.unit(), entry.specification(), entry.dosageForm(),
+                                entry.manufacturerName(), entry.remark(), entry.sourceCreatedAt(), entry.packageUnit(),
+                                entry.conversionFactor(), entry.approvalNumber(), entry.standardCode(),
+                                entry.packageMaterial(), entry.processingMethod(), entry.region(), entry.category(),
+                                entry.enabledFlag())));
             });
         }
         assertEquals(count.data().longValue(), returned, "耗材分页实际取得数必须等于来源声明数");

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.system.identity.mapper.IdentityMapper">
+    <resultMap id="userAccount" type="cn.zqkj.platform.system.identity.domain.model.UserAccount">
+        <constructor>
+            <!-- 平台用户内部主键 -->
+            <arg column="id" javaType="_long"/>
+            <!-- 平台本地登录名 -->
+            <arg column="login_name" javaType="java.lang.String"/>
+            <!-- 管理页面及审计展示使用的用户名称 -->
+            <arg column="display_name" javaType="java.lang.String"/>
+            <!-- BCrypt密码哈希，不包含明文密码 -->
+            <arg column="password_hash" javaType="java.lang.String"/>
+            <!-- 用户主归属平台机构主键 -->
+            <arg column="primary_organization_id" javaType="_long"/>
+            <!-- 用户主归属平台机构编码 -->
+            <arg column="organization_code" javaType="java.lang.String"/>
+            <!-- 用户和主机构合并计算后的可登录状态 -->
+            <arg column="account_enabled" javaType="_boolean"/>
+            <!-- 是否必须先修改初始或重置密码 -->
+            <arg column="must_change_password" javaType="_boolean"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="userAccountColumns">
+        <!-- 平台用户内部主键 -->
+        users.id,
+        <!-- 平台本地登录名 -->
+        users.login_name,
+        <!-- 用户显示名称 -->
+        users.display_name,
+        <!-- BCrypt密码哈希 -->
+        users.password_hash,
+        <!-- 用户主归属平台机构主键 -->
+        users.primary_organization_id,
+        <!-- 用户主归属平台机构编码 -->
+        organizations.organization_code,
+        <!-- 用户与主机构均启用时账号才可用 -->
+        CASE WHEN users.is_enabled = 1 AND organizations.is_enabled = 1 THEN 1 ELSE 0 END AS account_enabled,
+        <!-- 是否必须先修改密码 -->
+        users.must_change_password
+    </sql>
+
+    <select id="lockAndCountUsers" resultType="int">
+        SELECT COUNT(1)
+        <!-- 更新范围锁和可串行化范围锁保证一次性初始化 -->
+        FROM sys_user WITH (UPDLOCK, HOLDLOCK)
+    </select>
+
+    <select id="countUsers" resultType="int">
+        <!-- 统计平台用户总数，用于判断是否仍允许执行首次初始化 -->
+        SELECT COUNT(1)
+        FROM sys_user
+    </select>
+
+    <select id="findByLoginName" resultMap="userAccount">
+        SELECT <include refid="userAccountColumns"/>
+        FROM sys_user AS users
+        INNER JOIN org_organization AS organizations
+            ON organizations.id = users.primary_organization_id
+        <!-- 登录名按统一规范化结果精确匹配 -->
+        WHERE users.login_name = #{loginName}
+    </select>
+
+    <select id="findById" resultMap="userAccount">
+        SELECT <include refid="userAccountColumns"/>
+        FROM sys_user AS users
+        INNER JOIN org_organization AS organizations
+            ON organizations.id = users.primary_organization_id
+        <!-- 按平台用户内部主键精确查询 -->
+        WHERE users.id = #{userId}
+    </select>
+
+    <select id="findPermissionCodes" resultType="java.lang.String">
+        <!-- 用户经启用角色获得的去重功能权限代码 -->
+        SELECT DISTINCT role_permissions.permission_code
+        FROM sys_user_role AS user_roles
+        INNER JOIN sys_role AS roles
+            ON roles.id = user_roles.role_id
+           AND roles.is_enabled = 1
+        INNER JOIN sys_role_permission AS role_permissions
+            ON role_permissions.role_id = roles.id
+        <!-- 限定当前平台用户 -->
+        WHERE user_roles.user_id = #{userId}
+        <!-- 稳定输出权限代码顺序 -->
+        ORDER BY role_permissions.permission_code
+    </select>
+
+    <select id="findOrganizationCodes" resultType="java.lang.String">
+        <!-- 用户获批的显式管理范围，保留停用机构以支持复核和重新启用 -->
+        SELECT organizations.organization_code
+        FROM sys_user_organization_scope AS scopes
+        INNER JOIN org_organization AS organizations
+            ON organizations.id = scopes.organization_id
+        <!-- 限定当前平台用户 -->
+        WHERE scopes.user_id = #{userId}
+        <!-- 稳定输出机构代码顺序 -->
+        ORDER BY organizations.organization_code
+    </select>
+
+    <update id="upsertPermission">
+        <!-- 权限代码是后端注册权限的稳定唯一标识 -->
+        IF EXISTS (SELECT 1 FROM sys_permission WHERE permission_code = #{permissionCode})
+            <!-- 已注册权限只同步展示名称 -->
+            UPDATE sys_permission
+            SET permission_name = #{permissionName}
+            WHERE permission_code = #{permissionCode};
+        ELSE
+            <!-- 首次注册权限代码及展示名称 -->
+            INSERT INTO sys_permission (
+                permission_code,<!-- 后端注册的稳定功能权限代码 -->
+                permission_name <!-- 管理页面展示的功能权限名称 -->
+            )
+            VALUES (#{permissionCode}, #{permissionName});
+    </update>
+
+    <select id="createRole" resultType="long">
+        INSERT INTO sys_role (
+            role_code,        <!-- 稳定角色代码 -->
+            role_name,        <!-- 角色展示名称 -->
+            is_enabled,       <!-- 初始化角色启用状态 -->
+            is_system_managed,<!-- 平台初始化角色保护标识 -->
+            created_by,       <!-- 创建人稳定用户标识快照 -->
+            updated_by        <!-- 最后修改人稳定用户标识快照 -->
+        ) VALUES (
+            #{roleCode}, #{roleName}, 1, 1, #{actor}, #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <select id="createUser" resultType="long">
+        INSERT INTO sys_user (
+            login_name,              <!-- 平台本地登录名 -->
+            display_name,            <!-- 管理页面及审计展示使用的用户名称 -->
+            password_hash,           <!-- BCrypt密码哈希，不保存明文密码 -->
+            primary_organization_id, <!-- 用户主归属机构内部主键 -->
+            is_enabled,              <!-- 初始化用户启用状态 -->
+            must_change_password,    <!-- 首次登录是否需要修改初始密码 -->
+            created_by,              <!-- 创建人稳定用户标识快照 -->
+            updated_by               <!-- 最后修改人稳定用户标识快照 -->
+        ) VALUES (
+            #{command.loginName}, #{command.displayName}, #{passwordHash}, #{organizationId},
+            1, 0, #{actor}, #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <insert id="grantPermission">
+        <!-- 角色、注册权限和授权人共同形成权限授予事实 -->
+        INSERT INTO sys_role_permission (
+            role_id,        <!-- 获得权限的平台角色内部主键 -->
+            permission_code,<!-- 授予的稳定功能权限代码 -->
+            granted_by      <!-- 执行授权的用户稳定标识快照 -->
+        )
+        VALUES (#{roleId}, #{permissionCode}, #{actor})
+    </insert>
+
+    <insert id="grantRole">
+        <!-- 用户、角色和授权人共同形成角色授予事实 -->
+        INSERT INTO sys_user_role (
+            user_id,   <!-- 获得角色的平台用户内部主键 -->
+            role_id,   <!-- 授予的平台角色内部主键 -->
+            granted_by <!-- 执行授权的用户稳定标识快照 -->
+        )
+        VALUES (#{userId}, #{roleId}, #{actor})
+    </insert>
+
+    <insert id="grantOrganization">
+        <!-- 用户、机构和授权人共同形成机构范围授予事实 -->
+        INSERT INTO sys_user_organization_scope (
+            user_id,        <!-- 获得机构范围的平台用户内部主键 -->
+            organization_id,<!-- 授予的平台机构内部主键 -->
+            granted_by      <!-- 执行授权的用户稳定标识快照 -->
+        )
+        VALUES (#{userId}, #{organizationId}, #{actor})
+    </insert>
+
+    <update id="changePassword">
+        UPDATE sys_user
+        <!-- 保存新密码强哈希 -->
+        SET password_hash = #{passwordHash},
+            <!-- 清除首次或重置密码强制修改标记 -->
+            must_change_password = 0,
+            <!-- 记录密码修改UTC时间 -->
+            password_changed_at = SYSUTCDATETIME(),
+            <!-- 记录最后修改人 -->
+            updated_by = #{actor},
+            <!-- 记录最后修改UTC时间 -->
+            updated_at = SYSUTCDATETIME()
+        <!-- 仅修改当前仍启用的目标用户 -->
+        WHERE id = #{userId}
+          AND is_enabled = 1
+    </update>
+</mapper>

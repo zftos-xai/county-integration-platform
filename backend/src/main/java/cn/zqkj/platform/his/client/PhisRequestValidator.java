@@ -1,9 +1,9 @@
 package cn.zqkj.platform.his.client;
 
-import cn.zqkj.platform.his.domain.dto.HospitalDirectoryQuery;
-import cn.zqkj.platform.his.domain.dto.MedicalDirectoryCountQuery;
-import cn.zqkj.platform.his.domain.dto.MedicalDirectoryQuery;
-import cn.zqkj.platform.his.domain.dto.OrganizationQuery;
+import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
+import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
+import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
 import cn.zqkj.platform.his.exception.PhisRequestException;
 
 /**

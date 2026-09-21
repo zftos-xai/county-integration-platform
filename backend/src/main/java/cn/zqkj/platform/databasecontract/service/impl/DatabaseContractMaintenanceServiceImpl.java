@@ -19,10 +19,9 @@ import cn.zqkj.platform.framework.database.DatabaseContractInspectionService;
 import cn.zqkj.platform.framework.database.DatabaseContractRepairPlanner;
 import cn.zqkj.platform.framework.database.DatabaseContractRepairSql;
 import cn.zqkj.platform.framework.database.DatabaseContractViolation;
-import cn.zqkj.platform.system.domain.dto.ManagementAuditCommand;
-import cn.zqkj.platform.system.domain.model.AccessActor;
-import cn.zqkj.platform.system.service.ManagementAuditService;
-import cn.zqkj.platform.system.service.impl.ManagementAuditServiceImpl;
+import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
+import cn.zqkj.platform.system.audit.service.ManagementAuditService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +29,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -325,7 +323,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
                 snapshot.executableCount(), snapshot.summary(), snapshot.createdBy(), snapshot.createdAt(),
                 snapshot.approvedBy(), snapshot.approvedAt(), snapshot.approvalNote(), snapshot.executedBy(),
                 snapshot.executedAt(), snapshot.verifiedAt(), snapshot.failureMessage(), snapshot.updatedAt(),
-                Base64.getEncoder().encodeToString(snapshot.version()), items);
+                Func.encodeBase64(snapshot.version()), items);
     }
 
     /**
@@ -339,7 +337,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
     private void audit(AccessActor actor, String action, String planNo, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(
                 actor, null, null, null, action, "DATABASE_CONTRACT_PLAN", planNo,
-                "SUCCESS", summary, ManagementAuditServiceImpl.currentRequestId()));
+                "SUCCESS", summary, auditService.currentRequestId()));
     }
 
     /**

@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.masterdata.mapper.hospitaldirectory.HospitalDirectorySyncMapper">
+    <resultMap id="directorySyncResult" type="cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySyncResult">
+        <constructor>
+            <!-- 100-003目录类型 -->
+            <arg column="directory_type" javaType="cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType"/>
+            <!-- 本类型可确认处理结论 -->
+            <arg column="status" javaType="cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySyncResultStatus"/>
+            <!-- HIS实际返回记录数 -->
+            <arg column="returned_count" javaType="_long"/>
+            <!-- 批次内重复记录数 -->
+            <arg column="duplicate_count" javaType="_long"/>
+            <!-- 自动校验不通过记录数 -->
+            <arg column="invalid_count" javaType="_long"/>
+            <!-- 同来源编码冲突记录数 -->
+            <arg column="conflict_count" javaType="_long"/>
+            <!-- 新增当前目录记录数 -->
+            <arg column="created_count" javaType="_long"/>
+            <!-- 更新或恢复有效记录数 -->
+            <arg column="updated_count" javaType="_long"/>
+            <!-- 与当前记录一致的记录数 -->
+            <arg column="unchanged_count" javaType="_long"/>
+            <!-- 来源缺失并标记无效记录数 -->
+            <arg column="source_missing_count" javaType="_long"/>
+            <!-- 处理后当前有效记录数，未完成时为空 -->
+            <arg column="active_count" javaType="java.lang.Long"/>
+            <!-- 受控失败摘要，完成时为空 -->
+            <arg column="failure_summary" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <update id="beginFetch">
+        <!-- 仅将新建或结果未知批次推进到HIS取数状态，并以rowversion阻止重复执行 -->
+        UPDATE md_sync_batch
+        SET batch_status = 'FETCHING', started_at = SYSUTCDATETIME(), finished_at = NULL,
+            failure_code = NULL, failure_summary = NULL, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{batchId} AND batch_status IN ('CREATED', 'RESULT_UNKNOWN') AND row_version = #{expectedVersion}
+    </update>
+
+    <select id="classifyDirectory" resultType="int">
+        <!-- 在写入前分类：0新增、1更新或恢复有效、2与当前有效记录一致。 -->
+        SELECT CASE
+            WHEN NOT EXISTS (SELECT 1 FROM md_hospital_directory directory
+                WHERE directory.organization_id = #{organizationId} AND directory.source_system_code = 'PRIMARY_HIS'
+                  AND directory.directory_type = #{record.directoryType.code} AND directory.source_record_code = #{record.sourceCode}) THEN 0
+            WHEN EXISTS (SELECT 1 FROM md_hospital_directory directory
+                WHERE directory.organization_id = #{organizationId} AND directory.source_system_code = 'PRIMARY_HIS'
+                  AND directory.directory_type = #{record.directoryType.code} AND directory.source_record_code = #{record.sourceCode}
+                  AND (directory.is_valid = 0 OR directory.source_record_name &lt;&gt; #{record.sourceName}
+                    OR ISNULL(directory.mnemonic_code, '') &lt;&gt; ISNULL(#{record.mnemonicCode,jdbcType=NVARCHAR}, '')
+                    OR ISNULL(directory.category_name, '') &lt;&gt; ISNULL(#{record.categoryName,jdbcType=NVARCHAR}, '')
+                    OR ISNULL(directory.remark, '') &lt;&gt; ISNULL(#{record.remark,jdbcType=NVARCHAR}, '')
+                    OR ISNULL(directory.department_code, '') &lt;&gt; ISNULL(#{record.departmentCode,jdbcType=NVARCHAR}, '')
+                    OR ISNULL(directory.department_name, '') &lt;&gt; ISNULL(#{record.departmentName,jdbcType=NVARCHAR}, '')
+                    OR ISNULL(directory.ward_name, '') &lt;&gt; ISNULL(#{record.wardName,jdbcType=NVARCHAR}, '')
+                    OR ISNULL(directory.source_organization_code, '') &lt;&gt; ISNULL(#{record.sourceOrganizationCode,jdbcType=NVARCHAR}, ''))) THEN 1
+            ELSE 2 END
+    </select>
+
+    <update id="updateDirectoryDirect">
+        <!-- 已存在来源记录直接写为本次完整HIS结果；重新出现时恢复为有效。 -->
+        UPDATE md_hospital_directory
+        SET source_record_name = #{record.sourceName}, mnemonic_code = #{record.mnemonicCode,jdbcType=NVARCHAR},
+            category_name = #{record.categoryName,jdbcType=NVARCHAR}, remark = #{record.remark,jdbcType=NVARCHAR},
+            department_code = #{record.departmentCode,jdbcType=NVARCHAR}, department_name = #{record.departmentName,jdbcType=NVARCHAR},
+            ward_name = #{record.wardName,jdbcType=NVARCHAR}, source_organization_code = #{record.sourceOrganizationCode,jdbcType=NVARCHAR},
+            latest_batch_id = #{batchId}, is_valid = 1, invalidated_at = NULL, invalid_reason = NULL,
+            last_seen_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+        WHERE organization_id = #{organizationId} AND source_system_code = 'PRIMARY_HIS'
+          AND directory_type = #{record.directoryType.code} AND source_record_code = #{record.sourceCode}
+    </update>
+
+    <insert id="insertDirectoryDirect">
+        <!-- 首次出现的来源记录直接写入当前目录；锁定同一稳定键防止并发重复插入。 -->
+        INSERT INTO md_hospital_directory (
+            organization_id,          <!-- 平台机构主键 -->
+            source_system_code,       <!-- 来源系统稳定代码 -->
+            directory_type,           <!-- 100-003目录类型 -->
+            source_record_code,       <!-- HIS稳定目录编码 -->
+            source_record_name,       <!-- HIS目录名称 -->
+            mnemonic_code,            <!-- 可选助记码 -->
+            category_name,            <!-- 可选类别名称 -->
+            remark,                   <!-- 可选非敏感备注 -->
+            department_code,          <!-- 可选关联科室编码 -->
+            department_name,          <!-- 可选关联科室名称 -->
+            ward_name,                <!-- 可选关联病区编码 -->
+            source_organization_code, <!-- HIS返回机构编码 -->
+            first_seen_batch_id,      <!-- 首次见到该记录的同步运行 -->
+            latest_batch_id,          <!-- 最近完整对账运行 -->
+            first_seen_at,            <!-- 首次见到时间 -->
+            last_seen_at              <!-- 最近完整返回时间 -->
+        ) SELECT #{organizationId}, 'PRIMARY_HIS', #{record.directoryType.code}, #{record.sourceCode}, #{record.sourceName},
+            #{record.mnemonicCode,jdbcType=NVARCHAR}, #{record.categoryName,jdbcType=NVARCHAR}, #{record.remark,jdbcType=NVARCHAR},
+            #{record.departmentCode,jdbcType=NVARCHAR}, #{record.departmentName,jdbcType=NVARCHAR}, #{record.wardName,jdbcType=NVARCHAR},
+            #{record.sourceOrganizationCode,jdbcType=NVARCHAR}, #{batchId}, #{batchId}, SYSUTCDATETIME(), SYSUTCDATETIME()
+        WHERE NOT EXISTS (SELECT 1 FROM md_hospital_directory WITH (UPDLOCK, HOLDLOCK)
+            WHERE organization_id = #{organizationId} AND source_system_code = 'PRIMARY_HIS'
+              AND directory_type = #{record.directoryType.code} AND source_record_code = #{record.sourceCode})
+    </insert>
+
+    <update id="markMissingDirectoryInvalid">
+        <!-- 仅在这一目录类型完整取得并通过自动校验后，才确认未返回记录已不在HIS来源范围中。 -->
+        UPDATE directory
+        SET is_valid = 0, invalidated_at = SYSUTCDATETIME(), invalid_reason = 'HIS_NOT_RETURNED',
+            updated_at = SYSUTCDATETIME()
+        FROM md_hospital_directory directory
+        WHERE directory.organization_id = #{organizationId}
+          AND directory.source_system_code = 'PRIMARY_HIS'
+          AND directory.directory_type = #{directoryType.code}
+          AND directory.is_valid = 1
+          AND directory.latest_batch_id &lt;&gt; #{batchId}
+    </update>
+
+    <delete id="deleteRelationsForType">
+        <!-- 只替换已完整同步的类型关系，不影响其他目录类型。 -->
+        DELETE FROM md_hospital_directory_relation
+        WHERE organization_id = #{organizationId} AND source_system_code = 'PRIMARY_HIS'
+          AND relation_type = CASE #{directoryType.code}
+              WHEN 1 THEN 'DOCTOR_WARD' WHEN 2 THEN 'WARD_DEPARTMENT' WHEN 3 THEN 'BED_WARD' ELSE '__NONE__' END
+    </delete>
+
+    <insert id="insertRelationDirect">
+        <!-- 同类型全部返回后替换关系快照；关系本身不保存人员或患者敏感正文。 -->
+        INSERT INTO md_hospital_directory_relation (
+            organization_id,    <!-- 平台机构主键 -->
+            source_system_code, <!-- 来源系统稳定代码 -->
+            relation_type,      <!-- 已确认的目录关系类型 -->
+            source_record_code, <!-- 关系起点目录编码 -->
+            target_record_code, <!-- 关系终点目录编码 -->
+            latest_batch_id     <!-- 本次完整对账运行 -->
+        ) VALUES (
+            #{organizationId}, 'PRIMARY_HIS', #{relation.relationType}, #{relation.sourceCode}, #{relation.targetCode}, #{batchId}
+        )
+    </insert>
+
+    <select id="countActive" resultType="long">
+        <!-- 统计本机构当前有效医院综合目录总数 -->
+        SELECT COUNT(1)
+        FROM md_hospital_directory directory
+        WHERE directory.organization_id = #{organizationId}
+          AND directory.source_system_code = 'PRIMARY_HIS'
+          AND directory.is_valid = 1
+    </select>
+
+    <select id="countActiveByType" resultType="long">
+        <!-- 仅对已完整处理的单一目录类型统计当前有效记录，失败或结果未知时不会调用。 -->
+        SELECT COUNT(1)
+        FROM md_hospital_directory directory
+        WHERE directory.organization_id = #{organizationId}
+          AND directory.source_system_code = 'PRIMARY_HIS'
+          AND directory.directory_type = #{directoryType.code}
+          AND directory.is_valid = 1
+    </select>
+
+    <select id="findResults" resultMap="directorySyncResult">
+        <!-- 仅读取已保存的分项事实；不触发HIS调用，也不根据批次总计推算缺失类型。 -->
+        SELECT CASE directory_type
+                   WHEN 0 THEN 'DEPARTMENT' WHEN 1 THEN 'DOCTOR' WHEN 2 THEN 'WARD' WHEN 3 THEN 'BED'
+               END AS directory_type,
+               outcome_status AS status, returned_count, duplicate_count, invalid_count,
+               conflict_count, created_count, updated_count, unchanged_count, source_missing_count,
+               active_count, failure_summary
+        FROM md_hospital_directory_sync_result
+        WHERE batch_id = #{batchId}
+        ORDER BY directory_type ASC
+    </select>
+
+    <update id="saveDirectoryResult">
+        <!-- 同一批次和目录类型只保存一条可复核结论；批次状态仍为FETCHING时由外层事务统一提交。 -->
+        UPDATE md_hospital_directory_sync_result
+        SET outcome_status = #{result.status}, returned_count = #{result.returnedCount},
+            duplicate_count = #{result.duplicateCount}, invalid_count = #{result.invalidCount},
+            conflict_count = #{result.conflictCount}, created_count = #{result.createdCount},
+            updated_count = #{result.updatedCount}, unchanged_count = #{result.unchangedCount},
+            source_missing_count = #{result.sourceMissingCount}, active_count = #{result.activeCount,jdbcType=BIGINT},
+            failure_summary = #{result.failureSummary,jdbcType=NVARCHAR}, finished_at = SYSUTCDATETIME()
+        WHERE batch_id = #{batchId} AND directory_type = #{result.directoryType.code};
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            INSERT INTO md_hospital_directory_sync_result (
+                batch_id,             <!-- 所属同步批次 -->
+                directory_type,       <!-- 医院目录子类型 -->
+                outcome_status,       <!-- 本类型最终处理结论 -->
+                returned_count,       <!-- HIS实际返回条数 -->
+                duplicate_count,      <!-- 批内重复条数 -->
+                invalid_count,        <!-- 字段校验不通过条数 -->
+                conflict_count,       <!-- 来源编码内容冲突条数 -->
+                created_count,        <!-- 新增当前目录条数 -->
+                updated_count,        <!-- 更新或恢复有效条数 -->
+                unchanged_count,      <!-- 与当前记录一致条数 -->
+                source_missing_count, <!-- 完整返回后标记无效条数 -->
+                active_count,         <!-- 处理后当前有效条数 -->
+                failure_summary,      <!-- 失败或结果未知摘要 -->
+                finished_at           <!-- 本类型结论完成时间 -->
+            ) VALUES (
+                #{batchId}, #{result.directoryType.code}, #{result.status}, #{result.returnedCount},
+                #{result.duplicateCount}, #{result.invalidCount}, #{result.conflictCount}, #{result.createdCount},
+                #{result.updatedCount}, #{result.unchangedCount}, #{result.sourceMissingCount},
+                #{result.activeCount,jdbcType=BIGINT}, #{result.failureSummary,jdbcType=NVARCHAR},
+                SYSUTCDATETIME()
+            );
+        END
+    </update>
+
+    <update id="finishCompleted">
+        <!-- 保存本次直接对账事实；部分异常不回滚已经完整成功的目录类型。 -->
+        UPDATE md_sync_batch
+        SET batch_status = #{status}, is_active = 0, returned_count = #{returnedCount},
+            duplicate_count = #{duplicateCount}, invalid_count = #{invalidCount}, conflict_count = #{conflictCount},
+            created_count = #{createdCount}, updated_count = #{updatedCount}, unchanged_count = #{unchangedCount},
+            source_missing_count = #{sourceMissingCount}, active_count = #{activeCount}, completed_at = SYSUTCDATETIME(),
+            failure_code = #{failureCode,jdbcType=NVARCHAR}, failure_summary = #{failureSummary,jdbcType=NVARCHAR},
+            finished_at = SYSUTCDATETIME(), updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{batchId} AND batch_status = 'FETCHING'
+    </update>
+
+    <update id="finishFailure">
+        <!-- 明确失败释放范围；结果未知保持占用以防止未经确认的重复请求 -->
+        UPDATE md_sync_batch
+        SET batch_status = #{status}, is_active = CASE WHEN #{status} = 'FAILED' THEN 0 ELSE 1 END,
+            returned_count = #{returnedCount}, duplicate_count = #{duplicateCount},
+            invalid_count = #{invalidCount}, conflict_count = #{conflictCount},
+            failure_code = #{code}, failure_summary = #{summary}, finished_at = SYSUTCDATETIME(),
+            updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{batchId} AND batch_status = 'FETCHING'
+    </update>
+</mapper>

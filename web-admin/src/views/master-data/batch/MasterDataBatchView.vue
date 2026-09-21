@@ -17,7 +17,8 @@ import {
   cancelMasterDataBatch,
   getMasterDataBatch,
   getHospitalDirectorySyncResults,
-  runHospitalDirectoryBatch,
+  getMedicalDirectorySyncResults,
+  runMasterDataBatch,
   listMasterDataBatches,
   getMasterDataSyncOptions,
   masterDataBatchStatuses,
@@ -30,6 +31,7 @@ import type {
   MasterDataCategory,
   MasterDataSyncOptions,
   HospitalDirectorySyncResult,
+  MedicalDirectorySyncResult,
   StartMasterDataBatchInput,
 } from '@/api/master-data/batch';
 import { listOrganizations } from '@/api/system/organization';
@@ -37,6 +39,7 @@ import { authState, hasPermission } from '@/store/modules/auth';
 import { ApiClientError } from '@/utils/request';
 import StartBatchDrawer from './components/StartBatchDrawer.vue';
 import DirectorySyncResultPanel from './components/DirectorySyncResultPanel.vue';
+import MedicalDirectorySyncResultPanel from './components/MedicalDirectorySyncResultPanel.vue';
 import {
   emptyMasterDataBatchForm,
   masterDataCategoryLabels,
@@ -60,6 +63,7 @@ const selected = ref<MasterDataBatchSummary | null>(null);
 const detailError = ref<ApiClientError | null>(null);
 const isDetailLoading = ref(false);
 const directoryResults = ref<HospitalDirectorySyncResult[]>([]);
+const medicalDirectoryResults = ref<MedicalDirectorySyncResult[]>([]);
 const isDirectoryResultsLoading = ref(false);
 const isAdvancing = ref(false);
 const confirmCancelId = ref<number | null>(null);
@@ -88,11 +92,10 @@ const hasSyncOption = computed(
     syncOptions.value.businesses.length > 0,
 );
 const hasSyncSource = computed(() => syncOptions.value.sources.length > 0);
-const canRunHospitalDirectory = computed(
+const canRunSelectedBatch = computed(
   () =>
     hasPermission('master-data:sync') &&
-    selected.value?.category === 'HOSPITAL_DIRECTORY' &&
-    selected.value.status === 'CREATED',
+    selected.value?.status === 'CREATED',
 );
 const canCancelBatch = computed(
   () =>
@@ -242,7 +245,7 @@ function changePageSize(value: number) {
   void loadBatches();
 }
 
-/** 打开医院综合目录同步窗口；只能选择已验证的HIS接口来源。 */
+/** 打开基础数据同步窗口；只能选择已验证的HIS接口来源。 */
 function openCreator() {
   const currentCode = authState.user?.organizationCode ?? '';
   const defaultSource =
@@ -297,7 +300,7 @@ async function cancelBatch(item: MasterDataBatchSummary) {
   }
 }
 
-/** 创建医院综合目录批次并立即完成100-003四类目录的自动处理。 */
+/** 创建当前选择业务批次并立即完成自动取得、校验和当前数据更新。 */
 async function submitBatch() {
   formError.value = validateMasterDataBatchForm(form.value) ?? '';
   const business = syncOptions.value.businesses.find(
@@ -312,12 +315,12 @@ async function submitBatch() {
   let created: MasterDataBatchSummary | null = null;
   try {
     created = await startMasterDataBatch(input);
-    const updated = await runHospitalDirectoryBatch(created.id, created.version);
+    const updated = await runMasterDataBatch(created.id, created.version);
     isCreatorOpen.value = false;
     notice.value =
       updated.status === 'COMPLETED'
-        ? '医院综合目录已完成自动对账，当前数据已更新。'
-        : `医院综合目录部分未完成：${resultSummary(updated)}`;
+        ? `${masterDataCategoryLabels[updated.category]}已完成自动对账，当前数据已更新。`
+        : `${masterDataCategoryLabels[updated.category]}部分未完成：${resultSummary(updated)}`;
     auditTarget.value = {
       targetType: 'MASTER_DATA_BATCH',
       targetId: updated.batchNo,
@@ -328,7 +331,7 @@ async function submitBatch() {
   } catch (caught) {
     const apiError = asApiError(
       caught,
-      created ? '批次已创建，但无法完成医院综合目录同步' : '无法开始医院综合目录同步',
+      created ? '批次已创建，但无法完成本次同步' : '无法开始同步',
     );
     if (!(await handleUnauthorized(apiError))) {
       if (created) {
@@ -418,15 +421,17 @@ async function openDetail(item: MasterDataBatchSummary) {
   isDetailLoading.value = true;
   isDirectoryResultsLoading.value = true;
   directoryResults.value = [];
+  medicalDirectoryResults.value = [];
   try {
-    const [latest, results] = await Promise.all([
-      getMasterDataBatch(item.id, controller.signal),
-      getHospitalDirectorySyncResults(item.id, controller.signal),
-    ]);
+    const latest = await getMasterDataBatch(item.id, controller.signal);
     if (!mounted || controller.signal.aborted || selected.value?.id !== item.id)
       return;
     selected.value = latest;
-    directoryResults.value = results;
+    if (latest.category === 'HOSPITAL_DIRECTORY') {
+      directoryResults.value = await getHospitalDirectorySyncResults(item.id, controller.signal);
+    } else {
+      medicalDirectoryResults.value = await getMedicalDirectorySyncResults(item.id, controller.signal);
+    }
   } catch (caught) {
     const apiError = asApiError(caught, '无法读取批次详情');
     if (
@@ -447,26 +452,26 @@ async function openReview(batchId: number) {
   await router.push(`/master-data/batches/${batchId}`);
 }
 
-/** 取得100-003四类目录并由服务端自动校验和更新当前数据，结果未知时不自动重试。 */
-async function runSelectedHospitalDirectory() {
+/** 取得当前选择业务并由服务端自动校验和更新当前数据，结果未知时不自动重试。 */
+async function runSelectedBatch() {
   const current = selected.value;
   if (!current || isAdvancing.value) return;
   isAdvancing.value = true;
   actionError.value = null;
   try {
-    const updated = await runHospitalDirectoryBatch(current.id, current.version);
+    const updated = await runMasterDataBatch(current.id, current.version);
     selected.value = updated;
     notice.value =
       updated.status === 'COMPLETED'
-        ? '医院综合目录已完成自动对账，当前数据已更新。'
-        : `医院综合目录部分未完成：${resultSummary(updated)}`;
+        ? `${masterDataCategoryLabels[updated.category]}已完成自动对账，当前数据已更新。`
+        : `${masterDataCategoryLabels[updated.category]}部分未完成：${resultSummary(updated)}`;
     auditTarget.value = {
       targetType: 'MASTER_DATA_BATCH',
       targetId: updated.batchNo,
     };
     await openDetail(updated);
   } catch (caught) {
-    const apiError = asApiError(caught, '无法同步医院综合目录');
+    const apiError = asApiError(caught, '无法同步当前基础数据业务');
     if (!(await handleUnauthorized(apiError))) {
       await openDetail(current);
       actionError.value = apiError;
@@ -508,8 +513,9 @@ function statusPresentation(
 
 /** @param item 批次摘要 @return 页面可安全展示的同步结果摘要 */
 function resultSummary(item: MasterDataBatchSummary) {
+  const business = masterDataCategoryLabels[item.category];
   if (item.status === 'FAILED' && item.failureCode === 'HIS_BUSINESS_FAILURE') {
-    return 'HIS 拒绝医院综合目录查询，平台没有取得任何目录数据。';
+    return `HIS 拒绝${business}查询，平台没有取得任何目录数据。`;
   }
   if (item.status === 'FAILED' && item.failureCode === 'HIS_DATA_INVALID') {
     return '取得的数据未能通过系统校验，平台没有更新当前有效数据。';
@@ -518,13 +524,13 @@ function resultSummary(item: MasterDataBatchSummary) {
     return '无法确认 HIS 是否已处理完成，请先查询交易记录，不要重复提交。';
   }
   if (item.status === 'FAILED') {
-    return '本次同步未完成，平台没有更新当前有效数据。';
+    return `本次${business}同步未完成，平台没有更新当前有效数据。`;
   }
   if (item.status === 'COMPLETED_WITH_ERRORS') {
-    return '部分目录未通过自动校验或被 HIS 拒绝；已完成的目录类型已经更新，失败类型没有改动。';
+    return `部分${business}类型未通过自动校验或被 HIS 拒绝；已完成类型已经更新，失败类型没有改动。`;
   }
   if (item.status === 'COMPLETED_WITH_UNKNOWN') {
-    return '部分目录查询结果无法确认；已完成的目录类型已经更新，结果未知类型没有改动。';
+    return `部分${business}查询结果无法确认；已完成类型已经更新，结果未知类型没有改动。`;
   }
   return item.status === 'COMPLETED'
     ? '系统已完成自动校验，并更新本机构当前目录。'
@@ -542,7 +548,9 @@ function failureTitle(item: MasterDataBatchSummary) {
 /** @param item 失败批次 @return 不引导重复提交的下一步 */
 function failureNextStep(item: MasterDataBatchSummary) {
   if (item.failureCode === 'HIS_BUSINESS_FAILURE') {
-    return '请接口提供方开通该机构的 100-003 目录查询权限；确认后新建一次同步。';
+    return item.category === 'MEDICAL_DIRECTORY'
+      ? '请接口提供方开通该机构的 100-004 和 100-005 目录查询权限；确认后新建一次同步。'
+      : '请接口提供方开通该机构的 100-003 目录查询权限；确认后新建一次同步。';
   }
   if (item.failureCode === 'HIS_CONFIGURATION_ERROR') {
     return '请检查该机构的 HIS 接口配置，再从同步列表新建一次同步。';
@@ -593,6 +601,18 @@ function environmentLabel(item: MasterDataBatchSummary) {
     : item.environment === 'TEST'
       ? '测试环境'
       : '开发环境';
+}
+
+/** @param item 同步批次 @return 本次实际处理的目录范围 */
+function batchScopeDescription(item: MasterDataBatchSummary) {
+  return item.category === 'MEDICAL_DIRECTORY' ? '中药、西药、诊疗、耗材' : '科室、医生、病区、床位';
+}
+
+/** @param item 同步批次 @return 更新策略的准确业务说明 */
+function currentDataExplanation(item: MasterDataBatchSummary) {
+  return item.category === 'MEDICAL_DIRECTORY'
+    ? '系统先核对100-005声明数量，再分页取得100-004数据；完整通过校验的类型直接更新当前目录。来源时间范围未证明为全量快照，因此本次不会按未返回数据标记无效。'
+    : '本次读取科室、病区、床位和人员目录；完整返回且通过校验的部分已直接更新为当前数据。';
 }
 
 onMounted(() => {
@@ -897,13 +917,19 @@ onBeforeUnmount(() => {
               </div>
               <p>{{ resultSummary(selected) }}</p>
               <dl class="failure-facts">
-                <div><dt>本次范围</dt><dd>科室、医生、病区、床位</dd></div>
+                <div><dt>本次范围</dt><dd>{{ batchScopeDescription(selected) }}</dd></div>
                 <div><dt>平台数据</dt><dd>未写入，当前有效数据未改变</dd></div>
                 <div><dt>下一步</dt><dd>{{ failureNextStep(selected) }}</dd></div>
               </dl>
             </section>
             <DirectorySyncResultPanel
+              v-if="selected.category === 'HOSPITAL_DIRECTORY'"
               :results="directoryResults"
+              :loading="isDirectoryResultsLoading"
+            />
+            <MedicalDirectorySyncResultPanel
+              v-else
+              :results="medicalDirectoryResults"
               :loading="isDirectoryResultsLoading"
             />
             <section class="batch-detail-section">
@@ -916,7 +942,7 @@ onBeforeUnmount(() => {
                 <div>
                   <dt>接口环境 / 交易</dt>
                   <dd>
-                    {{ environmentLabel(selected) }} · {{ selected.dataTradeCode }}
+                    {{ environmentLabel(selected) }} · {{ selected.dataTradeCode }}<template v-if="selected.countTradeCode"> / {{ selected.countTradeCode }}</template>
                   </dd>
                 </div>
                 <div>
@@ -931,7 +957,7 @@ onBeforeUnmount(() => {
             >
               <h3>数据更新结果</h3>
               <p class="batch-result-intro">
-                本次读取科室、病区、床位和人员目录；完整返回且通过校验的部分已直接更新为当前数据。
+                {{ currentDataExplanation(selected) }}
               </p>
               <div class="count-grid">
                 <span
@@ -941,6 +967,7 @@ onBeforeUnmount(() => {
                   ><small>新增 / 更新</small
                   ><strong>{{ selected.counts.created }} / {{ selected.counts.updated }} 条</strong></span
                 ><span
+                  v-if="selected.category === 'HOSPITAL_DIRECTORY'"
                   ><small>标记无效</small
                   ><strong>{{ selected.counts.sourceMissing }} 条</strong></span
                 ><span
@@ -996,14 +1023,14 @@ onBeforeUnmount(() => {
             }}
           </button>
           <button
-            v-if="canRunHospitalDirectory"
+            v-if="canRunSelectedBatch"
             class="prototype-button"
             type="button"
             :disabled="isAdvancing"
-            @click="runSelectedHospitalDirectory"
+            @click="runSelectedBatch"
           >
             <LoaderCircle v-if="isAdvancing" class="spinning" :size="15" />{{
-              isAdvancing ? '正在同步' : '同步医院综合目录'
+              isAdvancing ? '正在同步' : `同步${masterDataCategoryLabels[selected.category]}`
             }}
           </button>
           <button

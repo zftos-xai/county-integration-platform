@@ -1,6 +1,6 @@
 package cn.zqkj.platform.framework.config;
 
-import cn.zqkj.platform.system.mapper.IdentityMapper;
+import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import cn.zqkj.platform.framework.security.filter.ActiveAccountFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

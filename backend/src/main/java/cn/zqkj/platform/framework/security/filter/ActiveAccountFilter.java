@@ -1,6 +1,6 @@
 package cn.zqkj.platform.framework.security.filter;
 
-import cn.zqkj.platform.system.mapper.IdentityMapper;
+import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

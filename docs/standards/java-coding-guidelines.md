@@ -94,7 +94,7 @@ public List<ExchangeRecordSummary> findRecent(String organizationCode, int limit
 - 请求和响应对象不得直接暴露数据库实体。对外接口规范、领域和持久化模型不一致时应明确转换边界。
 - 方法保持单一目的；复杂条件提取为有业务含义的方法，避免深层嵌套、超长参数列表和用布尔值控制多条流程。
 - 优先使用构造器注入和创建后不能修改的对象；只读传输结果可用 `record`。禁止通过静态可变状态共享请求数据。
-- Spring、安全和Web技术装配按职责放入`framework`；`common`仅允许统一响应、异常等边界明确且不含业务规则的类型，不创建无边界的`shared`或`utils`包。
+- Spring、安全和Web技术装配按职责放入`framework`；`common`仅允许统一响应、异常等边界明确且不含业务规则的类型。公共无状态工具以`common.utils.Func`作为唯一业务调用门面，日期时间、文本、集合等分类实现仅供该工具域内部协作；业务代码不得直接导入分类工具类或再新增第二个通用入口。不得创建无边界的`shared`包或向`Func`放入业务规则。
 - 业务域专属异常统一放在`<业务域>/exception`，跨业务且语义稳定的公共异常才允许放在`common/exception`。异常类不得夹在`controller`、`client`、`service`或`service.impl`中；名称应表达失败语义，不使用`ServiceException`、`ClientException`等仅描述技术层次的笼统命名。
 
 ## 5. Java 基础实践

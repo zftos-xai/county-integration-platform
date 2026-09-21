@@ -9,6 +9,7 @@ import {
   masterDataBatchCancelPath,
   masterDataBatchDetailPath,
   masterDataBatchDirectoryResultsPath,
+  masterDataBatchMedicalDirectoryResultsPath,
   masterDataBatchRunPath,
   masterDataBatchListPath,
   masterDataSyncOptionsPath,
@@ -19,6 +20,7 @@ import { hospitalDirectoryTypes, type HospitalDirectoryType } from './directory'
 /** 当前已经确认进入首批基础数据业务的类别。 */
 export const masterDataCategories = [
   'HOSPITAL_DIRECTORY',
+  'MEDICAL_DIRECTORY',
 ] as const
 
 /** 首批基础数据类别代码。 */
@@ -119,6 +121,8 @@ export type StartMasterDataBatchInput = {
   organizationCode: string | null
   environment: MasterDataEnvironment
   category: MasterDataCategory
+  rangeStart: string | null
+  rangeEnd: string | null
 }
 
 /** 当前账号可实际使用的HIS机构和环境组合。 */
@@ -133,6 +137,8 @@ export type MasterDataSyncBusiness = {
   category: MasterDataCategory
   name: string
   tradeCode: string
+  countTradeCode: string | null
+  requiresTimeRange: boolean
 }
 
 /** 发起同步时由后端给出的真实来源和已实现业务。 */
@@ -165,7 +171,9 @@ export function isMasterDataSyncBusiness(
     isRecord(value) &&
     isMasterDataCategory(value.category) &&
     typeof value.name === 'string' &&
-    typeof value.tradeCode === 'string'
+    typeof value.tradeCode === 'string' &&
+    (typeof value.countTradeCode === 'string' || value.countTradeCode === null) &&
+    typeof value.requiresTimeRange === 'boolean'
   )
 }
 
@@ -343,6 +351,19 @@ export function getHospitalDirectorySyncResults(
   )
 }
 
+/** 读取一个100-004/100-005批次的分项事实；查看不会再次调用HIS。 */
+export function getMedicalDirectorySyncResults(
+  batchId: number,
+  signal?: AbortSignal,
+) {
+  return apiRequest<MedicalDirectorySyncResult[]>(
+    masterDataBatchMedicalDirectoryResultsPath(batchId),
+    { signal },
+    (value): value is MedicalDirectorySyncResult[] =>
+      Array.isArray(value) && value.every(isMedicalDirectorySyncResult),
+  )
+}
+
 /**
  * 发起一次有明确业务范围的同步批次。
  * 网络失败或超时时要求调用方先按请求标识回读，不能直接再次提交。
@@ -377,7 +398,7 @@ export async function cancelMasterDataBatch(batchId: number, version: string) {
 }
 
 /** 使用最近读取版本完成100-003医院综合目录的取得、自动校验和直接对账。 */
-export async function runHospitalDirectoryBatch(batchId: number, version: string) {
+export async function runMasterDataBatch(batchId: number, version: string) {
   try {
     return await apiRequest<MasterDataBatchSummary>(
       masterDataBatchRunPath(batchId),
@@ -388,4 +409,41 @@ export async function runHospitalDirectoryBatch(batchId: number, version: string
     if (error instanceof ApiClientError) throw asUncertainWriteError(error)
     throw error
   }
+}
+
+/** 100-004/100-005按医疗目录类型保存的处理事实。 */
+export type MedicalDirectorySyncResult = {
+  directoryType: 'TRADITIONAL_MEDICINE' | 'WESTERN_MEDICINE' | 'TREATMENT' | 'CONSUMABLE'
+  status: HospitalDirectorySyncResultStatus
+  declaredCount: number | null
+  returnedCount: number
+  duplicateCount: number
+  invalidCount: number
+  conflictCount: number
+  createdCount: number
+  updatedCount: number
+  unchangedCount: number
+  sourceMissingCount: number
+  activeCount: number | null
+  failureSummary: string | null
+}
+
+/** 校验医疗目录分项结果，禁止把缺失字段显示为零。 */
+export function isMedicalDirectorySyncResult(
+  value: unknown,
+): value is MedicalDirectorySyncResult {
+  if (!isRecord(value)) return false
+  const types = ['TRADITIONAL_MEDICINE', 'WESTERN_MEDICINE', 'TREATMENT', 'CONSUMABLE']
+  const numericFields = [
+    value.returnedCount, value.duplicateCount, value.invalidCount, value.conflictCount,
+    value.createdCount, value.updatedCount, value.unchangedCount, value.sourceMissingCount,
+  ]
+  return (
+    typeof value.directoryType === 'string' && types.some((type) => type === value.directoryType) &&
+    (value.status === 'COMPLETED' || value.status === 'FAILED' || value.status === 'RESULT_UNKNOWN') &&
+    (typeof value.declaredCount === 'number' || value.declaredCount === null) &&
+    numericFields.every((item) => typeof item === 'number') &&
+    (typeof value.activeCount === 'number' || value.activeCount === null) &&
+    (typeof value.failureSummary === 'string' || value.failureSummary === null)
+  )
 }

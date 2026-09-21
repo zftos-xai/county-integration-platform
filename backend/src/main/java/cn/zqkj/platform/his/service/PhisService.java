@@ -1,18 +1,18 @@
 package cn.zqkj.platform.his.service;
 
-import cn.zqkj.platform.his.domain.dto.HospitalDirectoryQuery;
-import cn.zqkj.platform.his.domain.dto.MedicalDirectoryCountQuery;
-import cn.zqkj.platform.his.domain.dto.MedicalDirectoryQuery;
-import cn.zqkj.platform.his.domain.dto.OrganizationQuery;
-import cn.zqkj.platform.his.domain.model.HospitalDirectoryEntry;
-import cn.zqkj.platform.his.domain.model.MedicalDirectoryEntry;
-import cn.zqkj.platform.his.domain.model.OrganizationEntry;
-import cn.zqkj.platform.his.domain.model.PhisResponse;
+import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
+import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
+import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
+import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
+import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
+import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
+import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
 import cn.zqkj.platform.his.exception.PhisCommunicationException;
 import cn.zqkj.platform.his.exception.PhisConfigurationException;
 import cn.zqkj.platform.his.exception.PhisProtocolException;
 import cn.zqkj.platform.his.exception.PhisRequestException;
-import cn.zqkj.platform.system.domain.model.ParameterEnvironment;
+import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
 
 import java.util.List;
 

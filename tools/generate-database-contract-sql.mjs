@@ -93,7 +93,8 @@ function parseMigrations() {
 
   for (const migrationFile of migrationFiles) {
     const sql = readFileSync(join(migrationRoot, migrationFile), 'utf8')
-    if (/^ALTER\s+TABLE\s+.*\s+(?:ALTER|DROP)\s+(?:COLUMN\s+)?/im.test(sql)) {
+    // 仅禁止会改变字段物理契约的修改；约束重建不会改变字段清单，迁移可安全继续生成字段契约。
+    if (/^ALTER\s+TABLE\s+.*\s+(?:ALTER|DROP)\s+COLUMN\s+/im.test(sql)) {
       throw new Error(`${migrationFile} 包含尚未支持的 ALTER TABLE 结构修改`)
     }
     for (const tableMatch of sql.matchAll(createTablePattern)) {

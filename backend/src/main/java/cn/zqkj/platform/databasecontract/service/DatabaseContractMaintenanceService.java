@@ -4,7 +4,7 @@ import cn.zqkj.platform.databasecontract.domain.dto.CreateDatabaseContractPlanRe
 import cn.zqkj.platform.databasecontract.domain.model.DatabaseContractPlanSnapshot;
 import cn.zqkj.platform.databasecontract.domain.vo.DatabaseContractInspectionVO;
 import cn.zqkj.platform.databasecontract.domain.vo.DatabaseContractPlanVO;
-import cn.zqkj.platform.system.domain.model.AccessActor;
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 
 import java.util.List;
 

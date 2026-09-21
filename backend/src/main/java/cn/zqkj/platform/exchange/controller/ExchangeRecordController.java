@@ -2,6 +2,7 @@ package cn.zqkj.platform.exchange.controller;
 
 import cn.zqkj.platform.framework.security.OrganizationAccessGuard;
 import cn.zqkj.platform.common.core.ApiResponse;
+import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.exchange.domain.dto.ExchangeRecordQuery;
 import cn.zqkj.platform.exchange.service.ExchangeRecordQueryService;
 import cn.zqkj.platform.exchange.domain.vo.ExchangeRecordVO;
@@ -19,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 
 /**
@@ -95,6 +95,6 @@ public class ExchangeRecordController {
      * @return UTC 本地时间，或在输入为空时返回空
      */
     private java.time.LocalDateTime toUtcLocalDateTime(OffsetDateTime value) {
-        return value == null ? null : value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
+        return Func.toUtc(value);
     }
 }

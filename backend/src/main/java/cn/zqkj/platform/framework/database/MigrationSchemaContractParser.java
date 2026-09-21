@@ -30,13 +30,15 @@ public class MigrationSchemaContractParser {
                     + "(?:\\((max|\\d+)(?:\\s*,\\s*(\\d+))?\\))?(?:\\s+(.*))?$",
             Pattern.CASE_INSENSITIVE
     );
-    private static final Pattern UNSUPPORTED_ALTER_PATTERN = Pattern.compile(
-            "(?im)^ALTER\\s+TABLE\\s+.*\\s+(?:ADD|ALTER|DROP)\\s+(?:COLUMN\\s+)?"
-    );
     private static final Pattern ALTER_TABLE_ADD_PATTERN = Pattern.compile(
             "(?ims)^ALTER\\s+TABLE\\s+(?:(?:\\[?([a-zA-Z_][\\w]*)]?)\\.)?"
                     + "\\[?([a-zA-Z_][\\w]*)]?\\s+ADD\\s*(.*?);"
     );
+    private static final Pattern ALTER_TABLE_DROP_CONSTRAINT_PATTERN = Pattern.compile(
+            "(?im)^ALTER\\s+TABLE\\s+(?:(?:\\[?[a-zA-Z_][\\w]*]?)\\.)?"
+                    + "\\[?[a-zA-Z_][\\w]*]?\\s+DROP\\s+CONSTRAINT\\s+\\[?[a-zA-Z_][\\w]*]?\\s*;"
+    );
+    private static final Pattern ALTER_TABLE_PATTERN = Pattern.compile("(?im)^ALTER\\s+TABLE\\s+");
 
     private final ResourcePatternResolver resourceResolver;
 
@@ -75,14 +77,18 @@ public class MigrationSchemaContractParser {
     }
 
     /**
-     * 拒绝尚未纳入解析规则的ALTER TABLE结构修改，防止错误宣称验证完整。
+     * 仅接受可解析的新增字段、约束新增和约束删除；拒绝其他ALTER TABLE结构修改，
+     * 防止字段契约静默漏检。
      *
      * @param resource 当前迁移资源
      * @param sql 迁移脚本文本
      */
     private void rejectUnsupportedSchemaChanges(Resource resource, String sql) {
-        String supportedAddsRemoved = ALTER_TABLE_ADD_PATTERN.matcher(sql).replaceAll("");
-        if (UNSUPPORTED_ALTER_PATTERN.matcher(supportedAddsRemoved).find()) {
+        String supportedChangesRemoved = ALTER_TABLE_ADD_PATTERN.matcher(sql).replaceAll("");
+        supportedChangesRemoved = ALTER_TABLE_DROP_CONSTRAINT_PATTERN
+                .matcher(supportedChangesRemoved)
+                .replaceAll("");
+        if (ALTER_TABLE_PATTERN.matcher(supportedChangesRemoved).find()) {
             throw new IllegalStateException(resource.getFilename()
                     + " 包含ALTER TABLE结构修改；必须先扩展数据库契约解析器再提交迁移");
         }

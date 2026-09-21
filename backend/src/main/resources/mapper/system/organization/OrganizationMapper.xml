@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.system.organization.mapper.OrganizationMapper">
+    <resultMap id="organizationView" type="cn.zqkj.platform.system.organization.domain.vo.OrganizationVO">
+        <constructor>
+            <!-- 平台机构内部主键 -->
+            <idArg column="id" javaType="java.lang.Long"/>
+            <!-- 平台统一且稳定的机构编码 -->
+            <arg column="organization_code" javaType="java.lang.String"/>
+            <!-- 管理页面及审计展示使用的机构名称 -->
+            <arg column="organization_name" javaType="java.lang.String"/>
+            <!-- 经项目确认的机构类型代码 -->
+            <arg column="organization_type" javaType="java.lang.String"/>
+            <!-- 可选父机构主键，空值表示顶级机构 -->
+            <arg column="parent_id" javaType="java.lang.Long"/>
+            <!-- 机构当前是否可用 -->
+            <arg column="is_enabled" javaType="_boolean"/>
+            <!-- 可选业务有效起始UTC时间 -->
+            <arg column="valid_from" javaType="java.time.LocalDateTime"/>
+            <!-- 可选业务有效结束UTC时间 -->
+            <arg column="valid_to" javaType="java.time.LocalDateTime"/>
+            <!-- 机构档案创建UTC时间 -->
+            <arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <!-- 机构档案最后修改UTC时间 -->
+            <arg column="updated_at" javaType="java.time.LocalDateTime"/>
+            <!-- SQL Server并发版本 -->
+            <arg column="row_version" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="organizationColumns">
+        <!-- 平台机构内部主键 -->
+        id,
+        <!-- 平台统一且稳定的机构编码 -->
+        organization_code,
+        <!-- 管理页面及审计展示使用的机构名称 -->
+        organization_name,
+        <!-- 经项目确认的机构类型代码 -->
+        organization_type,
+        <!-- 可选父机构主键，空值表示顶级机构 -->
+        parent_id,
+        <!-- 机构当前是否可用 -->
+        is_enabled,
+        <!-- 可选业务有效起始UTC时间 -->
+        valid_from,
+        <!-- 可选业务有效结束UTC时间 -->
+        valid_to,
+        <!-- 机构档案创建UTC时间 -->
+        created_at,
+        <!-- 机构档案最后修改UTC时间 -->
+        updated_at,
+        <!-- SQL Server并发版本 -->
+        row_version
+    </sql>
+
+    <select id="findById" resultMap="organizationView">
+        SELECT <include refid="organizationColumns"/>
+        FROM org_organization
+        <!-- 按平台机构内部主键精确查询 -->
+        WHERE id = #{id}
+    </select>
+
+    <select id="countByCode" resultType="int">
+        SELECT COUNT(1)
+        FROM org_organization
+        <!-- 使用稳定机构编码检查唯一性 -->
+        WHERE organization_code = #{organizationCode}
+    </select>
+
+    <select id="findAll" resultMap="organizationView">
+        SELECT <include refid="organizationColumns"/>
+        FROM org_organization
+        <if test="enabled != null">
+            <!-- 可选按机构启用状态过滤 -->
+            WHERE is_enabled = #{enabled}
+        </if>
+        <!-- 按机构名称及内部主键稳定排序 -->
+        ORDER BY organization_name, id
+    </select>
+
+    <select id="create" resultType="long" affectData="true">
+        INSERT INTO org_organization (
+            <!-- 平台统一且稳定的机构编码 -->
+            organization_code,
+            <!-- 机构名称 -->
+            organization_name,
+            <!-- 经项目确认的机构类型代码 -->
+            organization_type,
+            <!-- 可选父机构主键 -->
+            parent_id,
+            <!-- 新机构默认启用 -->
+            is_enabled,
+            <!-- 可选业务有效起始UTC时间 -->
+            valid_from,
+            <!-- 可选业务有效结束UTC时间 -->
+            valid_to,
+            <!-- 创建人稳定用户标识快照 -->
+            created_by,
+            <!-- 最后修改人稳定用户标识快照 -->
+            updated_by
+        ) VALUES (
+            #{command.organizationCode},
+            #{command.organizationName},
+            #{command.organizationType},
+            #{command.parentId,jdbcType=BIGINT},
+            1,
+            #{command.validFrom,jdbcType=TIMESTAMP},
+            #{command.validTo,jdbcType=TIMESTAMP},
+            #{actor},
+            #{actor}
+        );
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <update id="update">
+        UPDATE org_organization
+        <!-- 可修改的机构名称 -->
+        SET organization_name = #{command.organizationName},
+            <!-- 可修改的机构类型代码 -->
+            organization_type = #{command.organizationType},
+            <!-- 可修改的父机构主键 -->
+            parent_id = #{command.parentId,jdbcType=BIGINT},
+            <!-- 可选业务有效起始UTC时间 -->
+            valid_from = #{command.validFrom,jdbcType=TIMESTAMP},
+            <!-- 可选业务有效结束UTC时间 -->
+            valid_to = #{command.validTo,jdbcType=TIMESTAMP},
+            <!-- 最后修改人稳定用户标识快照 -->
+            updated_by = #{actor},
+            <!-- 最后修改UTC时间 -->
+            updated_at = SYSUTCDATETIME()
+        <!-- 内部主键确定目标，rowversion防止无感知并发覆盖 -->
+        WHERE id = #{id}
+          AND row_version = #{command.expectedVersion}
+    </update>
+
+    <update id="setEnabled">
+        UPDATE org_organization
+        <!-- 机构目标启用状态 -->
+        SET is_enabled = #{enabled},
+            <!-- 最后修改人稳定用户标识快照 -->
+            updated_by = #{actor},
+            <!-- 最后修改UTC时间 -->
+            updated_at = SYSUTCDATETIME()
+        <!-- 内部主键确定目标，rowversion防止无感知并发覆盖 -->
+        WHERE id = #{id}
+          AND row_version = #{expectedVersion}
+    </update>
+
+    <select id="countEnabledChildren" resultType="int">
+        SELECT COUNT(1)
+        FROM org_organization
+        <!-- 统计指定父机构下当前启用的直接子机构 -->
+        WHERE parent_id = #{parentId}
+          AND is_enabled = 1
+    </select>
+</mapper>

@@ -69,15 +69,15 @@ test('接口尚未就绪时不隐藏同步入口，并提供唯一配置入口',
   assert.match(drawer, /emit\('configure'\)/);
 });
 
-test('医院综合目录在一次服务端操作中自动校验并直接对账，不提供人工发布按钮', async () => {
+test('已接入目录业务在一次服务端操作中自动校验并直接对账，不提供人工发布按钮', async () => {
   const source = await readFile(pagePath, 'utf8');
 
-  assert.match(source, /runHospitalDirectoryBatch/);
+  assert.match(source, /runMasterDataBatch/);
   assert.match(
     source,
-    /startMasterDataBatch\(input\)[\s\S]*runHospitalDirectoryBatch/,
+    /startMasterDataBatch\(input\)[\s\S]*runMasterDataBatch/,
   );
-  assert.match(source, /同步医院综合目录/);
+  assert.match(source, /masterDataCategoryLabels\[selected\.category\]/);
   assert.doesNotMatch(source, /publishDepartmentBatch|发布正式版本|master-data:publish/);
   assert.match(source, /请勿直接重复操作/);
 });

@@ -18,6 +18,11 @@ export function masterDataBatchDirectoryResultsPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/directory-results`
 }
 
+/** @param batchId 平台批次主键 @return 100-004/100-005按目录类型保存的结果地址 */
+export function masterDataBatchMedicalDirectoryResultsPath(batchId: number) {
+  return `${masterDataBatchDetailPath(batchId)}/medical-directory-results`
+}
+
 /** @param batchId 平台批次主键 @return 尚未执行批次的取消地址 */
 export function masterDataBatchCancelPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/cancel`

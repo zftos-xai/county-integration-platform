@@ -2,6 +2,7 @@ package cn.zqkj.platform.databasecontract.controller;
 
 import cn.zqkj.platform.common.core.ApiResponse;
 import cn.zqkj.platform.common.exception.InvalidRequestException;
+import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.databasecontract.domain.dto.AdvanceDatabaseContractPlanRequest;
 import cn.zqkj.platform.databasecontract.domain.dto.ApproveDatabaseContractPlanRequest;
 import cn.zqkj.platform.databasecontract.domain.dto.CreateDatabaseContractPlanRequest;
@@ -9,7 +10,7 @@ import cn.zqkj.platform.databasecontract.domain.vo.DatabaseContractInspectionVO;
 import cn.zqkj.platform.databasecontract.domain.vo.DatabaseContractPlanVO;
 import cn.zqkj.platform.databasecontract.service.DatabaseContractMaintenanceService;
 import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
-import cn.zqkj.platform.system.domain.model.AccessActor;
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Base64;
 import java.util.List;
 
 /** 提供健康实例中的数据库契约扫描、方案、审批、执行和取消API。 */
@@ -165,7 +165,7 @@ public class DatabaseContractMaintenanceController {
      */
     private byte[] decodeVersion(String value) {
         try {
-            byte[] version = Base64.getDecoder().decode(value);
+            byte[] version = Func.decodeBase64(value);
             if (version.length != Long.BYTES) {
                 throw new InvalidRequestException("version 必须表示8字节SQL Server行版本");
             }

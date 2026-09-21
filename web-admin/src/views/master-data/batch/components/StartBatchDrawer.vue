@@ -1,4 +1,4 @@
-<!-- 医院综合目录同步窗口：选择HIS来源机构后立即执行100-003的完整目录同步。 -->
+<!-- 基础数据同步窗口：从已验证HIS来源选择业务及必要的来源查询范围后立即执行。 -->
 <script setup lang="ts">
 import {
   AlertCircle,
@@ -170,7 +170,7 @@ watch(
                     </option>
                   </select>
                   <small v-if="selectedBusiness">
-                    基层 HIS 交易码 {{ selectedBusiness.tradeCode }}
+                    基层 HIS 交易码 {{ selectedBusiness.tradeCode }}<template v-if="selectedBusiness.countTradeCode"> / {{ selectedBusiness.countTradeCode }}</template>
                   </small>
                 </dd>
               </div>
@@ -189,6 +189,14 @@ watch(
                 </dd>
               </div>
             </dl>
+            <div v-if="selectedBusiness?.requiresTimeRange" class="batch-range-field">
+              <strong>来源数据时间范围</strong>
+              <small>100-005 与 100-004 会使用完全相同的时间范围；请按接口提供方确认的口径填写。</small>
+              <div>
+                <label><span>开始时间</span><input v-model="form.rangeStart" type="datetime-local" required /></label>
+                <label><span>结束时间</span><input v-model="form.rangeEnd" type="datetime-local" required /></label>
+              </div>
+            </div>
           </section>
         </form>
       </div>
@@ -280,6 +288,9 @@ watch(
 .batch-confirmation dd { margin: 7px 0 0; color: #2b414a; font-size: 12px; font-weight: 650; }
 .batch-confirmation dd > small { display: block; margin-top: 3px; color: #7b8990; font-size: 10px; font-weight: 500; }
 .batch-confirmation select { width: 100%; min-height: 32px; padding: 0 8px; }
+.batch-range-field { margin-top: 12px; display: grid; gap: 7px; color: #40545d; }
+.batch-range-field > strong { font-size: 12px; }.batch-range-field > small { color: #718089; font-size: 11px; line-height: 1.5; }
+.batch-range-field > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.batch-range-field label { font-size: 11px; }.batch-range-field input { min-height: 38px; padding: 0 9px; border: 1px solid #cfd9dd; border-radius: 5px; color: #263741; }
 .batch-dialog-footer {
   min-height: 64px;
   padding: 12px 22px;
@@ -301,5 +312,6 @@ watch(
   .batch-dialog-backdrop { padding: 0; place-items: end center; }
   .batch-start-dialog { width: 100%; max-height: 92vh; border-radius: 10px 10px 0 0; }
   .batch-confirmation { grid-template-columns: 1fr; }
+  .batch-range-field > div { grid-template-columns: 1fr; }
 }
 </style>
