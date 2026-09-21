@@ -16,6 +16,6 @@ public record CreateUserRequest(
         @NotBlank @Size(min = 3, max = 64) String loginName,
         @NotBlank @Size(max = 100) String displayName,
         @Positive long primaryOrganizationId,
-        @NotBlank @Size(min = 12, max = 128) String temporaryPassword
+        @NotBlank @Size(min = 9, max = 128) String temporaryPassword
 ) {
 }

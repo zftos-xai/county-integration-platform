@@ -1,0 +1,119 @@
+{
+  "schema": "vista-web-contract-1.0",
+  "task_id": "vista-20260919-master-data",
+  "mode": "验收并修复",
+  "authority": {
+    "user_request": "使用 vista-web-acceptance 验证基础数据相关正式页面，即验即改；人工复核不得作为发布主流程。",
+    "project_rules": [
+      {
+        "source": "AGENTS.md",
+        "version": "33857aff4adb7ab41ce3a109a93820c9f9340ba0",
+        "verified_at": "2026-09-19T15:17:26Z"
+      },
+      {
+        "source": "docs/standards/frontend-coding-guidelines.md",
+        "version": "workspace",
+        "verified_at": "2026-09-19T15:17:26Z"
+      }
+    ]
+  },
+  "baseline": {
+    "revision": "33857aff4adb7ab41ce3a109a93820c9f9340ba0",
+    "workspace_state": "dirty: 92 tracked/untracked paths; preserve unrelated work",
+    "allowed_files": [
+      "web-admin/src/views/master-data/**",
+      "web-admin/src/api/master-data/batch.ts",
+      "web-admin/src/layout/AppLayout.vue",
+      "web-admin/src/router/index.ts",
+      "web-admin/menu-delivery-status.json",
+      "backend/src/main/java/cn/zqkj/platform/masterdata/service/impl/OrganizationMappingServiceImpl.java",
+      "tools/verify-menu-delivery.mjs",
+      "web-admin/tests/auditApiPaths.test.mjs",
+      "web-admin/tests/databaseContractPrototype.test.mjs",
+      "web-admin/tests/formalUiContent.test.mjs",
+      "web-admin/tests/masterDataBatchPage.test.mjs",
+      "design-audit/vista-20260919-master-data/**"
+    ],
+    "must_preserve": [
+      "真实 API 数据来源和服务端权限边界",
+      "机构级 HIS 配置自动验证是100-003同步前置条件",
+      "问题批次禁止发布且修正来源后重新同步",
+      "当前未发布的46条科室暂存数据不得因验收被写入正式目录"
+    ],
+    "stop_conditions": [
+      "不得点击发布、重新发起、登记结论或其他业务写操作",
+      "不得提交、推送、部署或发布工程",
+      "页面要求与接口规范冲突时停止写操作并记录"
+    ]
+  },
+  "target": {
+    "origin": "http://127.0.0.1:5173",
+    "route": "/master-data/batches; /master-data/batches/6",
+    "page_name": "基础数据同步和批次详情",
+    "user_role": "平台管理员 PLATFORM",
+    "page_purpose": "展示一次基础数据同步的范围、自动校验和最终结果。HIS机构身份校验属于外部系统的机构配置，不构成独立页面；人工选择映射、人工复核和人工发布均不属于主流程。"
+  },
+  "project_adapter": {
+    "service_entry": "npm run dev --workspace web-admin; Vite origin http://127.0.0.1:5173",
+    "session_setup": "复用用户当前已登录的平台管理员浏览器会话，只读验收",
+    "design_authorities": [
+      "web-admin/src/assets/styles/prototype.css",
+      "web-admin/src/layout/AppLayout.vue"
+    ],
+    "component_authorities": [
+      "web-admin/src/components/AdminPagination.vue",
+      "web-admin/src/views/master-data/batch/components/StartBatchDrawer.vue"
+    ],
+    "api_sources": [
+      "web-admin/src/api/master-data/batch.ts",
+      "backend/src/main/java/cn/zqkj/platform/masterdata/controller/MasterDataBatchController.java"
+    ],
+    "evidence_root": "design-audit/vista-20260919-master-data/evidence",
+    "git_policy": "只修改合同允许文件；不提交不推送"
+  },
+  "write_authorization": {
+    "allowed": false,
+    "environment": "local UI connected to test data",
+    "record_scope": "read-only",
+    "reversibility": "not applicable",
+    "cleanup": "not applicable"
+  },
+  "environments": [
+    {
+      "id": "browser-main",
+      "mode": "real-window",
+      "viewport": {"width": 1728, "height": 817, "dpr": 2},
+      "basis": "用户当前 Chrome 真实窗口；主要桌面管理端场景"
+    },
+    {
+      "id": "browser-compact",
+      "mode": "viewport-override",
+      "viewport": {"width": 1280, "height": 720, "dpr": 2},
+      "basis": "桌面管理端最小代表宽度，用于检查筛选区、表格和固定操作区拥挤"
+    }
+  ],
+  "visible_areas": [
+    {"id": "content-root", "name": "应用侧栏、页面标题与内容根", "presence": "always", "trigger": "", "owner": "AppLayout.vue", "environment_expectations": {"browser-main": "visible", "browser-compact": "visible or collapsed navigation without overlap"}},
+    {"id": "primary-content", "name": "批次筛选、列表和分页", "presence": "always", "trigger": "打开 /master-data/batches", "owner": "MasterDataBatchView.vue", "environment_expectations": {"browser-main": "visible", "browser-compact": "visible without action-column overlap"}},
+    {"id": "batch-start-dialog", "name": "发起基础数据同步对话框", "presence": "conditional", "trigger": "点击发起同步；不提交", "owner": "StartBatchDrawer.vue", "environment_expectations": {"browser-main": "centered and complete", "browser-compact": "complete with reachable footer actions"}},
+    {"id": "batch-detail", "name": "批次来源、数量、状态和发布边界", "presence": "conditional", "trigger": "打开 /master-data/batches/6", "owner": "MasterDataBatchDetailView.vue", "environment_expectations": {"browser-main": "visible", "browser-compact": "visible without horizontal page overflow"}},
+    {"id": "stage-table", "name": "100-003暂存数据表格", "presence": "conditional", "trigger": "批次详情默认页签", "owner": "MasterDataBatchDetailView.vue", "environment_expectations": {"browser-main": "visible and readable", "browser-compact": "contained table scrolling or responsive columns"}},
+    {"id": "blocking-issues", "name": "系统校验阻断问题", "presence": "conditional", "trigger": "点击校验问题页签", "owner": "MasterDataBatchDetailView.vue", "environment_expectations": {"browser-main": "visible", "browser-compact": "visible"}},
+    {"id": "surface-end", "name": "分页、末行、全局页脚和退出入口", "presence": "always", "trigger": "滚动到每个页面真实末端", "owner": "page owner and AppLayout.vue", "environment_expectations": {"browser-main": "reachable and not covered", "browser-compact": "reachable and not covered"}}
+  ],
+  "requirements": [
+    {"id": "component-consumption", "module": "component-consumption", "environment": "browser-main", "required": true, "expected": "筛选、分页、按钮、弹层和状态反馈复用项目标准组件与样式，不出现浏览器默认或重复实现失控。", "evidence_types": ["screenshot", "tool-log", "engineering"]},
+    {"id": "theme", "module": "theme", "environment": "browser-main", "required": true, "expected": "主题颜色、边界、文字层级、反馈语义与全局管理端一致，焦点和禁用状态可辨识。", "evidence_types": ["screenshot", "tool-log", "engineering"]},
+    {"id": "layout", "module": "layout", "environment": "browser-main", "required": true, "expected": "1728x817及1280x720下无页面级横向溢出、遮挡、无效大留白或不可达操作。", "evidence_types": ["screenshot", "tool-log", "engineering"]},
+    {"id": "iconography", "module": "iconography", "environment": "browser-main", "required": true, "expected": "图标来自现有Lucide体系，纯图标按钮有可访问名称且点击区一致。", "evidence_types": ["screenshot", "tool-log", "engineering"]},
+    {"id": "content", "module": "content", "environment": "browser-main", "required": true, "expected": "不出现人工复核作为主流程、原始枚举或含混状态；长编码单行省略并可查看全文。", "evidence_types": ["screenshot", "tool-log", "engineering"]},
+    {"id": "page-end", "module": "page-end", "environment": "browser-main", "required": true, "expected": "列表分页、详情末端和全局页脚可达，不被固定栏或浮层覆盖。", "evidence_types": ["screenshot", "tool-log", "engineering"]},
+    {"id": "business-validity", "module": "business-validity", "environment": "browser-main", "required": true, "expected": "业务链为机构配置自动校验→取得→系统校验→自动更新或保留上一成功版本；不设置机构映射、人工复核、人工确认通过或人工发布。", "evidence_types": ["screenshot", "tool-log", "engineering"]},
+    {"id": "api-data-integrity", "module": "api-data-integrity", "environment": "browser-main", "required": true, "expected": "批次和数量来自真实API，页面不使用原型数据或前端静态成功状态；尚未重构完成的旧页面不得作为业务完成证据。", "evidence_types": ["network-log", "source-trace", "engineering"]}
+  ],
+  "exclusions": [
+    "不执行任何业务写入、发布、重新同步或问题结论登记",
+    "不进行物理设备、触控或发布批准",
+    "不把测试和构建通过视为真实业务发布成功"
+  ]
+}

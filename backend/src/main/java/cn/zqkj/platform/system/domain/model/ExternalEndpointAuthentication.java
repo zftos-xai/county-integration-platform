@@ -16,4 +16,14 @@ public record ExternalEndpointAuthentication(
         String password,
         String authorizationCode
 ) {
+
+    /**
+     * 返回固定脱敏文字，防止认证信息因对象日志或异常拼接泄露。
+     *
+     * @return 不包含任何认证字段的固定描述
+     */
+    @Override
+    public String toString() {
+        return "ExternalEndpointAuthentication[REDACTED]";
+    }
 }

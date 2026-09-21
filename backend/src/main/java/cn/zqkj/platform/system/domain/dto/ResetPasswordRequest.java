@@ -8,5 +8,5 @@ import jakarta.validation.constraints.Size;
  *
  * @param temporaryPassword 新临时密码
  */
-public record ResetPasswordRequest(@NotBlank @Size(min = 12, max = 128) String temporaryPassword) {
+public record ResetPasswordRequest(@NotBlank @Size(min = 9, max = 128) String temporaryPassword) {
 }

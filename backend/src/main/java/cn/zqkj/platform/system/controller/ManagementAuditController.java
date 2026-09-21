@@ -29,7 +29,11 @@ public class ManagementAuditController {
 
     private final ManagementAuditService service;
 
-    /** @param service 管理审计服务 */
+    /**
+     * 创建管理审计查询控制器。
+     *
+     * @param service 管理审计服务
+     */
     public ManagementAuditController(ManagementAuditService service) {
         this.service = service;
     }

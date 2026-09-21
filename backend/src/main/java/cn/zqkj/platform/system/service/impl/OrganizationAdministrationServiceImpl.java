@@ -45,7 +45,13 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
         this.auditService = auditService;
     }
 
-    /** @param enabled 可选启用状态 @param actor 操作人 @return 范围内机构 */
+    /**
+     * 查询当前操作人机构范围内的机构档案。
+     *
+     * @param enabled 可选启用状态
+     * @param actor 操作人
+     * @return 范围内机构
+     */
     @Transactional(readOnly = true)
     @Override
     public List<OrganizationVO> findAll(Boolean enabled, AccessActor actor) {
@@ -54,7 +60,13 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
                 .toList();
     }
 
-    /** @param organizationId 机构主键 @param actor 操作人 @return 范围内机构 */
+    /**
+     * 读取当前操作人有权访问的机构档案。
+     *
+     * @param organizationId 机构主键
+     * @param actor 操作人
+     * @return 范围内机构
+     */
     @Transactional(readOnly = true)
     @Override
     public OrganizationVO get(long organizationId, AccessActor actor) {
@@ -136,14 +148,26 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
         return updated;
     }
 
-    /** @param actor 操作人 @param organization 机构 @param action 动作 @param summary 不含敏感内容的摘要 */
+    /**
+     * 追加不包含DDL全文和连接信息的管理审计事件。
+     *
+     * @param actor 操作人
+     * @param organization 机构
+     * @param action 动作
+     * @param summary 不含敏感内容的摘要
+     */
     private void audit(AccessActor actor, OrganizationVO organization, String action, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, organization.id(),
                 organization.organizationCode(), action, "ORGANIZATION", organization.organizationCode(),
                 "SUCCESS", summary, ManagementAuditServiceImpl.currentRequestId()));
     }
 
-    /** @param actor 操作人 @param organizationCode 机构代码 */
+    /**
+     * 校验当前操作人拥有目标机构数据范围。
+     *
+     * @param actor 操作人
+     * @param organizationCode 机构代码
+     */
     private void requireAccess(AccessActor actor, String organizationCode) {
         if (!actor.canAccess(organizationCode)) {
             throw new AccessDeniedException("当前账号无权访问该机构");

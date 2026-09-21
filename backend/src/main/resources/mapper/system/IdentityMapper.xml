@@ -48,6 +48,7 @@
     </select>
 
     <select id="countUsers" resultType="int">
+        <!-- 统计平台用户总数，用于判断是否仍允许执行首次初始化 -->
         SELECT COUNT(1)
         FROM sys_user
     </select>
@@ -106,14 +107,21 @@
             WHERE permission_code = #{permissionCode};
         ELSE
             <!-- 首次注册权限代码及展示名称 -->
-            INSERT INTO sys_permission (permission_code, permission_name)
+            INSERT INTO sys_permission (
+                permission_code,<!-- 后端注册的稳定功能权限代码 -->
+                permission_name <!-- 管理页面展示的功能权限名称 -->
+            )
             VALUES (#{permissionCode}, #{permissionName});
     </update>
 
     <select id="createRole" resultType="long">
         INSERT INTO sys_role (
-            <!-- 稳定角色代码 -->
-            role_code, role_name, is_enabled, is_system_managed, created_by, updated_by
+            role_code,        <!-- 稳定角色代码 -->
+            role_name,        <!-- 角色展示名称 -->
+            is_enabled,       <!-- 初始化角色启用状态 -->
+            is_system_managed,<!-- 平台初始化角色保护标识 -->
+            created_by,       <!-- 创建人稳定用户标识快照 -->
+            updated_by        <!-- 最后修改人稳定用户标识快照 -->
         ) VALUES (
             #{roleCode}, #{roleName}, 1, 1, #{actor}, #{actor}
         );
@@ -122,32 +130,48 @@
 
     <select id="createUser" resultType="long">
         INSERT INTO sys_user (
-            <!-- 登录名、显示名称、密码哈希和主机构构成初始身份 -->
-            login_name, display_name, password_hash, primary_organization_id,
-            <!-- 初始用户启用且必须修改密码，并记录创建及修改人 -->
-            is_enabled, must_change_password, created_by, updated_by
+            login_name,              <!-- 平台本地登录名 -->
+            display_name,            <!-- 管理页面及审计展示使用的用户名称 -->
+            password_hash,           <!-- BCrypt密码哈希，不保存明文密码 -->
+            primary_organization_id, <!-- 用户主归属机构内部主键 -->
+            is_enabled,              <!-- 初始化用户启用状态 -->
+            must_change_password,    <!-- 首次登录是否需要修改初始密码 -->
+            created_by,              <!-- 创建人稳定用户标识快照 -->
+            updated_by               <!-- 最后修改人稳定用户标识快照 -->
         ) VALUES (
             #{command.loginName}, #{command.displayName}, #{passwordHash}, #{organizationId},
-            1, 1, #{actor}, #{actor}
+            1, 0, #{actor}, #{actor}
         );
         SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
     </select>
 
     <insert id="grantPermission">
         <!-- 角色、注册权限和授权人共同形成权限授予事实 -->
-        INSERT INTO sys_role_permission (role_id, permission_code, granted_by)
+        INSERT INTO sys_role_permission (
+            role_id,        <!-- 获得权限的平台角色内部主键 -->
+            permission_code,<!-- 授予的稳定功能权限代码 -->
+            granted_by      <!-- 执行授权的用户稳定标识快照 -->
+        )
         VALUES (#{roleId}, #{permissionCode}, #{actor})
     </insert>
 
     <insert id="grantRole">
         <!-- 用户、角色和授权人共同形成角色授予事实 -->
-        INSERT INTO sys_user_role (user_id, role_id, granted_by)
+        INSERT INTO sys_user_role (
+            user_id,   <!-- 获得角色的平台用户内部主键 -->
+            role_id,   <!-- 授予的平台角色内部主键 -->
+            granted_by <!-- 执行授权的用户稳定标识快照 -->
+        )
         VALUES (#{userId}, #{roleId}, #{actor})
     </insert>
 
     <insert id="grantOrganization">
         <!-- 用户、机构和授权人共同形成机构范围授予事实 -->
-        INSERT INTO sys_user_organization_scope (user_id, organization_id, granted_by)
+        INSERT INTO sys_user_organization_scope (
+            user_id,        <!-- 获得机构范围的平台用户内部主键 -->
+            organization_id,<!-- 授予的平台机构内部主键 -->
+            granted_by      <!-- 执行授权的用户稳定标识快照 -->
+        )
         VALUES (#{userId}, #{organizationId}, #{actor})
     </insert>
 

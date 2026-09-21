@@ -8,7 +8,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   createExternalEndpoint, createExternalSystem, listExternalEndpoints, listExternalSystems,
-  updateExternalEndpoint, updateExternalSystem,
+  updateExternalEndpoint, updateExternalSystem, verifyExternalEndpoint,
 } from '@/api/system/configuration'
 import type { ExternalEndpoint, ExternalSystem, ParameterEnvironment } from '@/api/system/configuration'
 import { listOrganizations } from '@/api/system/organization'
@@ -22,7 +22,7 @@ import { ApiClientError, asUncertainWriteError } from '@/utils/request'
 import ExternalEndpointEditorDrawer from './components/ExternalEndpointEditorDrawer.vue'
 import ExternalSystemEditorDrawer from './components/ExternalSystemEditorDrawer.vue'
 import {
-  emptyExternalEndpointForm, emptyExternalSystemForm, externalEndpointToForm, externalSystemToForm,
+  emptyExternalEndpointForm, emptyExternalSystemForm, externalEndpointToForm, externalSystemToForm, normalizeHisServiceUrl,
   toCreateExternalEndpointInput, toCreateExternalSystemInput, toUpdateExternalEndpointInput,
   toUpdateExternalSystemInput, validateExternalEndpointForm, validateExternalSystemForm,
 } from './form'
@@ -39,7 +39,7 @@ const endpointForm = ref<ExternalEndpointForm>(emptyExternalEndpointForm(null))
 const systemEditorOpen = ref(false)
 const endpointEditorOpen = ref(false)
 const query = ref('')
-const endpointStatus = ref<'all' | 'enabled' | 'disabled'>('all')
+const endpointStatus = ref<'all' | 'ready' | 'attention'>('all')
 const onlyIncomplete = ref(false)
 const expandedOrganizationKey = ref<string | null>(null)
 const isLoading = ref(true)
@@ -108,8 +108,8 @@ const filteredEndpointGroups = computed(() => {
   const keyword = query.value.trim().toLocaleLowerCase('zh-CN')
   return endpointGroups.value.filter(group => {
     const configured = Object.values(group.endpoints)
-    if (endpointStatus.value === 'enabled' && !configured.some(endpoint => endpoint.enabled)) return false
-    if (endpointStatus.value === 'disabled' && configured.some(endpoint => endpoint.enabled)) return false
+    if (endpointStatus.value === 'ready' && !configured.some(endpoint => endpoint.verificationStatus === 'VERIFIED')) return false
+    if (endpointStatus.value === 'attention' && configured.every(endpoint => endpoint.verificationStatus === 'VERIFIED')) return false
     if (onlyIncomplete.value && group.endpoints.PRODUCTION && group.endpoints.TEST
       && configured.every(endpoint => endpoint.credentialConfigured)) return false
     return !keyword || [group.organizationName, group.organizationCode]
@@ -203,14 +203,22 @@ function openEndpointCreate() {
   if (!selectedSystem.value) return
   endpointForm.value = emptyExternalEndpointForm(endpointOrganizationOptions.value[0]?.id ?? null)
   selectedEndpoint.value = null; operationError.value = null; formError.value = ''
-  editorSnapshot.value = JSON.stringify(endpointForm.value); endpointEditorOpen.value = true
+  editorSnapshot.value = endpointFormState(endpointForm.value); endpointEditorOpen.value = true
 }
 
 /** 打开机构接口配置编辑抽屉。 */
 function openEndpointEdit(endpoint: ExternalEndpoint) {
   endpointForm.value = externalEndpointToForm(endpoint); selectedEndpoint.value = endpoint
-  operationError.value = null; formError.value = ''; editorSnapshot.value = JSON.stringify(endpointForm.value)
+  operationError.value = null; formError.value = ''; editorSnapshot.value = endpointFormState(endpointForm.value)
   endpointEditorOpen.value = true
+}
+
+/** 序列化用于关闭确认的接口表单；未修改的按需回显内容不视为编辑。 */
+function endpointFormState(form: ExternalEndpointForm) {
+  return JSON.stringify(form.authenticationChanged ? form : {
+    ...form,
+    vendorCode: '', username: '', password: '', authorizationCode: '',
+  })
 }
 
 /** 关闭系统抽屉，并保护尚未保存的编辑。 */
@@ -223,8 +231,9 @@ function closeSystemEditor() {
 /** 关闭机构接口配置抽屉，并保护尚未保存的编辑。 */
 function closeEndpointEditor() {
   if (isSaving.value) return
-  if (JSON.stringify(endpointForm.value) !== editorSnapshot.value && !window.confirm('当前接口配置尚未保存，确定关闭吗？')) return
+  if (endpointFormState(endpointForm.value) !== editorSnapshot.value && !window.confirm('当前接口配置尚未保存，确定关闭吗？')) return
   endpointEditorOpen.value = false; selectedEndpoint.value = null
+  endpointForm.value = emptyExternalEndpointForm(null)
 }
 
 /** 保存新增或修改的外部系统。 */
@@ -260,16 +269,17 @@ async function submitEndpoint() {
   if (formError.value) return
   isSaving.value = true; operationError.value = null
   try {
-    const saved = selectedEndpoint.value
+    let saved = selectedEndpoint.value
       ? await updateExternalEndpoint(selectedEndpoint.value.id, toUpdateExternalEndpointInput(endpointForm.value))
       : await createExternalEndpoint(system.id, toCreateExternalEndpointInput(endpointForm.value))
-    const index = endpoints.value.findIndex(item => item.id === saved.id)
-    if (index < 0) endpoints.value.push(saved); else endpoints.value[index] = saved
-    endpoints.value.sort((left, right) => left.environment.localeCompare(right.environment)
-      || (left.organizationCode ?? '').localeCompare(right.organizationCode ?? ''))
-    notice.value = `机构接口配置已保存，当前状态为${saved.enabled ? '启用' : '停用'}。`
+    if (system.systemCode === 'PRIMARY_HIS') saved = await verifyExternalEndpoint(saved.id)
+    await loadEndpoints(system)
+    notice.value = saved.verificationStatus === 'VERIFIED'
+      ? `机构接口已保存并确认数据来源：${saved.sourceOrganizationName}。`
+      : `机构接口已保存，但未能确认数据来源：${saved.verificationFailureSummary ?? '请核对HIS配置后重新校验'}。`
     auditTarget.value = { targetType: 'EXTERNAL_ENDPOINT', targetId: String(saved.id) }
     endpointEditorOpen.value = false; selectedEndpoint.value = null
+    endpointForm.value = emptyExternalEndpointForm(null)
   } catch (caught) {
     const apiError = asUncertainWriteError(asApiError(caught, '无法保存机构接口配置'))
     if (!await handleUnauthorized(apiError)) operationError.value = apiError
@@ -317,7 +327,16 @@ function toggleOrganization(group: EndpointGroup) {
 /** 返回一条接口配置的简短状态文案。 */
 function endpointState(endpoint?: ExternalEndpoint) {
   if (!endpoint) return '未配置'
-  return endpoint.enabled ? '已启用' : '已停用'
+  if (endpoint.verificationStatus === 'VERIFIED') return '可同步'
+  if (endpoint.verificationStatus === 'RESULT_UNKNOWN') return '结果未知'
+  if (endpoint.verificationStatus === 'FAILED') return '校验失败'
+  return '待校验'
+}
+
+/** 显示服务端实际保存的完整HIS配置地址。 */
+function displayServiceUrl(endpoint?: ExternalEndpoint) {
+  if (!endpoint) return '—'
+  try { return normalizeHisServiceUrl(endpoint.baseUrl) } catch { return endpoint.baseUrl }
 }
 
 onMounted(() => loadPage())
@@ -356,7 +375,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
         <div v-if="endpointGroups.length" class="matrix-toolbar">
           <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="搜索机构名称或编码" aria-label="搜索机构接口配置" /></label>
           <label class="incomplete-filter"><input v-model="onlyIncomplete" type="checkbox" />仅看缺失配置</label>
-          <select v-model="endpointStatus" aria-label="接口配置状态"><option value="all">全部状态</option><option value="enabled">存在已启用配置</option><option value="disabled">无已启用配置</option></select>
+          <select v-model="endpointStatus" aria-label="接口配置状态"><option value="all">全部状态</option><option value="ready">可用于同步</option><option value="attention">需要处理</option></select>
           <span class="matrix-count">共 {{ filteredEndpointGroups.length }} 个机构</span>
           <button class="prototype-icon" type="button" aria-label="刷新接口配置" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="16" :class="{ spinning: isRefreshing }" /></button>
         </div>
@@ -371,14 +390,14 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
             <template v-for="group in pagedRows" :key="group.key">
               <tr class="organization-row" :class="{ expanded: expandedOrganizationKey === group.key }">
                 <td><button class="organization-toggle" type="button" :aria-expanded="expandedOrganizationKey === group.key" @click="toggleOrganization(group)"><ChevronDown v-if="expandedOrganizationKey === group.key" :size="16" /><ChevronRight v-else :size="16" /><span class="single-line" :title="group.organizationName"><strong>{{ group.organizationName }}</strong><small>{{ group.organizationCode }}</small></span></button></td>
-                <td><div class="environment-cell" :class="{ missing: !group.endpoints.PRODUCTION, disabled: group.endpoints.PRODUCTION && !group.endpoints.PRODUCTION.enabled }"><span class="state-line"><Circle :size="8" fill="currentColor" />{{ endpointState(group.endpoints.PRODUCTION) }}</span><small class="single-line" :title="group.endpoints.PRODUCTION?.baseUrl">{{ group.endpoints.PRODUCTION?.baseUrl ?? '—' }}</small></div></td>
-                <td><div class="environment-cell" :class="{ missing: !group.endpoints.TEST, disabled: group.endpoints.TEST && !group.endpoints.TEST.enabled }"><span class="state-line"><Circle :size="8" fill="currentColor" />{{ endpointState(group.endpoints.TEST) }}</span><small class="single-line" :title="group.endpoints.TEST?.baseUrl">{{ group.endpoints.TEST?.baseUrl ?? '—' }}</small></div></td>
+                <td><div class="environment-cell" :class="{ missing: !group.endpoints.PRODUCTION, attention: group.endpoints.PRODUCTION && group.endpoints.PRODUCTION.verificationStatus !== 'VERIFIED' }"><span class="state-line"><Circle :size="8" fill="currentColor" />{{ endpointState(group.endpoints.PRODUCTION) }}</span><small class="single-line" :title="displayServiceUrl(group.endpoints.PRODUCTION)">{{ displayServiceUrl(group.endpoints.PRODUCTION) }}</small></div></td>
+                <td><div class="environment-cell" :class="{ missing: !group.endpoints.TEST, attention: group.endpoints.TEST && group.endpoints.TEST.verificationStatus !== 'VERIFIED' }"><span class="state-line"><Circle :size="8" fill="currentColor" />{{ endpointState(group.endpoints.TEST) }}</span><small class="single-line" :title="displayServiceUrl(group.endpoints.TEST)">{{ displayServiceUrl(group.endpoints.TEST) }}</small></div></td>
                 <td><span class="credential-status" :class="{ missing: !primaryEndpoint(group).credentialConfigured }"><KeyRound :size="14" />{{ primaryEndpoint(group).credentialConfigured ? '已配置' : '未配置' }}</span></td>
                 <td><span class="single-line" :title="formatLocalDateTime(group.latestEndpoint.updatedAt)">{{ formatLocalDateTime(group.latestEndpoint.updatedAt) }}</span></td>
                 <td><button v-if="canWrite" class="table-action" type="button" @click="openEndpointEdit(primaryEndpoint(group))"><Pencil :size="13" />编辑</button></td>
               </tr>
               <tr v-if="expandedOrganizationKey === group.key" class="endpoint-detail-row">
-                <td colspan="6"><div class="endpoint-detail"><div><span>运行环境</span><strong>{{ environmentLabel(primaryEndpoint(group).environment) }}</strong></div><div class="detail-url"><span>接口地址</span><strong class="single-line" :title="primaryEndpoint(group).baseUrl">{{ primaryEndpoint(group).baseUrl }}</strong></div><div><span>接入信息</span><strong>{{ primaryEndpoint(group).credentialConfigured ? '已填写' : '未填写' }}</strong></div><div><span>超时设置</span><strong>{{ primaryEndpoint(group).connectTimeoutMs }} / {{ primaryEndpoint(group).readTimeoutMs }} ms</strong></div><div><span>更新时间</span><strong>{{ formatLocalDateTime(primaryEndpoint(group).updatedAt) }}</strong></div><button v-if="canWrite" class="work-quiet-button" type="button" @click="openEndpointEdit(primaryEndpoint(group))"><Pencil :size="14" />编辑配置</button></div></td>
+                <td colspan="6"><div class="endpoint-detail"><div><span>运行环境</span><strong>{{ environmentLabel(primaryEndpoint(group).environment) }}</strong></div><div class="detail-url"><span>接口地址</span><strong class="single-line" :title="displayServiceUrl(primaryEndpoint(group))">{{ displayServiceUrl(primaryEndpoint(group)) }}</strong></div><div><span>数据来源</span><strong>{{ primaryEndpoint(group).sourceOrganizationName ?? '尚未确认' }}</strong></div><div><span>接入信息</span><strong>{{ primaryEndpoint(group).credentialConfigured ? '已填写' : '未填写' }}</strong></div><div><span>自动校验</span><strong>{{ endpointState(primaryEndpoint(group)) }}</strong><small v-if="primaryEndpoint(group).verificationFailureSummary">{{ primaryEndpoint(group).verificationFailureSummary }}</small></div><button v-if="canWrite" class="work-quiet-button" type="button" @click="openEndpointEdit(primaryEndpoint(group))"><Pencil :size="14" />编辑配置</button></div></td>
               </tr>
             </template>
           </tbody>
@@ -427,7 +446,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .organization-toggle strong { display: block; overflow: hidden; text-overflow: ellipsis; }
 .organization-toggle small,.environment-cell small { display: block; margin-top: 5px; color: #70828b; font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
 .environment-cell { min-width: 0; color: #16824f; }
-.environment-cell.missing,.environment-cell.disabled { color: #7d8b91; }
+.environment-cell.missing,.environment-cell.attention { color: #7d8b91; }
 .state-line { display: flex; align-items: center; gap: 7px; font-weight: 650; }
 .credential-status { display: inline-flex; align-items: center; gap: 6px; color: #17765e; font-weight: 650; }
 .credential-status.missing { color: #bb613e; }

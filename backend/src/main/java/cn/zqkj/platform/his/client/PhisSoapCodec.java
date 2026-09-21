@@ -101,7 +101,7 @@ public class PhisSoapCodec {
      * @return 统一业务响应
      * @throws PhisProtocolException XML不安全、结构不完整、内层JSON无效或结果码未知时抛出
      */
-    public PhisResponse decodeResponse(String soapXml) {
+    public PhisResponse<JsonNode> decodeResponse(String soapXml) {
         requireText(soapXml, "基层HIS SOAP响应为空");
         Document document = parseXml(soapXml);
         if (document.getElementsByTagNameNS(SOAP_ENVELOPE_NAMESPACE, "Fault").getLength() > 0) {
@@ -164,7 +164,7 @@ public class PhisSoapCodec {
      * @param json 内层JSON文本
      * @return 统一业务响应
      */
-    private PhisResponse parseBusinessResponse(String json) {
+    private PhisResponse<JsonNode> parseBusinessResponse(String json) {
         try {
             JsonNode root = objectMapper.readTree(json);
             if (!root.isObject()) {
@@ -179,8 +179,15 @@ public class PhisSoapCodec {
                 throw new PhisProtocolException("基层HIS返回未确认的结果码");
             }
             JsonNode message = findFieldIgnoreCase(root, MESSAGE_FIELD);
-            return new PhisResponse("1".equals(resultCode), resultCode,
-                    message == null ? NullNode.getInstance() : message);
+            boolean success = "1".equals(resultCode);
+            if (success) {
+                return PhisResponse.success(resultCode,
+                        message == null ? NullNode.getInstance() : message);
+            }
+            String errorMessage = message != null && message.isTextual()
+                    ? message.asText()
+                    : "基层HIS返回业务失败";
+            return PhisResponse.failure(resultCode, errorMessage);
         } catch (JsonProcessingException exception) {
             throw new PhisProtocolException("基层HIS业务响应不是合法JSON", exception);
         }

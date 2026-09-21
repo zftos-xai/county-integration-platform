@@ -12,4 +12,14 @@ public record ExternalEndpointRuntimeConfiguration(
         ExternalEndpoint endpoint,
         ExternalEndpointAuthentication authentication
 ) {
+
+    /**
+     * 返回固定脱敏文字，防止地址和解密后的认证信息进入日志。
+     *
+     * @return 不包含端点与认证字段的固定描述
+     */
+    @Override
+    public String toString() {
+        return "ExternalEndpointRuntimeConfiguration[REDACTED]";
+    }
 }

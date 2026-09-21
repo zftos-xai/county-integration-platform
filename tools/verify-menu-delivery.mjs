@@ -46,11 +46,11 @@ for (const menu of deliveryStatus.menus ?? []) {
   if (!allowedStages.has(menu.stage)) fail(`${menu.label} 使用未知阶段：${menu.stage}`)
   const routePath = menu.route === '/' ? '' : menu.route.slice(1)
   const routePattern = menu.permission
-    ? new RegExp(`path: '${escapeRegExp(routePath)}',[^\\n]*requiredPermission: '${escapeRegExp(menu.permission)}'`)
-    : new RegExp(`path: '${escapeRegExp(routePath)}',[^\\n]*public: false`)
+    ? new RegExp(`path:\\s*'${escapeRegExp(routePath)}',[\\s\\S]{0,400}?requiredPermission:\\s*'${escapeRegExp(menu.permission)}'`)
+    : new RegExp(`path:\\s*'${escapeRegExp(routePath)}',[\\s\\S]{0,300}?public:\\s*false`)
   const navigationPattern = menu.permission
-    ? new RegExp(`\\{\\s*to: '${escapeRegExp(menu.route)}',\\s*label: '${escapeRegExp(menu.label)}',[^}]*permission: '${escapeRegExp(menu.permission)}'\\s*\\}`)
-    : new RegExp(`\\{\\s*to: '${escapeRegExp(menu.route)}',\\s*label: '${escapeRegExp(menu.label)}',[^}]*\\}`)
+    ? new RegExp(`\\{\\s*to:\\s*'${escapeRegExp(menu.route)}',\\s*label:\\s*'${escapeRegExp(menu.label)}',[^}]*permission:\\s*'${escapeRegExp(menu.permission)}'\\s*,?\\s*\\}`)
+    : new RegExp(`\\{\\s*to:\\s*'${escapeRegExp(menu.route)}',\\s*label:\\s*'${escapeRegExp(menu.label)}',[^}]*\\}`)
   if (!routePattern.test(routerSource)) fail(`${menu.label} 未注册符合权限要求的正式页面地址 ${menu.route}`)
   if (routerSource.includes(`path: '${routePath}', component: PlaceholderView`)) fail(`${menu.label} 仍指向占位页面`)
   if (!navigationPattern.test(layoutSource)) fail(`${menu.label} 未按接口规范进入正式导航`)

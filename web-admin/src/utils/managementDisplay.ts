@@ -9,6 +9,7 @@ export const AUDIT_TARGET_LABELS: Readonly<Record<string, string>> = {
   SESSION: '登录',
   EXTERNAL_SYSTEM: '外部系统',
   EXTERNAL_ENDPOINT: '外部系统接口',
+  MASTER_DATA_BATCH: '同步批次',
 }
 
 /** 管理页面中审计操作代码对应的中文说明。 */
@@ -42,6 +43,10 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   EXTERNAL_SYSTEM_UPDATED: '修改外部系统',
   EXTERNAL_ENDPOINT_CREATED: '新增外部系统接口',
   EXTERNAL_ENDPOINT_UPDATED: '修改外部系统接口',
+  MASTER_DATA_BATCH_CREATED: '发起同步批次',
+  MASTER_DATA_BATCH_CANCELLED: '取消同步批次',
+  MASTER_DATA_DEPARTMENT_FETCHED: '取得并校验科室数据',
+  MASTER_DATA_HOSPITAL_DIRECTORY_SYNCED: '完成医院综合目录对账',
 }
 
 /** 返回审计对象的中文名称；未知代码保留原值，避免隐藏后端新增类型。 */

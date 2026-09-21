@@ -50,6 +50,18 @@
    sqlcmd -S .\SQLEXPRESS -E -b -i .\03-verify-baseline.sql -o .\database-baseline-check.txt
    ```
 
+   Flyway迁移后可执行`04-verify-database-contract.sql`核对字段契约。若确认真实数据库发生长度或NULL属性漂移，先完成备份和变更审批，再执行会实际修改DDL的修复脚本：
+
+   ```powershell
+   sqlcmd -S .\SQLEXPRESS -E -b -i .\04-verify-database-contract.sql -o .\database-contract-check.txt
+   sqlcmd -S .\SQLEXPRESS -E -b -i .\05-repair-database-contract.sql -o .\database-contract-repair.txt
+   sqlcmd -S .\SQLEXPRESS -E -b -i .\04-verify-database-contract.sql -o .\database-contract-recheck.txt
+   ```
+
+   `05`脚本不是只读脚本：它会提交`ALTER TABLE ... ALTER COLUMN`。脚本对缩短长度和收紧空值执行存量数据预检，并在任一DDL失败时回滚全部变更；不会自动增删字段或改变类型、精度、自增和计算属性。
+
+   应用正常运行后的日常维护由管理端“数据库契约维护”处理。该功能依赖Flyway主版本`V0700`创建方案和明细表，采用生成方案、非创建人审批、事务执行、同事务复验的流程。在线执行范围比`05`离线脚本更窄，仅允许扩大长度或放宽NULL约束；失败会自动回滚，已成功变更只能通过新的版本化迁移继续调整。
+
 4. 在部署主机的`deploy/.env`中配置实际 JDBC 地址及两类应用凭证。迁移账号填入`PLATFORM_DB_MIGRATION_*`，运行账号填入`PLATFORM_DB_*`。该文件已被 Git 忽略。
 
 5. 首次发布运行 Flyway 后再次执行核对脚本，并补充空库迁移、应用连接、TLS、备份和恢复验证记录。当前脚本仅提供初始建库说明，不能代替 SQL Server 2012 SP4 真实验证。

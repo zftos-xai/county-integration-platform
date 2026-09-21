@@ -92,6 +92,25 @@
                 </executions>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.11.3</version>
+                <configuration>
+                    <detectJavaApiLink>false</detectJavaApiLink>
+                    <doclint>all</doclint>
+                    <failOnWarnings>true</failOnWarnings>
+                    <quiet>true</quiet>
+                    <show>protected</show>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>verify-production-javadoc</id>
+                        <phase>verify</phase>
+                        <goals><goal>javadoc-no-fork</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>

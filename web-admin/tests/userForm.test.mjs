@@ -16,7 +16,7 @@ test('用户表单拒绝非法登录名、机构和临时密码', () => {
   form.primaryOrganizationId = '2'
   form.temporaryPassword = 'operator@123456'
   assert.equal(validateUserForm(form, true), '临时密码不能包含登录名')
-  assert.equal(validateTemporaryPassword('short', 'operator'), '临时密码长度需为 12—128 个字符')
+  assert.equal(validateTemporaryPassword('short', 'operator'), '临时密码长度需为 9—128 个字符')
 })
 
 test('用户表单映射保留rowversion且规范化登录名', () => {

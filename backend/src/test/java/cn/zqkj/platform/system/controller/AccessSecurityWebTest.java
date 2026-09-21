@@ -94,7 +94,12 @@ class AccessSecurityWebTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    /** @param permission 可选功能权限 @return 测试用户 */
+    /**
+     * 创建具有指定功能权限的测试登录主体。
+     *
+     * @param permission 可选功能权限
+     * @return 测试用户
+     */
     private PlatformUserPrincipal principal(String permission) {
         List<SimpleGrantedAuthority> authorities = permission == null
                 ? List.of(new SimpleGrantedAuthority("ORG:ORG001"))
@@ -107,7 +112,11 @@ class AccessSecurityWebTest {
         );
     }
 
-    /** @param permission 可选数据库当前功能权限 */
+    /**
+     * 准备处于启用状态的测试账号。
+     *
+     * @param permission 可选数据库当前功能权限
+     */
     private void prepareActiveAccount(String permission) {
         when(identityMapper.findById(1L)).thenReturn(
                 new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false)

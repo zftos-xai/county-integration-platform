@@ -20,6 +20,12 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tools/verify-java-package-layout.mjs
+      - run: node tools/verify-java-comments.mjs
+      - run: node tools/verify-mapper-comments.mjs
       - run: mvn -B verify
         working-directory: backend
 

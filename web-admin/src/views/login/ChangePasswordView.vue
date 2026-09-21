@@ -17,8 +17,8 @@ const isSubmitDisabled = computed(() => !currentPassword.value || !newPassword.v
 async function submit() {
   localError.value = ''
   error.value = null
-  if (newPassword.value.length < 12 || newPassword.value.length > 128) {
-    localError.value = '新密码长度需为 12–128 个字符'
+  if (newPassword.value.length < 9 || newPassword.value.length > 128) {
+    localError.value = '新密码长度需为 9–128 个字符'
     return
   }
   if (newPassword.value !== confirmation.value) {
@@ -45,7 +45,7 @@ async function submit() {
         <div class="prototype-login-message warning">当前账号仅有修改密码权限，完成后请重新登录。</div>
         <div v-if="localError || error" class="prototype-login-message danger" role="alert"><strong>{{ localError || error?.message }}</strong><small v-if="error?.requestId">请求编号：{{ error.requestId }}</small></div>
         <label for="current-password">当前密码</label><input id="current-password" v-model="currentPassword" type="password" autocomplete="current-password" maxlength="128" />
-        <label for="new-password">新密码</label><input id="new-password" v-model="newPassword" type="password" autocomplete="new-password" maxlength="128" placeholder="至少 12 个字符" />
+        <label for="new-password">新密码</label><input id="new-password" v-model="newPassword" type="password" autocomplete="new-password" maxlength="128" placeholder="至少 9 个字符" />
         <label for="confirm-password">确认新密码</label><input id="confirm-password" v-model="confirmation" type="password" autocomplete="new-password" maxlength="128" />
         <button class="prototype-login-submit" type="submit" :disabled="isSubmitDisabled">{{ authState.isLoading ? '正在修改…' : '修改密码并退出' }}</button>
       </form>

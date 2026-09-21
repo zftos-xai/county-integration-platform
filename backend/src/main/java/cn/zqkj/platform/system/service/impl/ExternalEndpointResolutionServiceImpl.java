@@ -4,6 +4,7 @@ import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.system.domain.model.ExternalEndpointAuthentication;
 import cn.zqkj.platform.system.domain.model.ExternalEndpoint;
 import cn.zqkj.platform.system.domain.model.ExternalEndpointRuntimeConfiguration;
+import cn.zqkj.platform.system.domain.model.ExternalEndpointScope;
 import cn.zqkj.platform.system.domain.model.ParameterEnvironment;
 import cn.zqkj.platform.system.mapper.ConfigurationMapper;
 import cn.zqkj.platform.system.service.ExternalEndpointResolutionService;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -68,7 +70,11 @@ public class ExternalEndpointResolutionServiceImpl implements ExternalEndpointRe
         this.environmentReader = environmentReader;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>只解析已启用且验证通过的端点；解密后的认证信息仅存在于返回的运行时对象中，不写日志或数据库明文。</p>
+     */
     @Override
     @Transactional(readOnly = true)
     public Optional<ExternalEndpointRuntimeConfiguration> findEnabledRuntime(
@@ -83,7 +89,59 @@ public class ExternalEndpointResolutionServiceImpl implements ExternalEndpointRe
                 ));
     }
 
-    /** @param endpoint 接口配置 @return 解密后的认证信息 */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>用于启用前验证，可解析已配置端点；仍要求地址和受支持的凭证引用完整可用。</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ExternalEndpointRuntimeConfiguration> findConfiguredRuntime(
+            String systemCode,
+            ParameterEnvironment environment,
+            long organizationId
+    ) {
+        return configurationMapper.findConfiguredExternalEndpoint(systemCode, environment, organizationId)
+                .map(endpoint -> new ExternalEndpointRuntimeConfiguration(endpoint, resolveAuthentication(endpoint)));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>先按机构权限取得候选范围，再过滤掉无法完整解析地址或认证信息的配置。</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExternalEndpointScope> findAvailableScopes(
+            String systemCode,
+            List<String> organizationCodes
+    ) {
+        return configurationMapper.findEnabledExternalEndpointScopes(systemCode, organizationCodes).stream()
+                .filter(scope -> hasResolvableRuntime(systemCode, scope))
+                .toList();
+    }
+
+    /**
+     * 判断端点是否满足业务运行时解析的全部前提。
+     *
+     * @param systemCode 外部系统代码
+     * @param scope 接口适用范围
+     * @return 地址和认证信息均可解析时为true
+     */
+    private boolean hasResolvableRuntime(String systemCode, ExternalEndpointScope scope) {
+        try {
+            return findEnabledRuntime(systemCode, scope.environment(), scope.organizationId()).isPresent();
+        } catch (ResourceConflictException exception) {
+            return false;
+        }
+    }
+
+    /**
+     * 解密托管凭证或解析受控兼容凭证引用。
+     *
+     * @param endpoint 接口配置
+     * @return 解密后的认证信息
+     */
     private ExternalEndpointAuthentication resolveAuthentication(ExternalEndpoint endpoint) {
         String reference = endpoint.credentialReference();
         if (reference != null && reference.startsWith(MANAGED_PREFIX)) {
@@ -114,7 +172,12 @@ public class ExternalEndpointResolutionServiceImpl implements ExternalEndpointRe
         }
     }
 
-    /** @param value 认证字段 @return 是否为空 */
+    /**
+     * 判断认证字段是否缺失或仅包含空白。
+     *
+     * @param value 认证字段
+     * @return 是否为空
+     */
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }

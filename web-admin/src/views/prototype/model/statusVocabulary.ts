@@ -80,7 +80,7 @@ export function dataStatusTone(value: string): StatusTone {
 
 /** Makes prototype-only enablement explicit while keeping the operational state name stable. */
 export function interfaceStatusLabel(value: string): string {
-  return value === '演示启用' ? '已启用（演示）' : value
+  return value === '演示启用' ? '已启用' : value
 }
 
 /** Returns the approved display name for enabled or disabled managed resources. */

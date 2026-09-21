@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { scenarios } from '../src/views/prototype/model/prototypeData.ts'
 import { createRecoveryTasks, recoveryBlock } from '../src/views/prototype/model/recoveryWorkflow.ts'
 
@@ -86,4 +87,27 @@ test('S11 清理失败或与发送冲突：保留失败状态且不允许并发�
   assert.equal(task.cleanupFailed, true)
   assert.equal(task.dataStatus, '清理失败')
   assert.match(recoveryBlock({ ...task, activeSender: true }, 'clean', 'operator'), /正在发送/)
+})
+
+test('基础数据旧原型已撤下，避免把人工映射和人工核查误作业务流程', async () => {
+  const view = await readFile('web-admin/src/views/prototype/PrototypeView.vue', 'utf8')
+  const plan = await readFile('docs/plans/基础数据业务详细计划.md', 'utf8')
+
+  assert.doesNotMatch(view, /foundation-mappings|foundation-issues|FoundationDataPanel|FoundationOperationsPanel/)
+  assert.match(plan, /配置即归属，不另建映射/)
+  assert.match(plan, /直接幂等更新平台当前目录/)
+  assert.match(plan, /不以人工确认代替程序校验/)
+})
+
+test('侧栏导航：桌面密度、会话操作和收起状态使用完整布局规则', async () => {
+  const view = await readFile('web-admin/src/views/prototype/PrototypeView.vue', 'utf8')
+  const styles = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8')
+
+  assert.match(view, /class="prototype-session-actions"/)
+  assert.match(view, /class="prototype-collapse-button"/)
+  assert.match(styles, /grid-template-columns: 224px minmax\(0, 1fr\)/)
+  assert.match(styles, /\.prototype-session-actions \{[^}]*display: grid/)
+  assert.match(styles, /\.prototype-collapse-button \{[^}]*border: 1px solid/)
+  assert.match(styles, /\.prototype-app\.sidebar-collapsed \{ grid-template-columns: 68px minmax\(0, 1fr\); \}/)
+  assert.match(styles, /\.prototype-sidebar\.collapsed \.prototype-nav button > span/)
 })

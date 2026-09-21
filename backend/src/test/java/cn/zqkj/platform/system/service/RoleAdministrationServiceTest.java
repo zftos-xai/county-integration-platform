@@ -113,12 +113,21 @@ class RoleAdministrationServiceTest {
                 org.mockito.ArgumentMatchers.any());
     }
 
-    /** @return 固定操作人 */
+    /**
+     * 创建具有测试机构范围的服务层操作人。
+     *
+     * @return 固定操作人
+     */
     private AccessActor actor() {
         return new AccessActor(1L, "admin", Set.of("ORG001"));
     }
 
-    /** @param systemManaged 系统保护标识 @return 角色记录 */
+    /**
+     * 创建角色测试快照。
+     *
+     * @param systemManaged 系统保护标识
+     * @return 角色记录
+     */
     private RoleSummary role(boolean systemManaged) {
         return new RoleSummary(
                 systemManaged ? 1L : 2L,
@@ -127,7 +136,11 @@ class RoleAdministrationServiceTest {
         );
     }
 
-    /** @return 固定并发版本 */
+    /**
+     * 创建确定性的8字节SQL Server行版本。
+     *
+     * @return 固定并发版本
+     */
     private byte[] version() {
         return new byte[Long.BYTES];
     }

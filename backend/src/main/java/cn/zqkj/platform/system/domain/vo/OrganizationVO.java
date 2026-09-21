@@ -3,7 +3,11 @@ package cn.zqkj.platform.system.domain.vo;
 import java.time.LocalDateTime;
 
 /**
- * 表示平台机构的可读快照。
+ * 平台机构档案的API只读投影。
+ *
+ * <p>数据来源：{@code dbo.org_organization}（机构表）。</p>
+ *
+ * <p>业务说明：用于展示机构层级、有效期和启停状态；行版本用于防止管理端覆盖他人修改。</p>
  *
  * @param id 平台内部机构主键
  * @param organizationCode 平台统一机构编码
@@ -32,7 +36,19 @@ public record OrganizationVO(
 ) {
 
     /**
-     * 创建机构记录并防止外部持有可变并发版本数组。
+     * 创建机构投影并复制可变的行版本数组。
+     *
+     * @param id 平台内部机构主键
+     * @param organizationCode 平台统一机构编码
+     * @param organizationName 机构名称
+     * @param organizationType 经项目确认的机构类型代码
+     * @param parentId 父机构主键；顶级机构为空
+     * @param enabled 机构是否启用
+     * @param validFrom 可选有效起始UTC时间
+     * @param validTo 可选有效结束UTC时间
+     * @param createdAt 档案创建UTC时间
+     * @param updatedAt 档案最后修改UTC时间
+     * @param version SQL Server行版本
      */
     public OrganizationVO {
         version = version == null ? null : version.clone();

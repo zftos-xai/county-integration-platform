@@ -52,6 +52,15 @@ public record CurrentUserVO(
 
     /**
      * 防止调用方持有可变权限列表。
+     *
+     * @param userId 用户主键
+     * @param loginName 登录名
+     * @param displayName 显示名称
+     * @param primaryOrganizationId 主机构主键
+     * @param organizationCode 主机构代码
+     * @param mustChangePassword 是否必须先修改密码
+     * @param permissions 当前有效权限代码
+     * @param organizationCodes 当前显式机构范围代码
      */
     public CurrentUserVO {
         permissions = List.copyOf(permissions);

@@ -52,13 +52,13 @@ public class CodeParameterDefinitionRegistry implements ParameterDefinitionRegis
             )
     );
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 返回按注册顺序固定且不可由数据库扩展的参数定义。 */
     @Override
     public List<ParameterDefinition> findAll() {
         return DEFINITIONS;
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 参数键按精确值匹配，未注册键返回空结果。 */
     @Override
     public Optional<ParameterDefinition> find(String key) {
         return DEFINITIONS.stream().filter(definition -> definition.key().equals(key)).findFirst();

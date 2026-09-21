@@ -41,21 +41,34 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
         this.auditService = auditService;
     }
 
-    /** @return 全部角色及其权限 */
+    /**
+     * 查询全部角色并补充各自权限集合。
+     *
+     * @return 全部角色及其权限
+     */
     @Transactional(readOnly = true)
     @Override
     public List<RoleVO> findAll() {
         return mapper.findRoles().stream().map(this::enrich).toList();
     }
 
-    /** @param roleId 角色主键 @return 指定角色及其权限 */
+    /**
+     * 读取指定角色并补充权限集合。
+     *
+     * @param roleId 角色主键
+     * @return 指定角色及其权限
+     */
     @Transactional(readOnly = true)
     @Override
     public RoleVO get(long roleId) {
         return enrich(requireRole(roleId));
     }
 
-    /** @return 后端注册权限清单 */
+    /**
+     * 查询全部代码注册权限。
+     *
+     * @return 后端注册权限清单
+     */
     @Transactional(readOnly = true)
     @Override
     public List<PermissionVO> findPermissions() {
@@ -137,7 +150,11 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
         return updated;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>拒绝删除内置角色或仍被用户引用的角色，并使用行版本避免覆盖并发变更。</p>
+     */
     @Transactional
     @Override
     public void delete(long roleId, byte[] expectedVersion, AccessActor actor) {
@@ -157,13 +174,25 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
                 ManagementAuditServiceImpl.currentRequestId()));
     }
 
-    /** @param actor 操作人 @param role 角色 @param action 动作 @param summary 不含敏感内容的摘要 */
+    /**
+     * 追加不包含DDL全文和连接信息的管理审计事件。
+     *
+     * @param actor 操作人
+     * @param role 角色
+     * @param action 动作
+     * @param summary 不含敏感内容的摘要
+     */
     private void audit(AccessActor actor, RoleVO role, String action, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, null, null, action,
                 "ROLE", role.roleCode(), "SUCCESS", summary, ManagementAuditServiceImpl.currentRequestId()));
     }
 
-    /** @param summary 角色基础快照 @return 完整角色记录 */
+    /**
+     * 为角色基础快照补充稳定排序的权限集合。
+     *
+     * @param summary 角色基础快照
+     * @return 完整角色记录
+     */
     private RoleVO enrich(RoleSummary summary) {
         return new RoleVO(
                 summary.id(), summary.roleCode(), summary.roleName(), summary.enabled(), summary.systemManaged(),
@@ -172,7 +201,12 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
         );
     }
 
-    /** @param roleId 角色主键 @return 存在角色 */
+    /**
+     * 读取角色；不存在时抛出资源不存在异常。
+     *
+     * @param roleId 角色主键
+     * @return 存在角色
+     */
     private RoleSummary requireRole(long roleId) {
         if (roleId <= 0) {
             throw new InvalidRequestException("roleId 必须大于 0");
@@ -181,14 +215,25 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
                 .orElseThrow(() -> new ResourceNotFoundException("Platform role was not found"));
     }
 
-    /** @param role 角色 */
+    /**
+     * 拒绝修改或删除平台保护角色。
+     *
+     * @param role 角色
+     */
     private void requireMutable(RoleSummary role) {
         if (role.systemManaged()) {
             throw new ResourceConflictException("系统保护角色不能修改");
         }
     }
 
-    /** @param value 文本 @param field 字段 @param maximumLength 最大长度 @return 裁剪值 */
+    /**
+     * 校验角色必填文本并返回裁剪后的值。
+     *
+     * @param value 文本
+     * @param field 字段
+     * @param maximumLength 最大长度
+     * @return 裁剪值
+     */
     private String requireText(String value, String field, int maximumLength) {
         if (value == null || value.isBlank() || value.trim().length() > maximumLength) {
             throw new InvalidRequestException(field + " is invalid");
@@ -196,7 +241,11 @@ public class RoleAdministrationServiceImpl implements RoleAdministrationService 
         return value.trim();
     }
 
-    /** @param version 并发版本 */
+    /**
+     * 校验SQL Server行版本恰好为8字节。
+     *
+     * @param version 并发版本
+     */
     private void requireVersion(byte[] version) {
         if (version == null || version.length != Long.BYTES) {
             throw new InvalidRequestException("version 必须是 8 字节的 SQL Server 行版本号");

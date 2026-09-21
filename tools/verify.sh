@@ -23,11 +23,18 @@ python3 "$project_root/plugins/team-engineering-standards/skills/project-enginee
 echo "Checking Java package layout..."
 node "$project_root/tools/verify-java-package-layout.mjs"
 
+echo "Checking Java comment quality and persistence-model table documentation..."
+node "$project_root/tools/verify-java-comments.mjs"
+
+echo "Checking MyBatis Mapper XML comments..."
+node "$project_root/tools/verify-mapper-comments.mjs"
+
 echo "Checking Java 17 backend..."
 "$maven_command" -B -f "$project_root/backend/pom.xml" verify
 
 echo "Checking SQL migration structure..."
 node "$project_root/tools/verify-sql-migrations.mjs"
+node "$project_root/tools/generate-database-contract-sql.mjs" --check
 
 echo "Checking Vue applications..."
 cd "$project_root"

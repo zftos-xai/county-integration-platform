@@ -3,9 +3,13 @@ package cn.zqkj.platform.exchange.domain.model;
 import java.time.LocalDateTime;
 
 /**
- * 表示一次真实目标系统调用完成后的最小运行记录。
+ * 一次真实目标系统调用完成后的最小持久化事实。
  *
- * <p>该对象只接受不含敏感内容的摘要和业务记录引用，不承载完整 XML、JSON、病历或报告正文。</p>
+ * <p>持久化目标：{@code dbo.exch_exchange_record}（交换记录表）。该类是写入参数，
+ * 不是数据库完整行的读取投影。</p>
+ *
+ * <p>业务说明：只接受不含敏感内容的摘要和业务记录引用，不承载完整XML、JSON、
+ * 病历或报告正文；请求编号由数据库唯一约束防止重复落库。</p>
  *
  * @param requestId 跨组件定位本次调用的请求编号
  * @param interfaceCode 接口事件码或交易码

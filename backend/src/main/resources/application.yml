@@ -36,6 +36,8 @@ server:
         same-site: strict
 
 platform:
+  database-contract:
+    enabled: ${PLATFORM_DATABASE_CONTRACT_ENABLED:true}
   security:
     bootstrap-secret: ${PLATFORM_BOOTSTRAP_SECRET:}
     credential-encryption-key: ${PLATFORM_CREDENTIAL_ENCRYPTION_KEY:}

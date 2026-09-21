@@ -33,7 +33,11 @@ class ManagementAuditSecurityWebTest {
     @MockitoBean private IdentityMapper identityMapper;
     @MockitoBean private UserDetailsService userDetailsService;
 
-    /** @throws Exception MockMvc调用失败时抛出 */
+    /**
+     * 验证管理审计接口要求审计只读权限。
+     *
+     * @throws Exception MockMvc调用失败时抛出
+     */
     @Test
     void enforcesAuditReadPermission() throws Exception {
         prepareAccount(List.of("audit:read"));
@@ -46,7 +50,11 @@ class ManagementAuditSecurityWebTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** @param permissions 当前权限 */
+    /**
+     * 准备服务端账号状态查询替身。
+     *
+     * @param permissions 当前权限
+     */
     private void prepareAccount(List<String> permissions) {
         when(identityMapper.findById(1L)).thenReturn(
                 new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false)
@@ -55,7 +63,12 @@ class ManagementAuditSecurityWebTest {
         when(identityMapper.findOrganizationCodes(1L)).thenReturn(List.of("ORG001"));
     }
 
-    /** @param permissions 权限 @return 测试用户 */
+    /**
+     * 创建具有指定功能权限的测试登录主体。
+     *
+     * @param permissions 权限
+     * @return 测试用户
+     */
     private PlatformUserPrincipal principal(List<String> permissions) {
         List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
         permissions.forEach(value -> authorities.add(new SimpleGrantedAuthority(value)));

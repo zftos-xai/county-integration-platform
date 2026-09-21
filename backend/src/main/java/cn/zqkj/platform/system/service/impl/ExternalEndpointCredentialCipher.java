@@ -119,7 +119,14 @@ public class ExternalEndpointCredentialCipher {
         }
     }
 
-    /** @param mode 加密或解密模式 @param endpointId 服务地址主键 @param initializationVector 随机向量 @return 已初始化密码器 */
+    /**
+     * 创建使用当前托管密钥和指定随机向量的AES-GCM密码器。
+     *
+     * @param mode 加密或解密模式
+     * @param endpointId 服务地址主键
+     * @param initializationVector 随机向量
+     * @return 已初始化密码器
+     */
     private Cipher cipher(int mode, long endpointId, byte[] initializationVector) throws GeneralSecurityException {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(mode, new SecretKeySpec(encryptionKey, "AES"),
@@ -135,7 +142,12 @@ public class ExternalEndpointCredentialCipher {
         }
     }
 
-    /** @param configuredSecret 部署密钥文本 @return 经过域隔离派生的256位AES密钥 */
+    /**
+     * 从独立配置秘密派生固定长度AES密钥。
+     *
+     * @param configuredSecret 部署密钥文本
+     * @return 经过域隔离派生的256位AES密钥
+     */
     private static byte[] deriveKey(String configuredSecret) {
         if (configuredSecret == null || configuredSecret.isBlank()) {
             return new byte[0];

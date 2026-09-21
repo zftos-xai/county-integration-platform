@@ -23,25 +23,25 @@ test('基层HIS接口配置必须选择机构并接受实际HTTP地址', () => {
   assert.equal(validateExternalEndpointForm(form, null, true), '请选择适用机构')
   form.organizationId = 8
   assert.equal(validateExternalEndpointForm(form, null, true), null)
-  assert.equal(form.enabled, true)
-  assert.equal(toCreateExternalEndpointInput(form).enabled, true)
+  assert.equal('organizationQueryName' in toCreateExternalEndpointInput(form), false)
 })
 
 test('修改接口配置时接入信息留空表示保留且请求携带并发版本', () => {
   const endpoint = {
     id: 3, externalSystemId: 1, environment: 'TEST', organizationId: 8, organizationCode: 'ORG008',
     baseUrl: 'http://his.example.invalid/WebService.asmx', connectTimeoutMs: 3000, readTimeoutMs: 15000,
-    credentialConfigured: true, enabled: false, createdAt: '2026-01-01T00:00:00',
+    credentialConfigured: true, enabled: false,
+    sourceOrganizationId: null, sourceOrganizationName: null, verificationStatus: 'NOT_VERIFIED',
+    verifiedAt: null, verificationFailureSummary: null, createdAt: '2026-01-01T00:00:00',
     updatedAt: '2026-01-01T00:00:00', version: 'AAAAAAAAAAE=',
   }
   const form = externalEndpointToForm(endpoint)
-  form.enabled = true
   assert.equal(form.authorizationCode, '')
   assert.equal(validateExternalEndpointForm(form, endpoint, true), null)
   assert.deepEqual(toUpdateExternalEndpointInput(form), {
     environment: 'TEST', organizationId: 8,
     baseUrl: endpoint.baseUrl, connectTimeoutMs: 3000, readTimeoutMs: 15000,
-    authentication: null, enabled: true, version: 'AAAAAAAAAAE=',
+    authentication: null, enabled: false, version: 'AAAAAAAAAAE=',
   })
 })
 
@@ -49,23 +49,29 @@ test('更换适用机构时必须填写新机构自己的接入信息', () => {
   const endpoint = {
     id: 3, externalSystemId: 1, environment: 'TEST', organizationId: 8, organizationCode: 'ORG008',
     baseUrl: 'http://his.example.invalid/WebService.asmx', connectTimeoutMs: 3000, readTimeoutMs: 15000,
-    credentialConfigured: true, enabled: true, createdAt: '2026-01-01T00:00:00',
+    credentialConfigured: true, enabled: true,
+    sourceOrganizationId: null, sourceOrganizationName: null, verificationStatus: 'NOT_VERIFIED',
+    verifiedAt: null, verificationFailureSummary: null, createdAt: '2026-01-01T00:00:00',
     updatedAt: '2026-01-01T00:00:00', version: 'AAAAAAAAAAE=',
   }
   const form = externalEndpointToForm(endpoint)
   form.organizationId = 9
   assert.match(validateExternalEndpointForm(form, endpoint, true) ?? '', /更换机构后/)
-  form.vendorCode = 'V09'; form.authorizationCode = 'AUTH-009'
+  form.vendorCode = 'V09'; form.authorizationCode = 'AUTH-009'; form.authenticationChanged = true
   assert.equal(validateExternalEndpointForm(form, endpoint, true), null)
 })
 
-test('接口地址拒绝查询参数并校验接入信息必填项', () => {
+test('接口地址兼容ASMX操作地址并拒绝其他查询参数', () => {
   const form = emptyExternalEndpointForm(8)
   form.baseUrl = 'http://his.example.invalid/WebService.asmx?op=PHIS_Interface'
+  form.vendorCode = 'V01'; form.authorizationCode = 'AUTH-008'
+  assert.equal(validateExternalEndpointForm(form, null, true), null)
+  assert.equal(toCreateExternalEndpointInput(form).baseUrl,
+    'http://his.example.invalid/WebService.asmx?op=PHIS_Interface')
+  form.baseUrl = 'http://his.example.invalid/WebService.asmx?foo=bar'
   assert.match(validateExternalEndpointForm(form, null, true), /正确的 HIS 接口地址/)
   form.baseUrl = 'http://his.example.invalid/WebService.asmx'
-  assert.match(validateExternalEndpointForm(form, null, true), /厂商编号和 HIS 验证码/)
-  form.vendorCode = 'V01'; form.authorizationCode = 'AUTH-008'; form.username = 'operator'
+  form.username = 'operator'
   assert.match(validateExternalEndpointForm(form, null, true), /HIS 用户名和 HIS 密码/)
 })
 
@@ -74,7 +80,8 @@ test('外部系统页按机构展示接口配置并保持列表内容单行省�
   assert.match(source, /机构接口配置表使用的稳定分组键/)
   assert.match(source, /<th>机构<\/th><th>生产环境<\/th><th>测试环境<\/th><th>接入信息<\/th>/)
   assert.match(source, /\.single-line \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
-  assert.match(source, /class="single-line" :title="group\.endpoints\.PRODUCTION\?\.baseUrl"/)
+  assert.match(source, /displayServiceUrl\(group\.endpoints\.PRODUCTION\)/)
+  assert.match(source, /await loadEndpoints\(system\)/)
 })
 
 test('外部系统页按数据阶段收敛空状态操作', async () => {
@@ -104,10 +111,10 @@ test('外部系统与机构接口配置抽屉使用完整字段和固定操作�
   assert.doesNotMatch(endpointDrawer, /凭证引用|env:\/\//)
   assert.doesNotMatch(endpointDrawer, /setup-guide|配置步骤|1选择机构2填写地址3填写接入信息/)
   assert.doesNotMatch(endpointDrawer, /id="endpoint-(environment|organization)"[^>]*disabled/)
-  assert.match(endpointDrawer, /修改接入信息/)
+  assert.match(endpointDrawer, /查看或修改/)
   assert.match(endpointDrawer, /class="endpoint-footer"/)
-  assert.match(endpointDrawer, /<strong>启用配置<\/strong>/)
-  assert.match(endpointDrawer, /type="checkbox" role="switch"/)
+  assert.match(endpointDrawer, /<strong>保存后自动校验<\/strong>/)
+  assert.doesNotMatch(endpointDrawer, /type="checkbox" role="switch"/)
   assert.doesNotMatch(endpointDrawer, /保存后的状态/)
   assert.match(endpointDrawer, /'保存配置'/)
   assert.doesNotMatch(endpointDrawer, /创建停用连接/)

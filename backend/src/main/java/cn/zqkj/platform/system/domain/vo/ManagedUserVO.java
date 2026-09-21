@@ -36,6 +36,19 @@ public record ManagedUserVO(
 
     /**
      * 防止调用方持有可变集合或并发版本数组。
+     *
+     * @param id 用户主键
+     * @param loginName 登录名
+     * @param displayName 显示名称
+     * @param primaryOrganizationId 主机构主键
+     * @param organizationCode 主机构代码
+     * @param enabled 是否启用
+     * @param mustChangePassword 是否必须修改密码
+     * @param createdAt 创建UTC时间
+     * @param updatedAt 最后修改UTC时间
+     * @param version SQL Server并发版本
+     * @param roleIds 已授予角色主键
+     * @param organizationScopeIds 已授予机构范围主键
      */
     public ManagedUserVO {
         version = version == null ? null : version.clone();
@@ -43,7 +56,11 @@ public record ManagedUserVO(
         organizationScopeIds = List.copyOf(organizationScopeIds);
     }
 
-    /** @return SQL Server并发版本副本 */
+    /**
+     * 返回SQL Server行版本的防御性副本。
+     *
+     * @return SQL Server并发版本副本
+     */
     @Override
     public byte[] version() {
         return version == null ? null : version.clone();

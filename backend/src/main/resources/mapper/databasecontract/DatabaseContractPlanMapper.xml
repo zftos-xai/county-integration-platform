@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.databasecontract.mapper.DatabaseContractPlanMapper">
+    <resultMap id="planSnapshot" type="cn.zqkj.platform.databasecontract.domain.model.DatabaseContractPlanSnapshot">
+        <constructor>
+            <!-- 维护方案内部主键 --><arg column="id" javaType="_long"/>
+            <!-- 可追溯方案编号 --><arg column="plan_no" javaType="java.lang.String"/>
+            <!-- 维护方案状态 --><arg column="status" javaType="cn.zqkj.platform.databasecontract.domain.model.DatabaseContractPlanStatus"/>
+            <!-- 选中差异总数 --><arg column="issue_count" javaType="_int"/>
+            <!-- 可在线执行差异数 --><arg column="executable_count" javaType="_int"/>
+            <!-- 方案业务摘要 --><arg column="summary" javaType="java.lang.String"/>
+            <!-- 创建人登录名快照 --><arg column="created_by" javaType="java.lang.String"/>
+            <!-- 创建UTC时间 --><arg column="created_at" javaType="java.time.LocalDateTime"/>
+            <!-- 审批人登录名快照 --><arg column="approved_by" javaType="java.lang.String"/>
+            <!-- 审批UTC时间 --><arg column="approved_at" javaType="java.time.LocalDateTime"/>
+            <!-- 审批依据摘要 --><arg column="approval_note" javaType="java.lang.String"/>
+            <!-- 执行人登录名快照 --><arg column="executed_by" javaType="java.lang.String"/>
+            <!-- 执行UTC时间 --><arg column="executed_at" javaType="java.time.LocalDateTime"/>
+            <!-- 复验UTC时间 --><arg column="verified_at" javaType="java.time.LocalDateTime"/>
+            <!-- 失败安全摘要 --><arg column="failure_message" javaType="java.lang.String"/>
+            <!-- 最后更新UTC时间 --><arg column="updated_at" javaType="java.time.LocalDateTime"/>
+            <!-- SQL Server并发版本；JVM类名[B表示原始byte数组 --><arg column="row_version" javaType="[B"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="planItemSnapshot" type="cn.zqkj.platform.databasecontract.domain.model.DatabaseContractPlanItemSnapshot">
+        <constructor>
+            <!-- 明细内部主键 --><arg column="id" javaType="_long"/>
+            <!-- 归属方案主键 --><arg column="plan_id" javaType="_long"/>
+            <!-- 稳定差异代码 --><arg column="violation_code" javaType="java.lang.String"/>
+            <!-- 数据库或映射对象名 --><arg column="object_name" javaType="java.lang.String"/>
+            <!-- 预期契约快照 --><arg column="expected_value" javaType="java.lang.String"/>
+            <!-- 实际检测快照 --><arg column="actual_value" javaType="java.lang.String"/>
+            <!-- 建议修改方向 --><arg column="direction" javaType="java.lang.String"/>
+            <!-- 处理建议 --><arg column="action_text" javaType="java.lang.String"/>
+            <!-- 是否允许在线执行 --><arg column="executable" javaType="_boolean"/>
+            <!-- 服务端生成DDL预览 --><arg column="ddl_preview" javaType="java.lang.String"/>
+            <!-- 执行边界说明 --><arg column="execution_note" javaType="java.lang.String"/>
+            <!-- DDL执行状态 --><arg column="execution_status" javaType="java.lang.String"/>
+            <!-- 执行后复验状态 --><arg column="verification_status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="insertPlan" resultType="long" affectData="true">
+        <!-- 创建维护方案并返回SQL Server生成的主键 -->
+        INSERT INTO db_contract_plan
+            (plan_no,              <!-- 可追溯方案编号 -->
+             status,               <!-- 初始方案状态 -->
+             issue_count,          <!-- 选中差异总数 -->
+             executable_count,     <!-- 可在线执行差异数 -->
+             summary,              <!-- 方案业务摘要 -->
+             created_by)           <!-- 创建人登录名快照 -->
+        VALUES
+            (#{planNo}, N'DRAFT', #{issueCount}, #{executableCount}, #{summary}, #{createdBy});
+        SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
+    </select>
+
+    <insert id="insertItem">
+        <!-- DDL只能来自服务端可信契约元数据，接口请求不接收SQL文本 -->
+        INSERT INTO db_contract_plan_item
+            (plan_id,              <!-- 归属方案主键 -->
+             violation_code,       <!-- 稳定差异代码 -->
+             object_name,          <!-- 数据库或映射对象名 -->
+             expected_value,       <!-- 预期契约快照 -->
+             actual_value,         <!-- 实际检测快照 -->
+             direction,            <!-- 建议修改方向 -->
+             action_text,          <!-- 处理建议 -->
+             executable,           <!-- 是否允许在线执行 -->
+             ddl_preview,          <!-- 服务端生成DDL预览 -->
+             execution_note,       <!-- 执行边界说明 -->
+             execution_status,     <!-- DDL执行状态 -->
+             verification_status)  <!-- 执行后复验状态 -->
+        VALUES
+            (#{planId}, #{item.violationCode}, #{item.objectName}, #{item.expectedValue},
+             #{item.actualValue}, #{item.direction}, #{item.actionText}, #{item.executable},
+             #{item.ddlPreview}, #{item.executionNote}, N'PENDING', N'PENDING')
+    </insert>
+
+    <select id="findRecent" resultMap="planSnapshot">
+        <!-- 页面只展示最近100条，完整历史仍保存在数据库和管理审计中 -->
+        SELECT TOP (100) id, plan_no, status, issue_count, executable_count, summary,
+               created_by, created_at, approved_by, approved_at, approval_note,
+               executed_by, executed_at, verified_at, failure_message, updated_at, row_version
+        FROM db_contract_plan
+        ORDER BY updated_at DESC, id DESC
+    </select>
+
+    <select id="findById" resultMap="planSnapshot">
+        <!-- 按主键读取最新并发版本和状态事实 -->
+        SELECT id, plan_no, status, issue_count, executable_count, summary,
+               created_by, created_at, approved_by, approved_at, approval_note,
+               executed_by, executed_at, verified_at, failure_message, updated_at, row_version
+        FROM db_contract_plan WHERE id = #{id}
+    </select>
+
+    <select id="findItems" resultMap="planItemSnapshot">
+        <!-- 按稳定主键顺序返回方案全部差异 -->
+        SELECT id, plan_id, violation_code, object_name, expected_value, actual_value,
+               direction, action_text, executable, ddl_preview, execution_note,
+               execution_status, verification_status
+        FROM db_contract_plan_item WHERE plan_id = #{planId} ORDER BY id
+    </select>
+
+    <update id="approve">
+        <!-- 只允许基于最新行版本审批草稿 -->
+        UPDATE db_contract_plan SET status = N'APPROVED', approved_by = #{approvedBy},
+               approved_at = SYSUTCDATETIME(), approval_note = #{note}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{id} AND status = N'DRAFT' AND row_version = #{version}
+    </update>
+
+    <update id="markExecuting">
+        <!-- 只允许基于最新行版本执行已批准方案 -->
+        UPDATE db_contract_plan SET status = N'EXECUTING', executed_by = #{executedBy},
+               executed_at = SYSUTCDATETIME(), failure_message = NULL, updated_at = SYSUTCDATETIME()
+        WHERE id = #{id} AND status = N'APPROVED' AND row_version = #{version}
+    </update>
+
+    <update id="markCompleted">
+        <!-- 只有DDL完成并复验后才能进入完成状态 -->
+        UPDATE db_contract_plan SET status = N'COMPLETED', verified_at = SYSUTCDATETIME(),
+               updated_at = SYSUTCDATETIME() WHERE id = #{id} AND status = N'EXECUTING'
+    </update>
+
+    <update id="markFailed">
+        <!-- DDL事务回滚后单独记录失败摘要 -->
+        UPDATE db_contract_plan SET status = N'FAILED', failure_message = #{message},
+               executed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+        WHERE id = #{id} AND status IN (N'APPROVED', N'EXECUTING')
+    </update>
+
+    <update id="cancel">
+        <!-- 已开始执行或已完成方案不能取消 -->
+        UPDATE db_contract_plan SET status = N'CANCELLED', updated_at = SYSUTCDATETIME()
+        WHERE id = #{id} AND status IN (N'DRAFT', N'APPROVED') AND row_version = #{version}
+    </update>
+
+    <update id="markItemsExecuted">
+        <!-- 当前正式流程只允许全部明细可执行的方案进入执行 -->
+        UPDATE db_contract_plan_item SET execution_status = N'EXECUTED'
+        WHERE plan_id = #{planId} AND executable = 1
+    </update>
+
+    <update id="markItemVerification">
+        <!-- 保存每项DDL执行后的重新扫描结论 -->
+        UPDATE db_contract_plan_item SET verification_status = #{status} WHERE id = #{id}
+    </update>
+</mapper>

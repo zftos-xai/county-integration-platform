@@ -2,6 +2,10 @@ package cn.zqkj.platform.system.service;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.his.domain.model.OrganizationEntry;
+import cn.zqkj.platform.his.domain.model.HospitalDirectoryEntry;
+import cn.zqkj.platform.his.domain.model.PhisResponse;
+import cn.zqkj.platform.his.service.PhisService;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.DeleteParameterCommand;
@@ -17,6 +21,8 @@ import cn.zqkj.platform.system.domain.model.ParameterEnvironment;
 import cn.zqkj.platform.system.domain.model.ParameterValue;
 import cn.zqkj.platform.system.domain.model.ParameterValueType;
 import cn.zqkj.platform.system.domain.model.ExternalEndpoint;
+import cn.zqkj.platform.system.domain.model.ExternalEndpointAuthentication;
+import cn.zqkj.platform.system.domain.model.ExternalEndpointCredential;
 import cn.zqkj.platform.system.domain.model.ExternalSystem;
 import cn.zqkj.platform.system.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.mapper.ConfigurationMapper;
@@ -25,6 +31,7 @@ import cn.zqkj.platform.system.service.impl.ExternalEndpointCredentialCipher;
 import cn.zqkj.platform.system.service.ManagementAuditService;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +41,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -260,7 +268,7 @@ class ConfigurationServiceTest {
         verify(mapper, never()).deleteDictionaryItem(anyLong(), any());
     }
 
-    /** 验证服务地址拒绝不支持的协议、地址凭证和查询参数。 */
+    /** 验证服务地址拒绝不支持的协议、地址凭证和未知查询参数。 */
     @Test
     void rejectsInvalidExternalEndpointUrl() {
         ConfigurationMapper mapper = mock(ConfigurationMapper.class);
@@ -274,12 +282,12 @@ class ConfigurationServiceTest {
                 1L, endpointCommand("https://user:pass@his.local/api", null), actor()
         ));
         assertThrows(InvalidRequestException.class, () -> service.createExternalEndpoint(
-                1L, endpointCommand("http://his.local/api?op=PHIS_Interface", null), actor()
+                1L, endpointCommand("http://his.local/api?foo=bar", null), actor()
         ));
         verify(mapper, never()).createExternalEndpoint(anyLong(), any(), any());
     }
 
-    /** 验证正式WSDL使用的HTTP WebService基础地址能够登记。 */
+    /** 验证ASMX操作页HTTP地址能够登记并完整保留供管理端回显。 */
     @Test
     void acceptsHttpExternalEndpointUrl() {
         ConfigurationMapper mapper = mock(ConfigurationMapper.class);
@@ -289,12 +297,14 @@ class ConfigurationServiceTest {
         ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
 
         service.createExternalEndpoint(
-                1L, endpointCommand("http://his.example.invalid/WebService.asmx", null), actor()
+                1L, endpointCommand(
+                        "http://his.example.invalid/WebService.asmx?op=PHIS_Interface", null), actor()
         );
 
         verify(mapper).createExternalEndpoint(eq(1L),
-                argThat(command -> "http://his.example.invalid/WebService.asmx".equals(command.baseUrl())
-                        && command.enabled()),
+                argThat(command -> "http://his.example.invalid/WebService.asmx?op=PHIS_Interface"
+                        .equals(command.baseUrl())
+                        && !command.enabled()),
                 eq("admin"));
     }
 
@@ -322,6 +332,7 @@ class ConfigurationServiceTest {
         ConfigurationMapper mapper = mock(ConfigurationMapper.class);
         ExternalEndpoint current = externalEndpoint();
         when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(current));
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(externalSystem(true)));
         when(mapper.updateExternalEndpoint(eq(9L), any(), eq("admin"))).thenReturn(1);
         ConfigurationService service = service(mapper, List.of(), mock(OrganizationService.class));
 
@@ -334,6 +345,215 @@ class ConfigurationServiceTest {
                 command.environment() == ParameterEnvironment.TEST
                         && command.organizationId() == null
                         && command.authentication() == null), eq("admin"));
+    }
+
+    /** 验证100-008只在返回唯一来源机构后才允许基层HIS配置进入可同步状态。 */
+    @Test
+    void verifiesPrimaryHisEndpointWithExactlyOneOrganization() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        PhisService phisService = mock(PhisService.class);
+        ExternalEndpoint current = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, false, LocalDateTime.now(), LocalDateTime.now(), version(), "HIS测试机构", null, null,
+                cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.NOT_VERIFIED, null, null);
+        ExternalEndpoint verified = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, true, LocalDateTime.now(), LocalDateTime.now(), version(), "HIS测试机构", "HIS-ORG-001",
+                "HIS测试机构", cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.VERIFIED,
+                LocalDateTime.now(), null);
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(current), Optional.of(verified));
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(new ExternalSystem(
+                1L, "PRIMARY_HIS", "基层HIS", "测试用途", true,
+                LocalDateTime.now(), LocalDateTime.now(), version())));
+        when(phisService.verifyOrganizationConfiguration(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(true, "1", List.of(new OrganizationEntry(
+                        "HIS-ORG-001", "HIS测试机构", null, null, null, null)), null));
+        when(phisService.verifyHospitalDirectoryCapability(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(true, "1", List.<HospitalDirectoryEntry>of(), null));
+        when(mapper.markExternalEndpointVerified(eq(9L), eq("HIS-ORG-001"), eq("HIS测试机构"), eq("admin")))
+                .thenReturn(1);
+        ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
+                mock(OrganizationService.class), mock(ManagementAuditService.class),
+                mock(ExternalEndpointCredentialCipher.class), phisService);
+
+        var result = service.verifyExternalEndpoint(9L, actor());
+
+        assertEquals("VERIFIED", result.verificationStatus());
+        assertEquals("HIS-ORG-001", result.sourceOrganizationId());
+        verify(phisService).verifyHospitalDirectoryCapability(eq(10L), eq(ParameterEnvironment.TEST),
+                argThat(query -> "ORG001".equals(query.sourceOrganizationCode())));
+        verify(mapper).markExternalEndpointVerified(9L, "HIS-ORG-001", "HIS测试机构", "admin");
+    }
+
+    /** 验证100-008成功但100-003被拒绝时，接口不能被错误标记为可同步。 */
+    @Test
+    void rejectsPrimaryHisEndpointWithoutHospitalDirectoryPermission() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        PhisService phisService = mock(PhisService.class);
+        ExternalEndpoint current = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, false, LocalDateTime.now(), LocalDateTime.now(), version(), "HIS测试机构", null, null,
+                cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.NOT_VERIFIED, null, null);
+        ExternalEndpoint failed = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, false, LocalDateTime.now(), LocalDateTime.now(), version(), "HIS测试机构", null, null,
+                cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.FAILED,
+                LocalDateTime.now(), "HIS未授予100-003权限");
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(current), Optional.of(failed));
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(new ExternalSystem(
+                1L, "PRIMARY_HIS", "基层HIS", "测试用途", true,
+                LocalDateTime.now(), LocalDateTime.now(), version())));
+        when(phisService.verifyOrganizationConfiguration(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(true, "1", List.of(new OrganizationEntry(
+                        "HIS-ORG-001", "HIS测试机构", null, null, null, null)), null));
+        when(phisService.verifyHospitalDirectoryCapability(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(false, "0", null, "HIS未授予100-003权限"));
+        when(mapper.markExternalEndpointVerificationFailed(eq(9L), eq("FAILED"),
+                eq("HIS未授予100-003权限"), eq("admin"))).thenReturn(1);
+        ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
+                mock(OrganizationService.class), mock(ManagementAuditService.class),
+                mock(ExternalEndpointCredentialCipher.class), phisService);
+
+        var result = service.verifyExternalEndpoint(9L, actor());
+
+        assertEquals("FAILED", result.verificationStatus());
+        verify(mapper, never()).markExternalEndpointVerified(anyLong(), any(), any(), any());
+    }
+
+    /** 验证来源机构编码未变时，允许按100-008最新返回值更新机构名称。 */
+    @Test
+    void updatesReturnedOrganizationNameWhenSourceIdIsStable() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        PhisService phisService = mock(PhisService.class);
+        ExternalEndpoint current = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, false, LocalDateTime.now(), LocalDateTime.now(), version(), "目标卫生院", "HIS-ORG-001",
+                "目标卫生院旧名称",
+                cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.NOT_VERIFIED, null, null);
+        ExternalEndpoint verified = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, true, LocalDateTime.now(), LocalDateTime.now(), version(), "目标卫生院", "HIS-ORG-001",
+                "目标卫生院新名称", cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.VERIFIED,
+                LocalDateTime.now(), null);
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(current), Optional.of(verified));
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(new ExternalSystem(
+                1L, "PRIMARY_HIS", "基层HIS", "测试用途", true,
+                LocalDateTime.now(), LocalDateTime.now(), version())));
+        when(phisService.verifyOrganizationConfiguration(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(true, "1", List.of(new OrganizationEntry(
+                        "HIS-ORG-001", "目标卫生院新名称", null, null, null, null)), null));
+        when(phisService.verifyHospitalDirectoryCapability(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(true, "1", List.<HospitalDirectoryEntry>of(), null));
+        when(mapper.markExternalEndpointVerified(eq(9L), eq("HIS-ORG-001"),
+                eq("目标卫生院新名称"), eq("admin")))
+                .thenReturn(1);
+        ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
+                mock(OrganizationService.class), mock(ManagementAuditService.class),
+                mock(ExternalEndpointCredentialCipher.class), phisService);
+
+        var result = service.verifyExternalEndpoint(9L, actor());
+
+        assertEquals("VERIFIED", result.verificationStatus());
+        assertEquals("目标卫生院新名称", result.sourceOrganizationName());
+        verify(mapper).markExternalEndpointVerified(9L, "HIS-ORG-001", "目标卫生院新名称", "admin");
+    }
+
+    /** 验证十六进制形式的机构编码只有大小写变化时仍视为同一机构。 */
+    @Test
+    void acceptsStableSourceOrganizationIdWithDifferentLetterCase() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        PhisService phisService = mock(PhisService.class);
+        ExternalEndpoint current = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, false, LocalDateTime.now(), LocalDateTime.now(), version(), "目标卫生院", "03cdd57ce12f4720bb73ab71a944a036",
+                "目标卫生院旧名称",
+                cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.NOT_VERIFIED, null, null);
+        ExternalEndpoint verified = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, true, LocalDateTime.now(), LocalDateTime.now(), version(), "目标卫生院", "03CDD57CE12F4720BB73AB71A944A036",
+                "目标卫生院新名称", cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.VERIFIED,
+                LocalDateTime.now(), null);
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(current), Optional.of(verified));
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(new ExternalSystem(
+                1L, "PRIMARY_HIS", "基层HIS", "测试用途", true,
+                LocalDateTime.now(), LocalDateTime.now(), version())));
+        when(phisService.verifyOrganizationConfiguration(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(true, "1", List.of(new OrganizationEntry(
+                        "03CDD57CE12F4720BB73AB71A944A036", "目标卫生院新名称", null, null, null, null)), null));
+        when(phisService.verifyHospitalDirectoryCapability(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(true, "1", List.<HospitalDirectoryEntry>of(), null));
+        when(mapper.markExternalEndpointVerified(eq(9L), eq("03CDD57CE12F4720BB73AB71A944A036"),
+                eq("目标卫生院新名称"), eq("admin")))
+                .thenReturn(1);
+        ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
+                mock(OrganizationService.class), mock(ManagementAuditService.class),
+                mock(ExternalEndpointCredentialCipher.class), phisService);
+
+        var result = service.verifyExternalEndpoint(9L, actor());
+
+        assertEquals("VERIFIED", result.verificationStatus());
+        assertEquals("03CDD57CE12F4720BB73AB71A944A036", result.sourceOrganizationId());
+        verify(phisService).verifyHospitalDirectoryCapability(eq(10L), eq(ParameterEnvironment.TEST), any());
+        verify(mapper).markExternalEndpointVerified(9L, "03CDD57CE12F4720BB73AB71A944A036",
+                "目标卫生院新名称", "admin");
+    }
+
+    /** 验证100-008返回的机构编码变化时阻断配置，且不验证100-003。 */
+    @Test
+    void rejectsChangedSourceOrganizationId() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        PhisService phisService = mock(PhisService.class);
+        ExternalEndpoint current = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, false, LocalDateTime.now(), LocalDateTime.now(), version(), "目标卫生院", "OLD-ID",
+                "目标卫生院", cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.NOT_VERIFIED,
+                null, null);
+        ExternalEndpoint failed = new ExternalEndpoint(
+                9L, 1L, ParameterEnvironment.TEST, 10L, "ORG001",
+                "http://his.example.invalid/WebService.asmx", 3000, 15000, "managed://database",
+                true, false, LocalDateTime.now(), LocalDateTime.now(), version(), "目标卫生院", "OLD-ID",
+                "目标卫生院", cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus.FAILED,
+                LocalDateTime.now(), "100-008返回的机构编码与上次确认结果不一致，请核对HIS机构资料");
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(current), Optional.of(failed));
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(new ExternalSystem(
+                1L, "PRIMARY_HIS", "基层HIS", "测试用途", true,
+                LocalDateTime.now(), LocalDateTime.now(), version())));
+        when(phisService.verifyOrganizationConfiguration(eq(10L), eq(ParameterEnvironment.TEST), any()))
+                .thenReturn(new PhisResponse<>(true, "1", List.of(new OrganizationEntry(
+                        "NEW-ID", "目标卫生院新名称", null, null, null, null)), null));
+        when(mapper.markExternalEndpointVerificationFailed(eq(9L), eq("FAILED"),
+                eq("100-008返回的机构编码与上次确认结果不一致，请核对HIS机构资料"), eq("admin")))
+                .thenReturn(1);
+        ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
+                mock(OrganizationService.class), mock(ManagementAuditService.class),
+                mock(ExternalEndpointCredentialCipher.class), phisService);
+
+        var result = service.verifyExternalEndpoint(9L, actor());
+
+        assertEquals("FAILED", result.verificationStatus());
+        verify(phisService, never()).verifyHospitalDirectoryCapability(anyLong(), any(), any());
+        verify(mapper, never()).markExternalEndpointVerified(anyLong(), any(), any(), any());
+    }
+
+    /**
+     * 验证100-008成功后写入的审计记录与确认结果处于同一个本地事务中。
+     *
+     * <p>管理审计的成功记录要求加入已有事务；移除此事务边界会使HIS已经成功时仍向页面返回500。</p>
+     */
+    @Test
+    void verifiesPrimaryHisEndpointInsideTransaction() throws NoSuchMethodException {
+        assertTrue(ConfigurationServiceImpl.class
+                .getMethod("verifyExternalEndpoint", long.class, AccessActor.class)
+                .isAnnotationPresent(Transactional.class));
     }
 
     /** 验证更换适用机构时不能沿用原机构认证信息。 */
@@ -385,7 +605,44 @@ class ConfigurationServiceTest {
         ).credentialConfigured());
     }
 
-    /** @param mapper 配置Mapper @param definitions 参数定义 @param organizationService 机构服务 @return 被测服务 */
+    /** 验证管理员只能在机构范围内按需解密查看接入信息。 */
+    @Test
+    void revealsExternalEndpointAuthenticationWithinActorScope() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        ExternalEndpointCredential credential = new ExternalEndpointCredential(9L, new byte[]{1}, new byte[]{2}, 1);
+        ExternalEndpointCredentialCipher cipher = mock(ExternalEndpointCredentialCipher.class);
+        ManagementAuditService auditService = mock(ManagementAuditService.class);
+        when(mapper.findExternalEndpoint(9L)).thenReturn(Optional.of(externalEndpoint()));
+        when(mapper.findExternalEndpointCredential(9L)).thenReturn(Optional.of(credential));
+        when(cipher.decrypt(credential)).thenReturn(new ExternalEndpointAuthentication(
+                "V01", "his-user", "his-password", "AUTH-008"
+        ));
+        ParameterDefinitionRegistry registry = mock(ParameterDefinitionRegistry.class);
+        ConfigurationService service = new ConfigurationServiceImpl(
+                mapper, registry, mock(OrganizationService.class), auditService, cipher
+        );
+
+        var result = service.findExternalEndpointAuthentication(9L, actor());
+
+        assertEquals("V01", result.vendorCode());
+        assertEquals("his-user", result.username());
+        assertEquals("his-password", result.password());
+        assertEquals("AUTH-008", result.authorizationCode());
+        verify(auditService).recordSuccess(argThat(command ->
+                "EXTERNAL_ENDPOINT_AUTHENTICATION_VIEWED".equals(command.actionCode())
+                        && !command.changeSummary().contains("AUTH-008")
+                        && !command.changeSummary().contains("his-password")
+        ));
+    }
+
+    /**
+     * 创建被测服务并注入测试替身。
+     *
+     * @param mapper 配置Mapper
+     * @param definitions 参数定义
+     * @param organizationService 机构服务
+     * @return 被测服务
+     */
     private ConfigurationService service(
             ConfigurationMapper mapper,
             List<ParameterDefinition> definitions,
@@ -398,7 +655,17 @@ class ConfigurationServiceTest {
                 mock(ManagementAuditService.class), mock(ExternalEndpointCredentialCipher.class));
     }
 
-    /** @param key 参数键 @param type 类型 @param scoped 是否机构级 @param sensitive 是否敏感 @param min 下界 @param max 上界 @return 参数定义 */
+    /**
+     * 创建代码注册参数定义测试数据。
+     *
+     * @param key 参数键
+     * @param type 类型
+     * @param scoped 是否机构级
+     * @param sensitive 是否敏感
+     * @param min 下界
+     * @param max 上界
+     * @return 参数定义
+     */
     private ParameterDefinition definition(
             String key,
             ParameterValueType type,
@@ -413,7 +680,15 @@ class ConfigurationServiceTest {
         );
     }
 
-    /** @param environment 环境 @param organizationId 机构 @param value 值 @param version 并发版本 @return 写入命令 */
+    /**
+     * 创建参数写入命令测试数据。
+     *
+     * @param environment 环境
+     * @param organizationId 机构
+     * @param value 值
+     * @param version 并发版本
+     * @return 写入命令
+     */
     private UpsertParameterCommand command(
             ParameterEnvironment environment,
             Long organizationId,
@@ -423,7 +698,14 @@ class ConfigurationServiceTest {
         return new UpsertParameterCommand(environment, organizationId, value, true, version);
     }
 
-    /** @param id 主键 @param key 参数键 @param value 参数值 @return 参数值快照 */
+    /**
+     * 创建已持久化参数值测试快照。
+     *
+     * @param id 主键
+     * @param key 参数键
+     * @param value 参数值
+     * @return 参数值快照
+     */
     private ParameterValue parameterValue(long id, String key, String value) {
         return new ParameterValue(
                 id, key, ParameterValueType.STRING, ParameterEnvironment.PRODUCTION, null, null, value, true,
@@ -431,7 +713,12 @@ class ConfigurationServiceTest {
         );
     }
 
-    /** @param enabled 启用状态 @return 字典类型快照 */
+    /**
+     * 创建系统字典类型测试快照。
+     *
+     * @param enabled 启用状态
+     * @return 字典类型快照
+     */
     private DictionaryType dictionaryType(boolean enabled) {
         return new DictionaryType(
                 1L, "DISPLAY_MODE", "显示模式", "平台界面显示模式", enabled,
@@ -439,7 +726,11 @@ class ConfigurationServiceTest {
         );
     }
 
-    /** @return 未被引用的字典项快照 */
+    /**
+     * 创建系统字典项测试快照。
+     *
+     * @return 未被引用的字典项快照
+     */
     private DictionaryItem dictionaryItem() {
         return new DictionaryItem(
                 9L, 1L, "COMPACT", "紧凑", 10, true,
@@ -447,26 +738,47 @@ class ConfigurationServiceTest {
         );
     }
 
-    /** @param enabled 启用状态 @return 外部系统快照 */
+    /**
+     * 创建外部系统测试快照。
+     *
+     * @param enabled 启用状态
+     * @return 外部系统快照
+     */
     private ExternalSystem externalSystem(boolean enabled) {
         return new ExternalSystem(1L, "COUNTY_HIS", "县医院HIS", "测试用途", enabled,
                 LocalDateTime.now(), LocalDateTime.now(), version());
     }
 
-    /** @return 外部服务地址快照 */
+    /**
+     * 创建外部系统端点测试快照。
+     *
+     * @return 外部服务地址快照
+     */
     private ExternalEndpoint externalEndpoint() {
         return new ExternalEndpoint(9L, 1L, ParameterEnvironment.TEST, null, null,
                 "https://his.example.invalid/api", 3000, 15000, "managed://database", true, false,
                 LocalDateTime.now(), LocalDateTime.now(), version());
     }
 
-    /** @param url 地址 @param organizationId 可选机构 @return 服务地址创建命令 */
+    /**
+     * 创建端点保存命令测试数据。
+     *
+     * @param url 地址
+     * @param organizationId 可选机构
+     * @return 服务地址创建命令
+     */
     private ExternalEndpointCommand endpointCommand(String url, Long organizationId) {
         return new ExternalEndpointCommand(ParameterEnvironment.TEST, organizationId, url, 3000, 15000,
                 new ExternalEndpointAuthenticationCommand("V01", null, null, "AUTH-008"), true, null);
     }
 
-    /** @param id 机构主键 @param code 机构代码 @return 机构记录 */
+    /**
+     * 创建机构测试快照。
+     *
+     * @param id 机构主键
+     * @param code 机构代码
+     * @return 机构记录
+     */
     private OrganizationVO organization(long id, String code) {
         return new OrganizationVO(
                 id, code, "测试机构", "HOSPITAL", null, true, null, null,
@@ -474,12 +786,20 @@ class ConfigurationServiceTest {
         );
     }
 
-    /** @return 当前测试操作人 */
+    /**
+     * 创建具有测试机构范围的服务层操作人。
+     *
+     * @return 当前测试操作人
+     */
     private AccessActor actor() {
         return new AccessActor(1L, "admin", Set.of("ORG001"));
     }
 
-    /** @return 固定长度SQL Server并发版本 */
+    /**
+     * 创建确定性的8字节SQL Server行版本。
+     *
+     * @return 固定长度SQL Server并发版本
+     */
     private byte[] version() {
         return new byte[Long.BYTES];
     }

@@ -19,6 +19,6 @@ public record BootstrapRequest(
         @NotBlank @Size(max = 32) String organizationType,
         @NotBlank @Size(min = 3, max = 64) String loginName,
         @NotBlank @Size(max = 100) String displayName,
-        @NotBlank @Size(min = 12, max = 128) String initialPassword
+        @NotBlank @Size(min = 9, max = 128) String initialPassword
 ) {
 }

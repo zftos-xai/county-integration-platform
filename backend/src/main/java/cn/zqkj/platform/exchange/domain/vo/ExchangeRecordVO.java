@@ -7,6 +7,10 @@ import java.time.LocalDateTime;
 /**
  * 交换记录查询用例返回的只读摘要。
  *
+ * <p>数据来源：{@code dbo.exch_exchange_record}（交换记录表）。</p>
+ *
+ * <p>业务说明：仅向有权访问目标机构的调用方返回交换摘要，不包含请求或响应正文。</p>
+ *
  * @param id 平台交换记录主键
  * @param requestId 跨组件追踪的请求编号
  * @param interfaceCode 接口登记代码

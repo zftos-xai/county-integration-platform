@@ -1,7 +1,18 @@
 package cn.zqkj.platform.his.client;
 
+import cn.zqkj.platform.his.domain.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.dto.MedicalDirectoryCountQuery;
+import cn.zqkj.platform.his.domain.dto.MedicalDirectoryQuery;
+import cn.zqkj.platform.his.domain.dto.OrganizationQuery;
+import cn.zqkj.platform.his.domain.model.HospitalDirectoryEntry;
+import cn.zqkj.platform.his.domain.model.HospitalDirectoryType;
+import cn.zqkj.platform.his.domain.model.MedicalDirectoryEntry;
+import cn.zqkj.platform.his.domain.model.MedicalDirectoryType;
+import cn.zqkj.platform.his.domain.model.OrganizationEntry;
 import cn.zqkj.platform.his.domain.model.PhisResponse;
 import cn.zqkj.platform.his.exception.PhisCommunicationException;
+import cn.zqkj.platform.his.exception.PhisProtocolException;
+import cn.zqkj.platform.his.exception.PhisRequestException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -11,6 +22,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,34 +35,99 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class SoapPhisClientTest {
 
+    /** 验证100-005数量查询只接受单条非负整数，并发送与分页数据一致的范围条件。 */
+    @Test
+    void queriesMedicalDirectoryDeclaredCount() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startServer(exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[{\"行数\":\"37\"}]}"));
+        });
+
+        try {
+            PhisResponse<Long> response = client().countMedicalDirectory(
+                    context(server),
+                    new MedicalDirectoryCountQuery(
+                            MedicalDirectoryType.WESTERN_MEDICINE, null,
+                            LocalDateTime.of(2026, 9, 1, 0, 0),
+                            LocalDateTime.of(2026, 9, 20, 23, 59, 59), "ORG-001"));
+
+            assertTrue(response.success());
+            assertEquals(37L, response.data());
+            assertTrue(requestBody.get().contains("<TradeCode>100-005</TradeCode>"));
+            assertTrue(requestBody.get().contains("开始时间"));
+            assertTrue(requestBody.get().contains("2026-09-01 00:00:00"));
+            assertTrue(requestBody.get().contains("机构编码"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 验证100-004分页边界、扩展字段和来源启用值按强类型返回。 */
+    @Test
+    void queriesMedicalDirectoryPage() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startServer(exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[{"
+                    + "\"目录编码\":\"M001\",\"目录名称\":\"测试药品\",\"目录类别名称\":\"西药\","
+                    + "\"规格\":\"10mg\",\"包装单位\":\"盒\",\"转换系数\":10,\"是否启用\":true}]}"));
+        });
+
+        try {
+            PhisResponse<List<MedicalDirectoryEntry>> response = client().queryMedicalDirectory(
+                    context(server),
+                    new MedicalDirectoryQuery(
+                            MedicalDirectoryType.WESTERN_MEDICINE, null, 1, 100,
+                            LocalDateTime.of(2026, 9, 1, 0, 0),
+                            LocalDateTime.of(2026, 9, 20, 23, 59, 59), "ORG-001"));
+
+            assertTrue(response.success());
+            assertEquals("M001", response.data().get(0).directoryCode());
+            assertEquals("10", response.data().get(0).conversionFactor());
+            assertEquals("true", response.data().get(0).enabledFlag());
+            assertTrue(requestBody.get().contains("<TradeCode>100-004</TradeCode>"));
+            assertTrue(requestBody.get().contains("开始行数"));
+            assertTrue(requestBody.get().contains("结束行数"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /**
-     * 验证客户端向WebService基础地址发送SOAP请求并解析成功结果。
+     * 验证客户端保留配置中的ASMX操作地址，但向WebService基础地址发送SOAP请求并解析结果。
      */
     @Test
     void postsSoapRequestToHttpServiceAddress() throws Exception {
         AtomicReference<String> soapAction = new AtomicReference<>();
         AtomicReference<String> requestBody = new AtomicReference<>();
+        AtomicReference<String> requestQuery = new AtomicReference<>();
         HttpServer server = startServer(exchange -> {
             soapAction.set(exchange.getRequestHeaders().getFirst("SOAPAction"));
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":\"接口测试成功\"}"));
+            requestQuery.set(exchange.getRequestURI().getRawQuery());
+            send(exchange, 200, soapResponse(
+                    "{\"result\":\"1\",\"msg\":[{\"目录编码\":\"D001\",\"目录名称\":\"内科\","
+                            + "\"角色\":[{\"角色编码\":\"R01\",\"角色名称\":\"医生\"}]}]}"));
         });
 
         try {
-            PhisClient client = client();
-            URI serviceUri = serviceUri(server);
-            PhisResponse response = client.invoke(
-                    serviceUri,
-                    1_000,
-                    3_000,
-                    "100-001",
-                    "{\"厂商编号\":\"SYNTHETIC\"}"
+            PhisProtocolClient client = client();
+            URI serviceUri = URI.create(serviceUri(server) + "?op=PHIS_Interface");
+            PhisResponse<List<HospitalDirectoryEntry>> response = client.queryHospitalDirectory(
+                    PhisInvocationContext.create(serviceUri, 1_000, 3_000, "SYNTHETIC-AUTH"),
+                    query()
             );
 
             assertTrue(response.success());
+            assertEquals("D001", response.data().get(0).directoryCode());
+            assertEquals("R01", response.data().get(0).roles().get(0).roleCode());
+            assertEquals("医生", response.data().get(0).roles().get(0).roleName());
             assertEquals("\"http://tempuri.org/PHIS_Interface\"", soapAction.get());
-            assertTrue(requestBody.get().contains("<TradeCode>100-001</TradeCode>"));
+            assertEquals(null, requestQuery.get());
+            assertTrue(requestBody.get().contains("<TradeCode>100-003</TradeCode>"));
             assertTrue(requestBody.get().contains("<InputParameter>"));
+            assertTrue(requestBody.get().contains("SYNTHETIC-AUTH"));
         } finally {
             server.stop(0);
         }
@@ -65,12 +143,9 @@ class SoapPhisClientTest {
         try {
             PhisCommunicationException exception = assertThrows(
                     PhisCommunicationException.class,
-                    () -> client().invoke(
-                            serviceUri(server),
-                            1_000,
-                            3_000,
-                            "100-001",
-                            "{\"厂商编号\":\"SYNTHETIC\"}"
+                    () -> client().queryHospitalDirectory(
+                            context(server),
+                            query()
                     )
             );
 
@@ -81,20 +156,116 @@ class SoapPhisClientTest {
         }
     }
 
-    /**
-     * 验证客户端拒绝把ASMX操作页查询参数当作SOAP服务地址。
-     */
+    /** 验证目标业务错误回显授权码时，客户端会在返回业务层前清除该凭证。 */
     @Test
-    void rejectsOperationPageQueryParameter() {
-        PhisClient client = client();
+    void redactsAuthorizationCodeEchoedByBusinessFailure() throws Exception {
+        HttpServer server = startServer(exchange -> send(exchange, 200, soapResponse(
+                "{\"result\":\"0\",\"msg\":\"授权失败，验证码：SYNTHETIC-AUTH\"}")));
 
-        assertThrows(PhisCommunicationException.class, () -> client.invoke(
-                URI.create("http://his.example.invalid/WebService.asmx?op=PHIS_Interface"),
-                1_000,
-                3_000,
-                "100-001",
-                "{\"厂商编号\":\"SYNTHETIC\"}"
-        ));
+        try {
+            PhisResponse<List<HospitalDirectoryEntry>> response = client().queryHospitalDirectory(
+                    context(server), query());
+
+            assertTrue(!response.success());
+            assertTrue(response.errorMessage().contains("***"));
+            assertTrue(!response.errorMessage().contains("SYNTHETIC-AUTH"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 验证调用上下文拒绝未登记的查询参数，且请求不会进入协议客户端。 */
+    @Test
+    void rejectsUnsupportedQueryParameter() {
+        assertThrows(PhisRequestException.class, () -> PhisInvocationContext.create(
+                URI.create("http://his.example.invalid/WebService.asmx?foo=bar"),
+                1_000, 3_000, "SYNTHETIC-AUTH"));
+    }
+
+    /** 验证100-008只发送医院名称并转换来源机构字段。 */
+    @Test
+    void queriesOrganizations() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startServer(exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[{"
+                    + "\"ID\":\"H001\",\"医院名称\":\"县人民医院\",\"联系电话\":\"12345\"}]}"));
+        });
+
+        try {
+            PhisResponse<List<OrganizationEntry>> response =
+                    client().queryOrganizations(context(server), new OrganizationQuery("县人民医院"));
+
+            assertTrue(response.success());
+            assertEquals("H001", response.data().get(0).sourceOrganizationId());
+            assertEquals("县人民医院", response.data().get(0).hospitalName());
+            assertTrue(requestBody.get().contains("<TradeCode>100-008</TradeCode>"));
+            assertTrue(requestBody.get().contains("医院名称"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 验证四项运行配置作为整体固定脱敏，且空查询在发送前被拒绝。 */
+    @Test
+    void redactsInvocationContextAndRejectsInvalidQueryBeforeSend() {
+        PhisInvocationContext context = PhisInvocationContext.create(
+                URI.create("http://his.example.invalid/WebService.asmx"),
+                1_000, 3_000, "SYNTHETIC-AUTH");
+
+        assertEquals("PhisInvocationContext[REDACTED]", context.toString());
+        assertTrue(!context.toString().contains("SYNTHETIC-AUTH"));
+        assertThrows(PhisRequestException.class,
+                () -> client().queryHospitalDirectory(context, null));
+    }
+
+    /** 验证调用上下文集中拒绝无效超时、空授权码和带账号的地址。 */
+    @Test
+    void validatesInvocationContextAsOneUnit() {
+        URI endpoint = URI.create("http://his.example.invalid/WebService.asmx");
+
+        assertThrows(PhisRequestException.class,
+                () -> PhisInvocationContext.create(endpoint, 99, 3_000, "SYNTHETIC-AUTH"));
+        assertThrows(PhisRequestException.class,
+                () -> PhisInvocationContext.create(endpoint, 3_000, 2_999, "SYNTHETIC-AUTH"));
+        assertThrows(PhisRequestException.class,
+                () -> PhisInvocationContext.create(endpoint, 1_000, 3_000, " "));
+        assertThrows(PhisRequestException.class,
+                () -> PhisInvocationContext.create(
+                        URI.create("http://user:password@his.example.invalid/WebService.asmx"),
+                        1_000, 3_000, "SYNTHETIC-AUTH"));
+    }
+
+    /** 验证100-004单页超过协议上限时在网络请求前被拒绝。 */
+    @Test
+    void rejectsOversizedMedicalDirectoryPageBeforeSend() {
+        LocalDateTime start = LocalDateTime.of(2026, 9, 1, 0, 0);
+
+        assertThrows(PhisRequestException.class, () -> client().queryMedicalDirectory(
+                PhisInvocationContext.create(
+                        URI.create("http://his.example.invalid/WebService.asmx"),
+                        1_000, 3_000, "SYNTHETIC-AUTH"),
+                new MedicalDirectoryQuery(
+                        MedicalDirectoryType.WESTERN_MEDICINE, null, 1, 101,
+                        start, start.plusDays(1), null)));
+    }
+
+    /** 验证100-005成功响应中的负数不被当作合法声明行数。 */
+    @Test
+    void rejectsNegativeDeclaredCount() throws Exception {
+        HttpServer server = startServer(exchange -> send(exchange, 200, soapResponse(
+                "{\"result\":\"1\",\"msg\":[{\"行数\":\"-1\"}]}")));
+
+        try {
+            LocalDateTime start = LocalDateTime.of(2026, 9, 1, 0, 0);
+            assertThrows(PhisProtocolException.class, () -> client().countMedicalDirectory(
+                    context(server),
+                    new MedicalDirectoryCountQuery(
+                            MedicalDirectoryType.WESTERN_MEDICINE, null,
+                            start, start.plusDays(1), null)));
+        } finally {
+            server.stop(0);
+        }
     }
 
     /**
@@ -102,8 +273,29 @@ class SoapPhisClientTest {
      *
      * @return 基层HIS客户端
      */
-    private PhisClient client() {
-        return new SoapPhisClient(new PhisSoapCodec(new ObjectMapper()));
+    private PhisProtocolClient client() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        return new SoapPhisClient(new PhisSoapCodec(objectMapper), objectMapper);
+    }
+
+    /**
+     * 创建当前合成服务使用的完整、脱敏调用上下文。
+     *
+     * @param server 合成HTTP服务
+     * @return 协议客户端调用上下文
+     */
+    private PhisInvocationContext context(HttpServer server) {
+        return PhisInvocationContext.create(
+                serviceUri(server), 1_000, 3_000, "SYNTHETIC-AUTH");
+    }
+
+    /**
+     * 创建包含完整机构和分页范围的HIS目录查询。
+     *
+     * @return 不包含真实机构信息的合成目录查询
+     */
+    private HospitalDirectoryQuery query() {
+        return new HospitalDirectoryQuery(HospitalDirectoryType.DEPARTMENT, null, null);
     }
 
     /**

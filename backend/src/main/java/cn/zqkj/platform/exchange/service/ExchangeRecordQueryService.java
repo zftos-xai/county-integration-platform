@@ -10,6 +10,11 @@ import java.util.List;
  */
 public interface ExchangeRecordQueryService {
 
-    /** @param query 有界查询条件 @return 最近交换记录 */
+    /**
+     * 按机构范围和有界数量查询最近交换记录。
+     *
+     * @param query 有界查询条件
+     * @return 最近交换记录
+     */
     List<ExchangeRecordVO> findRecent(ExchangeRecordQuery query);
 }

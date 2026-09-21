@@ -15,6 +15,36 @@
       "auditActions": ["/api/v1/audit", "/events"]
     },
     {
+      "id": "master-data-directory",
+      "label": "数据目录",
+      "route": "/master-data/directory",
+      "permission": "master-data:read",
+      "writeCapable": false,
+      "stage": "前端已接入",
+      "page": "web-admin/src/views/master-data/directory/HospitalDirectoryView.vue",
+      "api": "web-admin/src/api/master-data/directory.ts",
+      "tests": ["web-admin/tests/hospitalDirectoryPage.test.mjs"],
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/masterdata/service/impl/HospitalDirectoryCatalogServiceImpl.java",
+      "auditActions": [],
+      "evidence": "docs/verification/2026-09-20-hospital-directory-live-sync.md"
+    },
+    {
+      "id": "master-data-batches",
+      "label": "同步批次",
+      "route": "/master-data/batches",
+      "permission": "master-data:read",
+      "writeCapable": true,
+      "stage": "前端已接入",
+      "page": "web-admin/src/views/master-data/batch/MasterDataBatchView.vue",
+      "api": "web-admin/src/api/master-data/batch.ts",
+      "form": "web-admin/src/views/master-data/batch/form.ts",
+      "editor": "web-admin/src/views/master-data/batch/components/StartBatchDrawer.vue",
+      "tests": ["web-admin/tests/masterDataBatchApiPaths.test.mjs", "web-admin/tests/masterDataBatchPage.test.mjs"],
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/masterdata/service/impl/MasterDataBatchServiceImpl.java",
+      "auditActions": ["MASTER_DATA_BATCH_CREATED"],
+      "evidence": "docs/verification/2026-09-20-hospital-directory-live-sync.md"
+    },
+    {
       "id": "organizations",
       "label": "机构管理",
       "route": "/organizations",
@@ -89,6 +119,21 @@
       "tests": ["web-admin/tests/configurationApiPaths.test.mjs", "web-admin/tests/configurationForm.test.mjs"],
       "auditSource": "backend/src/main/java/cn/zqkj/platform/system/service/impl/ConfigurationServiceImpl.java",
       "auditActions": ["DICTIONARY_TYPE_CREATED", "DICTIONARY_TYPE_UPDATED", "DICTIONARY_ITEM_CREATED", "DICTIONARY_ITEM_UPDATED"]
+    },
+    {
+      "id": "database-contract",
+      "label": "数据库契约维护",
+      "route": "/database-contract",
+      "permission": "database-contract:read",
+      "writeCapable": true,
+      "stage": "前端已接入",
+      "page": "web-admin/src/views/database-contract/DatabaseContractMaintenanceView.vue",
+      "api": "web-admin/src/api/database-contract/maintenance.ts",
+      "form": "web-admin/src/views/database-contract/form.ts",
+      "editor": "web-admin/src/views/database-contract/components/DatabaseContractConflictNotice.vue",
+      "tests": ["web-admin/tests/databaseContractMaintenance.test.mjs"],
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/databasecontract/service/impl/DatabaseContractMaintenanceServiceImpl.java",
+      "auditActions": ["DATABASE_CONTRACT_PLAN_CREATED", "DATABASE_CONTRACT_PLAN_APPROVED", "DATABASE_CONTRACT_PLAN_EXECUTED", "DATABASE_CONTRACT_PLAN_CANCELLED"]
     },
     {
       "id": "audit",

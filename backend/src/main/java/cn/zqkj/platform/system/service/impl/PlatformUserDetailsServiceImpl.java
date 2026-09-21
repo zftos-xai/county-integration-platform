@@ -29,7 +29,11 @@ public class PlatformUserDetailsServiceImpl implements PlatformUserDetailsServic
         this.mapper = mapper;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>从本地账号、角色和机构范围组装认证主体；不存在的账号统一映射为认证失败，避免泄露账号状态。</p>
+     */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         if (username == null || username.isBlank()) {

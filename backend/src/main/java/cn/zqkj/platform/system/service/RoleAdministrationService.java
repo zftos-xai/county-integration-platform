@@ -13,24 +13,63 @@ import java.util.List;
  */
 public interface RoleAdministrationService {
 
-    /** @return 全部角色及权限 */
+    /**
+     * 查询全部角色及其功能权限集合。
+     *
+     * @return 全部角色及权限
+     */
     List<RoleVO> findAll();
 
-    /** @param roleId 角色主键 @return 角色详情 */
+    /**
+     * 按主键读取角色和权限；不存在时由调用边界按约定处理。
+     *
+     * @param roleId 角色主键
+     * @return 角色详情
+     */
     RoleVO get(long roleId);
 
-    /** @return 后端注册权限清单 */
+    /**
+     * 查询后端已注册的功能权限。
+     *
+     * @return 后端注册权限清单
+     */
     List<PermissionVO> findPermissions();
 
-    /** @param command 创建命令 @param actor 操作人 @return 新角色 */
+    /**
+     * 创建角色和权限并返回最新视图。
+     *
+     * @param command 创建命令
+     * @param actor 操作人
+     * @return 新角色
+     */
     RoleVO create(CreateRoleCommand command, AccessActor actor);
 
-    /** @param roleId 角色主键 @param command 修改命令 @param actor 操作人 @return 修改后角色 */
+    /**
+     * 按并发版本更新角色和权限并返回最新视图。
+     *
+     * @param roleId 角色主键
+     * @param command 修改命令
+     * @param actor 操作人
+     * @return 修改后角色
+     */
     RoleVO update(long roleId, UpdateRoleCommand command, AccessActor actor);
 
-    /** @param roleId 角色主键 @param permissionCodes 权限代码 @param actor 操作人 @return 修改后角色 */
+    /**
+     * 整体替换角色的功能权限集合。
+     *
+     * @param roleId 角色主键
+     * @param permissionCodes 权限代码
+     * @param actor 操作人
+     * @return 修改后角色
+     */
     RoleVO replacePermissions(long roleId, List<String> permissionCodes, AccessActor actor);
 
-    /** @param roleId 角色主键 @param expectedVersion 并发版本 @param actor 操作人 */
+    /**
+     * 删除未被用户引用且不受平台保护的角色。
+     *
+     * @param roleId 角色主键
+     * @param expectedVersion 并发版本
+     * @param actor 操作人
+     */
     void delete(long roleId, byte[] expectedVersion, AccessActor actor);
 }

@@ -81,13 +81,19 @@ public class SecurityConfiguration {
         return new ProviderManager(provider);
     }
 
-    /** @return 显式保存到HTTP会话的登录信息存储 */
+    /**
+     * 配置仅从服务端会话读取和保存安全上下文的仓储。
+     *
+     * @return 显式保存到HTTP会话的登录信息存储
+     */
     @Bean
     SecurityContextRepository securityContextRepository() {
         return new HttpSessionSecurityContextRepository();
     }
 
     /**
+     * 创建每次请求重新核对账号可用状态的安全过滤器。
+     *
      * @param repository 身份持久化边界
      * @return 已认证账号状态复核过滤器
      */

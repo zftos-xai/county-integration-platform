@@ -2,6 +2,7 @@ package cn.zqkj.platform.his.client;
 
 import cn.zqkj.platform.his.domain.model.PhisResponse;
 import cn.zqkj.platform.his.exception.PhisProtocolException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.xml.sax.InputSource;
@@ -12,6 +13,7 @@ import java.io.StringReader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,13 +50,14 @@ class PhisSoapCodecTest {
      */
     @Test
     void decodesLowercaseStringSuccess() {
-        PhisResponse response = codec.decodeResponse(soapResponse(
+        PhisResponse<JsonNode> response = codec.decodeResponse(soapResponse(
                 "{\"result\":\"1\",\"msg\":{\"验证码\":\"masked\"}}"
         ));
 
         assertTrue(response.success());
         assertEquals("1", response.resultCode());
-        assertEquals("masked", response.message().path("验证码").asText());
+        assertEquals("masked", response.data().path("验证码").asText());
+        assertNull(response.errorMessage());
     }
 
     /**
@@ -62,13 +65,14 @@ class PhisSoapCodecTest {
      */
     @Test
     void decodesUppercaseNumericFailure() {
-        PhisResponse response = codec.decodeResponse(soapResponse(
+        PhisResponse<JsonNode> response = codec.decodeResponse(soapResponse(
                 "{\"Result\":0,\"Msg\":\"凭证无效\"}"
         ));
 
         assertFalse(response.success());
         assertEquals("0", response.resultCode());
-        assertEquals("凭证无效", response.message().asText());
+        assertNull(response.data());
+        assertEquals("凭证无效", response.errorMessage());
     }
 
     /**

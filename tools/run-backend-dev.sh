@@ -17,10 +17,17 @@ if [ ! -f "$security_file" ]; then
     exit 1
 fi
 
+bootstrap_secret_override=${PLATFORM_BOOTSTRAP_SECRET:-}
+
 set -a
 # shellcheck disable=SC1090
 . "$environment_file"
 set +a
+
+if [ -n "$bootstrap_secret_override" ]; then
+    PLATFORM_BOOTSTRAP_SECRET=$bootstrap_secret_override
+    export PLATFORM_BOOTSTRAP_SECRET
+fi
 
 if [ "${PLATFORM_DEV_RUN_MIGRATIONS:-false}" = "true" ]; then
     PLATFORM_DB_MIGRATION_ENABLED=true

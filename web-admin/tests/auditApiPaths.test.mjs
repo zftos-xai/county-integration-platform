@@ -31,5 +31,5 @@ test('正式审计页面使用只读接口且不提供写操作', async () => {
   assert.match(page, /listManagementAuditEvents/)
   assert.match(page, /当前账号机构范围内的脱敏记录/)
   assert.doesNotMatch(page, /createManagementAudit|updateManagementAudit|deleteManagementAudit/)
-  assert.match(router, /path: 'audit', component: AuditView/)
+  assert.match(router, /path:\s*'audit',[\s\S]{0,80}?component:\s*AuditView/)
 })

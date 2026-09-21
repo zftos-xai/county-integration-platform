@@ -33,7 +33,12 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
         this.mapper = mapper;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>对已经认证的本地账号逐请求复查数据库启用状态；账号被停用或删除后立即清除认证，
+     * 防止既有会话继续访问受保护资源。</p>
+     */
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,

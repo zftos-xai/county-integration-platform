@@ -143,6 +143,14 @@ chmod 600 deploy/.env.dev.local
 
 启动器只对当前开发进程追加 Java 17 兼容策略，并强制检查开发标识、`127.0.0.1:14330` 和 TLS 参数；生产环境会被拒绝。具体边界、IDEA 配置和退出条件见[开发环境临时 TLS 兼容方案](docs/plans/开发环境临时TLS兼容方案.md)。
 
+后台在Flyway完成后、进入可接收流量状态前执行数据库契约检查。检查器以版本化迁移脚本为结构依据，读取SQL Server真实元数据，核对SQL Server 2012主版本、数据库兼容级别110以及所有业务字段的类型、字符或二进制长度、数值精度、小数位、空值、自增和计算属性；同时核对全部MyBatis构造映射与Java记录组件。发现差异时启动失败，日志会输出稳定错误码、对象、期望值、实际值以及“数据库”或“Mapper/模型”的修改方向。`PLATFORM_DATABASE_CONTRACT_ENABLED`默认且正式环境必须为`true`；关闭后只能用于受控排障，不能作为结构兼容性验证证据。
+
+DBA也可以在SSMS或`sqlcmd`中直接执行[`deploy/sqlserver/04-verify-database-contract.sql`](deploy/sqlserver/04-verify-database-contract.sql)，只读检查真实数据库与Flyway字段契约并以结果集列出修改方向。该脚本由`node tools/generate-database-contract-sql.mjs`生成；迁移变化后未重新生成会被`./tools/verify.sh`和CI拦截。SQL脚本无法读取应用包内的Mapper和Java模型，因此这部分仍由应用启动检查负责。
+
+完成备份、审批和SQL Server 2012测试实例演练后，可执行[`deploy/sqlserver/05-repair-database-contract.sql`](deploy/sqlserver/05-repair-database-contract.sql)实际修复DDL。脚本会在同一事务内执行生成的`ALTER TABLE ... ALTER COLUMN`，支持字符或二进制字段长度及NULL属性修正；缩短字段和收紧`NOT NULL`前会检查存量数据，任一DDL失败则整批回滚。缺失或额外字段、类型、精度、`IDENTITY`、计算列等高风险差异不会自动处理，必须编写正式Flyway迁移。
+
+实例已正常启动时，管理端“运行处理 / 数据库契约维护”提供独立的日常维护闭环：实时扫描 → 生成方案 → 非创建人审批 → 输入方案编号确认执行 → 同事务复验。页面执行的DDL只由服务端根据当前契约生成，目前仅允许扩大字符或二进制字段长度、将`NOT NULL`放宽为`NULL`；客户端不能提交任意SQL。方案在执行前可以取消且历史保留；DDL或复验失败会整体回滚并记为失败，成功后不会提供恢复旧错误结构的按钮，后续调整必须建立新的版本化迁移。使用该页面前必须先部署`V0700__database_contract_maintenance_main.sql`，并按职责分别授予`database-contract:read`、`database-contract:plan`、`database-contract:approve`和`database-contract:execute`权限。
+
 SQL Server 2012 只能部署在受支持的 Windows Server 环境，不能使用本项目原有的 SQL Server Linux 容器。平台库可以与HIS库位于同一台服务器或同一实例，但必须使用独立数据库、读写账号、备份和维护计划；县医院HIS读取平台库视图使用独立只读账号。数据库实例、`county_integration` 数据库、兼容级别 110、TLS及备份恢复策略须由医院 DBA 按 [部署说明](deploy/README.md) 准备；Compose 只启动后台并连接外部数据库。
 
 管理端和嵌入端分别启动：

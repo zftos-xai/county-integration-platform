@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   configurationWriteRequest, dictionaryItemPath, dictionaryItemsPath, dictionaryTypePath,
-  externalEndpointPath, externalEndpointsPath, externalSystemPath, parameterValuePath,
+  externalEndpointAuthenticationPath, externalEndpointPath, externalEndpointsPath, externalSystemPath,
+  parameterValuePath,
 } from '../src/api/system/configurationApiPaths.ts'
 
 test('配置管理路径按 OpenAPI 接口定义生成', () => {
@@ -15,6 +16,7 @@ test('配置管理路径按 OpenAPI 接口定义生成', () => {
   assert.equal(externalSystemPath(3), '/configuration/external-systems/3')
   assert.equal(externalEndpointsPath(3), '/configuration/external-systems/3/endpoints')
   assert.equal(externalEndpointPath(7), '/configuration/external-endpoints/7')
+  assert.equal(externalEndpointAuthenticationPath(7), '/configuration/external-endpoints/7/authentication')
 })
 
 test('配置写请求保留 rowversion 和明确方法', () => {

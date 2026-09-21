@@ -157,7 +157,12 @@ public class OrganizationController {
         ));
     }
 
-    /** @param principal 当前用户 @return 应用服务操作人信息 */
+    /**
+     * 将当前登录主体转换为携带机构范围的服务层操作人。
+     *
+     * @param principal 当前用户
+     * @return 应用服务操作人信息
+     */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }

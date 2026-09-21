@@ -1,6 +1,6 @@
 <!-- 原型管理配置面板：仅用于交互评审，不代表真实 API 数据。 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { BookOpen, Check, Info, KeyRound, Plus, Search, ShieldCheck, SlidersHorizontal, Users, X } from 'lucide-vue-next'
 import AdminPagination from '@/components/AdminPagination.vue'
 
@@ -23,6 +23,8 @@ const drawer = ref<'dictionary' | 'user' | 'role' | null>(null)
 const isNew = ref(false)
 const draft = ref<Editable | null>(null)
 const drawerTab = ref<'detail' | 'items' | 'permissions' | 'record'>('detail')
+const drawerElement = ref<HTMLElement | null>(null)
+let drawerTrigger: HTMLElement | null = null
 
 const dictionaries = ref<Dictionary[]>([
   { id: 'DICT-002', code: 'EXCHANGE_DIRECTION', name: '交换方向', description: '用于接口和交换记录的方向标识', enabled: true, updatedAt: '2026-09-14 16:40', items: [
@@ -86,17 +88,30 @@ watch([query, status], () => { page.value = 1 })
 
 function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T }
 function openDrawer(kind: Exclude<typeof drawer.value, null>, item: Editable) {
+  drawerTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
   drawer.value = kind; draft.value = clone(item); isNew.value = false
   drawerTab.value = kind === 'dictionary' ? 'items' : kind === 'role' ? 'permissions' : 'detail'
+  void nextTick(() => drawerElement.value?.querySelector<HTMLElement>('button')?.focus())
 }
 function addItem() {
+  drawerTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
   isNew.value = true
   if (props.section === 'dictionaries') openNew('dictionary', { id: '', code: '', name: '', description: '', enabled: true, updatedAt: '', items: [] })
   if (props.section === 'system-users') openNew('user', { id: '', loginName: '', displayName: '', organization: '县域平台管理机构', roles: [], scopes: [], enabled: true, mustChangePassword: true, updatedAt: '' })
   if (props.section === 'system-roles') openNew('role', { id: '', code: '', name: '', description: '', enabled: true, systemManaged: false, users: 0, permissions: [], updatedAt: '' })
 }
-function openNew(kind: Exclude<typeof drawer.value, null>, item: Editable) { drawer.value = kind; draft.value = item; drawerTab.value = kind === 'role' ? 'permissions' : kind === 'dictionary' ? 'items' : 'detail' }
-function closeDrawer() { drawer.value = null; draft.value = null; isNew.value = false }
+function openNew(kind: Exclude<typeof drawer.value, null>, item: Editable) { drawer.value = kind; draft.value = item; drawerTab.value = kind === 'role' ? 'permissions' : kind === 'dictionary' ? 'items' : 'detail'; void nextTick(() => drawerElement.value?.querySelector<HTMLElement>('button')?.focus()) }
+function closeDrawer() { drawer.value = null; draft.value = null; isNew.value = false; void nextTick(() => drawerTrigger?.focus()) }
+/** 将键盘焦点约束在管理配置抽屉内，并支持 Escape 关闭。 */
+function onDrawerKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') { event.preventDefault(); closeDrawer(); return }
+  if (event.key !== 'Tab' || !drawerElement.value) return
+  const controls = Array.from(drawerElement.value.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]'))
+  if (!controls.length) return
+  const first = controls[0]; const last = controls[controls.length - 1]
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+}
 function saveDraft() {
   if (!draft.value || !drawer.value) return
   const now = '2026-09-15 12:00'
@@ -117,7 +132,7 @@ function saveDraft() {
     item.id ||= `ROLE-${String(roles.value.length + 1).padStart(3, '0')}`; item.updatedAt = now; object = item.code
     const index = roles.value.findIndex(row => row.id === item.id); index >= 0 ? roles.value.splice(index, 1, clone(item)) : roles.value.unshift(clone(item))
   }
-  emit('audit', { action: isNew.value ? '新增系统配置' : '更新系统配置', object, detail: `保存${drawerTitle.value}（原型演示）` })
+  emit('audit', { action: isNew.value ? '新增系统配置' : '更新系统配置', object, detail: `保存${drawerTitle.value}` })
   emit('notify', `${drawerTitle.value}已保存`); closeDrawer()
 }
 function addDictionaryEntry() {
@@ -148,17 +163,17 @@ const drawerTitle = computed(() => ({ dictionary: '数据字典', user: '用户�
   <div class="admin-panel">
     <section v-if="section === 'parameters'" class="admin-parameter-boundary">
       <div class="admin-boundary-icon"><SlidersHorizontal :size="22" /></div>
-      <div><h2>当前没有已注册参数</h2><p>参数键必须随服务版本在后端代码中注册。本页只能维护已注册参数在全局或机构范围内的取值，不能从页面新增参数键。</p></div>
-      <span class="badge bg-blue-lt text-blue">configuration:read</span>
+      <div><h2>暂无可维护参数</h2><p>系统当前未提供可配置参数。参数项由平台版本统一提供，本页不支持自行新增。</p></div>
+      <span class="badge bg-blue-lt text-blue">只读</span>
     </section>
     <template v-if="section === 'parameters'">
       <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input disabled aria-label="搜索已注册参数" placeholder="没有可搜索的已注册参数" /></label><select disabled aria-label="环境筛选"><option>全部环境</option></select><select disabled aria-label="机构范围筛选"><option>全部机构范围</option></select><span>0 项参数</span></div>
-      <section class="prototype-section work-table-section"><div class="prototype-table-wrap"><table class="work-table"><thead><tr><th>参数键 / 名称</th><th>值类型</th><th>作用范围</th><th>当前值</th><th>状态</th><th>最后修改</th><th>操作</th></tr></thead></table><div class="admin-empty"><Info :size="22" /><strong>代码注册清单为空</strong><span>新增参数需先完成需求确认和代码评审；后端注册后，本页才会出现对应配置项。</span></div></div><AdminPagination :total="0" :page="1" :page-size="10" /></section>
-      <section class="admin-rule-card"><header><ShieldCheck :size="18" /><strong>页面与后端边界</strong></header><dl><div><dt>查看权限</dt><dd>configuration:read</dd></div><div><dt>修改取值</dt><dd>configuration:write</dd></div><div><dt>允许的操作</dt><dd>为已注册参数设置环境或机构范围值</dd></div><div><dt>不允许的操作</dt><dd>在页面动态创建参数键</dd></div></dl></section>
+      <section class="prototype-section work-table-section"><div class="prototype-table-wrap"><table class="work-table"><thead><tr><th>参数键 / 名称</th><th>值类型</th><th>作用范围</th><th>当前值</th><th>状态</th><th>最后修改</th><th>操作</th></tr></thead></table><div class="admin-empty"><Info :size="22" /><strong>暂无可维护参数</strong><span>平台版本提供可配置参数后，本页将显示对应参数及其适用范围。</span></div></div><AdminPagination :total="0" :page="1" :page-size="10" /></section>
+      <section class="admin-rule-card"><header><ShieldCheck :size="18" /><strong>参数维护范围</strong></header><dl><div><dt>可查看</dt><dd>平台已提供的参数及当前取值</dd></div><div><dt>可修改</dt><dd>参数在全局、环境或机构范围内的取值</dd></div><div><dt>不可操作</dt><dd>自行新增或删除参数项</dd></div></dl></section>
     </template>
 
     <template v-else>
-      <div class="admin-summary"><component :is="sectionMeta.icon" :size="20" /><div><strong>{{ sectionMeta.count }} {{ sectionMeta.noun }}</strong><small>数据为合成演示，字段和操作对应现有后端功能</small></div><button class="prototype-button" @click="addItem"><Plus :size="15" />{{ sectionMeta.action }}</button></div>
+      <div class="admin-summary"><component :is="sectionMeta.icon" :size="20" /><div><strong>{{ sectionMeta.count }} {{ sectionMeta.noun }}</strong><small>按当前条件统计</small></div><button class="prototype-button" @click="addItem"><Plus :size="15" />{{ sectionMeta.action }}</button></div>
       <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input v-model="query" :aria-label="section === 'dictionaries' ? '搜索数据字典' : section === 'system-users' ? '搜索用户' : '搜索角色'" :placeholder="section === 'dictionaries' ? '字典编码、名称或说明' : section === 'system-users' ? '登录名、姓名、机构或角色' : '角色编码、名称或说明'" /></label><select v-model="status" aria-label="状态筛选"><option>全部状态</option><option value="启用">已启用</option><option value="停用">已停用</option></select><span>{{ currentRows.length }} 条</span></div>
 
       <section class="prototype-section work-table-section action-column-table"><div class="prototype-table-wrap">
@@ -170,7 +185,7 @@ const drawerTitle = computed(() => ({ dictionary: '数据字典', user: '用户�
     </template>
 
     <div v-if="drawer && draft" class="data-record-overlay" @click.self="closeDrawer">
-      <aside class="data-record-drawer admin-drawer" role="dialog" aria-modal="true" :aria-label="drawerTitle">
+      <aside ref="drawerElement" class="data-record-drawer admin-drawer" role="dialog" aria-modal="true" :aria-label="drawerTitle" tabindex="-1" @keydown="onDrawerKeydown">
         <header class="drawer-titlebar"><div><small>{{ isNew ? '新增' : '编辑' }}</small><h2>{{ drawerTitle }}</h2></div><button class="prototype-icon" aria-label="关闭" @click="closeDrawer"><X :size="18" /></button></header>
         <div class="admin-drawer-summary"><span class="prototype-tag" :class="draft.enabled ? 'success' : 'danger'">{{ draft.enabled ? '已启用' : '已停用' }}</span><strong>{{ editableName(draft) || '待填写' }}</strong><small>{{ editableCode(draft) || '保存后生成标识' }}</small></div>
         <nav class="drawer-tabs"><button :class="{ active: drawerTab === 'detail' }" @click="drawerTab = 'detail'">基本信息</button><button v-if="drawer === 'dictionary'" :class="{ active: drawerTab === 'items' }" @click="drawerTab = 'items'">字典项</button><button v-if="drawer === 'role'" :class="{ active: drawerTab === 'permissions' }" @click="drawerTab = 'permissions'">功能权限</button><button :class="{ active: drawerTab === 'record' }" @click="drawerTab = 'record'">变更记录</button></nav>
@@ -182,7 +197,7 @@ const drawerTitle = computed(() => ({ dictionary: '数据字典', user: '用户�
           </template>
           <template v-else-if="drawerTab === 'items' && drawer === 'dictionary'"><div class="section-heading"><div><h3>字典项</h3><small>编码保存后不可直接修改；停用不会删除历史引用。</small></div><button class="btn btn-outline-primary btn-sm" @click="addDictionaryEntry"><Plus :size="14" />新增字典项</button></div><div class="admin-item-list"><div class="admin-item-head"><span>编码</span><span>显示名称</span><span>顺序</span><span>状态</span></div><div v-for="item in (draft as Dictionary).items" :key="item.id" class="admin-item-row"><input v-model="item.code" /><input v-model="item.name" /><input v-model="item.order" type="number" /><select v-model="item.enabled"><option :value="true">启用</option><option :value="false">停用</option></select></div></div></template>
           <template v-else-if="drawerTab === 'permissions' && drawer === 'role'"><div class="admin-permission-note"><ShieldCheck :size="17" /><span>权限按后端身份验证代码分组。保存后，拥有该角色的用户按新权限访问功能。</span></div><section v-for="group in permissionCatalog" :key="group.group" class="admin-permission-group"><h3>{{ group.group }}</h3><label v-for="permission in group.items" :key="permission[0]"><input type="checkbox" :checked="(draft as SystemRole).permissions.includes(permission[0])" @change="togglePermission(permission[0])" /><span><strong>{{ permission[1] }}</strong><small>{{ permission[0] }}</small></span></label></section></template>
-          <template v-else><div class="admin-record"><Check :size="18" /><div><strong>最近更新</strong><p>{{ draft.updatedAt || '尚未保存' }}</p><small>正式环境由审计记录保存操作人、时间、对象和变更内容。</small></div></div></template>
+          <template v-else><div class="admin-record"><Check :size="18" /><div><strong>最近更新</strong><p>{{ draft.updatedAt || '尚未保存' }}</p><small>审计记录保存操作人、时间、对象和变更内容。</small></div></div></template>
         </div>
         <footer class="drawer-footer"><span>保存需要对应的写权限</span><div><button class="btn btn-outline-secondary" @click="closeDrawer">取消</button><button class="btn btn-primary" @click="saveDraft">保存</button></div></footer>
       </aside>

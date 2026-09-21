@@ -23,6 +23,7 @@ export type ExternalEndpointForm = {
   username: string
   password: string
   authorizationCode: string
+  authenticationChanged: boolean
   enabled: boolean
   version: string
 }
@@ -43,7 +44,7 @@ export function externalSystemToForm(system: ExternalSystem): ExternalSystemForm
   }
 }
 
-/** 创建默认启用的机构接口配置表单，管理员仍可在保存前明确改为停用。 */
+/** 创建待自动校验的机构接口配置表单。 */
 export function emptyExternalEndpointForm(defaultOrganizationId: number | null): ExternalEndpointForm {
   return {
     environment: 'TEST',
@@ -55,12 +56,13 @@ export function emptyExternalEndpointForm(defaultOrganizationId: number | null):
     username: '',
     password: '',
     authorizationCode: '',
+    authenticationChanged: true,
     enabled: true,
     version: '',
   }
 }
 
-/** 将接口配置映射为编辑表单，接入信息字段保持空白。 */
+/** 将接口配置映射为编辑表单，接入信息在管理员主动查看后另行填充。 */
 export function externalEndpointToForm(endpoint: ExternalEndpoint): ExternalEndpointForm {
   return {
     environment: endpoint.environment,
@@ -72,6 +74,7 @@ export function externalEndpointToForm(endpoint: ExternalEndpoint): ExternalEndp
     username: '',
     password: '',
     authorizationCode: '',
+    authenticationChanged: false,
     enabled: endpoint.enabled,
     version: endpoint.version,
   }
@@ -96,7 +99,7 @@ export function validateExternalEndpointForm(
   let url: URL
   try { url = new URL(form.baseUrl.trim()) } catch { return '请输入正确的 HIS 接口地址' }
   if (!['http:', 'https:'].includes(url.protocol)) return '请输入正确的 HIS 接口地址'
-  if (url.username || url.password || url.search || url.hash) return '请输入正确的 HIS 接口地址'
+  if (url.username || url.password || url.hash || !isSupportedHisOperationQuery(url)) return '请输入正确的 HIS 接口地址'
   if (!Number.isInteger(form.connectTimeoutMs) || form.connectTimeoutMs < 100 || form.connectTimeoutMs > 60000) return '连接超时必须为100至60000毫秒的整数'
   if (!Number.isInteger(form.readTimeoutMs) || form.readTimeoutMs < form.connectTimeoutMs || form.readTimeoutMs > 300000) return '读取超时必须不小于连接超时且不超过300000毫秒'
   const vendorCode = form.vendorCode.trim()
@@ -104,12 +107,24 @@ export function validateExternalEndpointForm(
   const username = form.username.trim()
   const password = form.password.trim()
   const organizationChanged = existing !== null && existing.organizationId !== form.organizationId
+  if (organizationChanged && !form.authenticationChanged) return '更换机构后，请重新填写该机构的接入信息'
   if ((!existing?.credentialConfigured || organizationChanged) && (!vendorCode || !authorizationCode)) {
     return organizationChanged ? '更换机构后，请重新填写该机构的厂商编号和 HIS 验证码' : '请填写厂商编号和 HIS 验证码'
   }
   if ((username && !password) || (!username && password)) return 'HIS 用户名和 HIS 密码必须同时填写'
-  if (form.enabled && !existing?.credentialConfigured && (!vendorCode || !authorizationCode)) return '启用前必须填写 HIS 接入信息'
   return null
+}
+
+/** 判断查询参数是否为空或仅为ASMX页面提供的PHIS_Interface操作提示。 */
+function isSupportedHisOperationQuery(url: URL): boolean {
+  if (!url.search) return true
+  return url.searchParams.size === 1 && url.searchParams.get('op') === 'PHIS_Interface'
+}
+
+/** 规范化管理员填写的HIS配置地址，并保留受支持的ASMX操作参数用于回显。 */
+export function normalizeHisServiceUrl(value: string): string {
+  const url = new URL(value.trim())
+  return url.toString()
 }
 
 /** 构造新增外部系统请求。 */
@@ -136,7 +151,7 @@ export function toCreateExternalEndpointInput(form: ExternalEndpointForm): Creat
   return {
     environment: form.environment,
     organizationId: form.organizationId,
-    baseUrl: form.baseUrl.trim(),
+    baseUrl: normalizeHisServiceUrl(form.baseUrl),
     connectTimeoutMs: form.connectTimeoutMs,
     readTimeoutMs: form.readTimeoutMs,
     authentication: {
@@ -147,10 +162,9 @@ export function toCreateExternalEndpointInput(form: ExternalEndpointForm): Creat
   }
 }
 
-/** 构造更新机构接口配置请求，全部接入信息字段留空时保留原值。 */
+/** 构造更新机构接口配置请求，未修改接入信息时保留原值。 */
 export function toUpdateExternalEndpointInput(form: ExternalEndpointForm): UpdateExternalEndpointInput {
-  const authentication = [form.vendorCode, form.username, form.password, form.authorizationCode]
-    .some(value => value.trim())
+  const authentication = form.authenticationChanged
     ? {
         vendorCode: form.vendorCode.trim(), username: form.username.trim(),
         password: form.password, authorizationCode: form.authorizationCode.trim(),
@@ -159,7 +173,7 @@ export function toUpdateExternalEndpointInput(form: ExternalEndpointForm): Updat
   return {
     environment: form.environment,
     organizationId: form.organizationId,
-    baseUrl: form.baseUrl.trim(),
+    baseUrl: normalizeHisServiceUrl(form.baseUrl),
     connectTimeoutMs: form.connectTimeoutMs,
     readTimeoutMs: form.readTimeoutMs,
     authentication,

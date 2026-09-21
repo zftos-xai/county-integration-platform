@@ -37,6 +37,16 @@ export function externalEndpointPath(endpointId: number) {
   return `/configuration/external-endpoints/${endpointId}`
 }
 
+/** 构造机构HIS接入信息按需查看路径。 */
+export function externalEndpointAuthenticationPath(endpointId: number) {
+  return `${externalEndpointPath(endpointId)}/authentication`
+}
+
+/** 构造以100-008自动确认HIS来源机构的路径。 */
+export function externalEndpointVerificationPath(endpointId: number) {
+  return `${externalEndpointPath(endpointId)}/verify`
+}
+
 /** 将配置写模型序列化为统一请求配置。 */
 export function configurationWriteRequest(method: ConfigurationWriteMethod, body: unknown): RequestInit {
   return { method, body: JSON.stringify(body) }

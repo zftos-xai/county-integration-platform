@@ -137,12 +137,22 @@ class UserAdministrationServiceTest {
         verify(mapper, never()).replaceUserRoles(anyLong(), any(), any());
     }
 
-    /** @return 固定操作人 */
+    /**
+     * 创建具有测试机构范围的服务层操作人。
+     *
+     * @return 固定操作人
+     */
     private AccessActor actor() {
         return new AccessActor(1L, "admin", Set.of("ORG001"));
     }
 
-    /** @param mapper 仓储 @param organizationService 机构服务 @return 用户服务 */
+    /**
+     * 创建被测服务并注入测试替身。
+     *
+     * @param mapper 仓储
+     * @param organizationService 机构服务
+     * @return 用户服务
+     */
     private UserAdministrationService service(
             AccessMapper mapper,
             OrganizationService organizationService
@@ -152,7 +162,14 @@ class UserAdministrationServiceTest {
         );
     }
 
-    /** @param id 用户主键 @param organizationCode 机构代码 @param enabled 状态 @return 用户记录 */
+    /**
+     * 创建用户管理测试快照。
+     *
+     * @param id 用户主键
+     * @param organizationCode 机构代码
+     * @param enabled 状态
+     * @return 用户记录
+     */
     private ManagedUserSummary user(long id, String organizationCode, boolean enabled) {
         return new ManagedUserSummary(
                 id, id == 1L ? "admin" : "operator", "User", 10L, organizationCode,
@@ -160,7 +177,13 @@ class UserAdministrationServiceTest {
         );
     }
 
-    /** @param id 机构主键 @param code 机构代码 @return 机构记录 */
+    /**
+     * 创建机构测试快照。
+     *
+     * @param id 机构主键
+     * @param code 机构代码
+     * @return 机构记录
+     */
     private OrganizationVO organization(long id, String code) {
         return new OrganizationVO(
                 id, code, "Organization", "HOSPITAL", null, true,
@@ -168,7 +191,11 @@ class UserAdministrationServiceTest {
         );
     }
 
-    /** @return 固定并发版本 */
+    /**
+     * 创建确定性的8字节SQL Server行版本。
+     *
+     * @return 固定并发版本
+     */
     private byte[] version() {
         return new byte[Long.BYTES];
     }

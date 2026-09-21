@@ -525,10 +525,12 @@
 .prototype-sidebar-foot { color: #74818e; border-top-color: #edf0f2; }
 .prototype-topbar { min-height: 136px; padding: 18px 32px 20px; align-items: flex-start; border-bottom-color: #e3e8ec; box-shadow: 0 2px 8px rgba(35, 51, 66, .05); }
 .prototype-heading { display: grid; gap: 0; }
+.prototype-title-line { margin-top: 4px; display: grid; align-items: start; gap: 0; }
 .prototype-breadcrumb { min-height: 20px; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; color: #7f8c99; font-size: 12px; line-height: 1.4; }
 .prototype-breadcrumb strong { color: #657482; font-weight: 600; }
 .prototype-breadcrumb > span[aria-hidden] { color: #a9b2bb; }
 .prototype-heading h1 { margin: 0 0 8px; color: #182433; font-size: 28px; font-weight: 700; line-height: 1.2; letter-spacing: -.02em; }
+.prototype-title-line p { color: #7a8794; font-size: 13px; line-height: 1.5; }
 .prototype-heading > p { margin: 0; color: #7a8794; font-size: 13px; line-height: 1.5; }
 .prototype-content { max-width: none; padding: 24px 28px 40px; }
 .prototype-section, .work-toolbar, .work-health-strip, .work-status-summary, .prototype-metrics { border-color: #e1e5e9; border-radius: 6px; box-shadow: 0 1px 2px #18243308; }
@@ -617,10 +619,19 @@
 .business-interface-intro small { color: #6d7d89; font-size: 11px; }
 .interface-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .interface-summary em { padding: 6px 9px; border: 1px solid #d5e2de; border-radius: 4px; background: #fff; color: #536b63; font-size: 10px; font-style: normal; white-space: nowrap; }
-.business-interface-table .work-table { min-width: 1380px; }
-.business-interface-table .work-table td { min-width: 145px; }
-.business-interface-table .work-table td:first-child { min-width: 190px; }
-.business-interface-table .work-table td:nth-child(2) { min-width: 215px; }
+.business-interface-table .work-table { min-width: 760px; table-layout: fixed; }
+.business-interface-table .work-table th:nth-child(1) { width: 220px; }
+.business-interface-table .work-table th:nth-child(2) { width: 205px; }
+.business-interface-table .work-table th:nth-child(3) { width: 225px; }
+.business-interface-table .work-table th:nth-child(4) { width: 110px; }
+.business-interface-table .work-table td { min-width: 0; overflow: hidden; }
+.business-interface-table .work-table td > strong,
+.business-interface-table .work-table td > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.interface-inline-state { margin-top: 7px; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.business-interface-table .interface-inline-state > small { min-width: 0; margin: 0; overflow: hidden; color: #657780; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.business-interface-table .interface-inline-state > small.blocked { color: #b34d43; }
+.interface-inline-state > button { margin-left: auto; padding: 0; border: 0; background: transparent; color: #187565; font-size: 10px; white-space: nowrap; }
+.interface-inline-state > button:disabled { color: #89959d; }
 .action-column-table th:last-child, .action-column-table td:last-child {
   position: sticky;
   right: 0;
@@ -858,7 +869,13 @@
 .alert-filterbar .form-select, .alert-filterbar .form-control, .alert-filterbar > .btn { height: 40px; font-size: 12px; }
 .alert-queue { border-color: #e1e5e9; box-shadow: 0 1px 2px #1824330b; overflow: hidden; }
 .alert-queue .card-header { min-height: 58px; padding: 10px 14px; }
-.alert-queue .table { min-width: 1050px; margin: 0; font-size: 11px; }
+.alert-queue .table { min-width: 760px; margin: 0; font-size: 11px; }
+.alert-queue .alert-queue-table { table-layout: fixed; }
+.alert-queue-table th:nth-child(1) { width: 130px; }
+.alert-queue-table th:nth-child(2) { width: 235px; }
+.alert-queue-table th:nth-child(3) { width: 155px; }
+.alert-queue-table th:nth-child(4) { width: 155px; }
+.alert-queue-table th:nth-child(5) { width: 110px; }
 .alert-queue th { background: #f7f8fa; color: #596674; font-size: 10px; white-space: nowrap; }
 .alert-queue td { padding: 11px 9px; border-color: #edf0f2; }
 .alert-queue td small { margin-top: 4px; display: block; color: #7c8995; font-size: 9px; line-height: 1.5; }
@@ -1054,6 +1071,7 @@
 .prototype-avatar { width: 28px; height: 28px; flex: none; border-radius: 50%; background: #e8efed; color: #315d55; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
 .prototype-main { min-height: 100vh; display: flex; flex-direction: column; }
 .prototype-content { flex: 1; }
+.prototype-title-line p { overflow: visible; text-overflow: clip; white-space: normal; }
 .prototype-sidebar-foot { min-height: 82px; padding: 14px 22px; display: flex; align-items: center; }
 .prototype-main-footer { min-height: 56px; padding: 8px 28px; border-top: 1px solid #e1e5e9; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .prototype-product-meta { display: flex; align-items: center; gap: 10px; color: #71808d; }
@@ -1142,3 +1160,49 @@
 .has-alert-workspace .alert-queue th:nth-child(3),
 .has-alert-workspace .alert-queue td:nth-child(3) { display: table-cell; }
 .has-alert-workspace .alert-queue .standard-pagination { align-items: flex-start; flex-wrap: wrap; }
+
+/* 侧栏是独立工作区：控制信息密度，并为会话操作提供统一按钮形态。 */
+.prototype-app { grid-template-columns: 224px minmax(0, 1fr); }
+.prototype-sidebar { width: 224px; }
+.prototype-brand { min-height: 76px; padding: 12px 16px; gap: 10px; }
+.prototype-logo { width: 38px; height: 38px; }
+.prototype-brand strong { font-size: 16px; }
+.prototype-nav { padding: 8px 10px 6px; gap: 5px; scrollbar-width: thin; scrollbar-color: #d7e0df transparent; }
+.prototype-nav-group { gap: 1px; }
+.prototype-nav-label { margin-top: 0; padding: 6px 10px 3px; }
+.prototype-nav button { height: 36px; padding: 0 10px; gap: 10px; }
+.prototype-nav button > svg { flex: none; }
+.prototype-nav button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prototype-sidebar-foot { min-height: 88px; padding: 8px 12px; display: grid; align-content: center; gap: 8px; }
+.prototype-session-actions { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.prototype-collapse-button { min-width: 0; min-height: 32px; padding: 0 8px; border: 1px solid #d9e1e3; border-radius: 6px; background: #fff; color: #536570; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; white-space: nowrap; }
+.prototype-collapse-button:hover { border-color: #b9cbc7; background: #f0f6f4; color: #12695d; }
+.prototype-collapse-button:focus-visible { outline: 2px solid #1a8173; outline-offset: 2px; }
+
+@media (min-width: 901px) {
+  .prototype-app { transition: grid-template-columns .18s ease; }
+  .prototype-app.sidebar-collapsed { grid-template-columns: 68px minmax(0, 1fr); }
+  .prototype-sidebar { transition: width .18s ease; }
+  .prototype-sidebar.collapsed { width: 68px; }
+  .prototype-sidebar.collapsed .prototype-brand { padding-inline: 10px; justify-content: center; }
+  .prototype-sidebar.collapsed .prototype-brand > span:not(.prototype-logo),
+  .prototype-sidebar.collapsed .prototype-nav-label,
+  .prototype-sidebar.collapsed .prototype-nav button > span,
+  .prototype-sidebar.collapsed .prototype-user > span:last-child,
+  .prototype-sidebar.collapsed .prototype-collapse-button > span { display: none; }
+  .prototype-sidebar.collapsed .prototype-nav { padding-inline: 8px; }
+  .prototype-sidebar.collapsed .prototype-nav-group { gap: 4px; }
+  .prototype-sidebar.collapsed .prototype-nav button { padding: 0; justify-content: center; }
+  .prototype-sidebar.collapsed .prototype-nav button.active::before { left: -8px; }
+  .prototype-sidebar.collapsed .prototype-sidebar-foot { min-height: 148px; padding-inline: 10px; justify-items: center; }
+  .prototype-sidebar.collapsed .prototype-user { justify-content: center; }
+  .prototype-sidebar.collapsed .prototype-session-actions { grid-template-columns: 1fr; }
+  .prototype-sidebar.collapsed .prototype-collapse-button { width: 34px; padding: 0; }
+}
+
+@media (max-width: 900px) {
+  .prototype-app,
+  .prototype-app.sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .prototype-sidebar,
+  .prototype-sidebar.collapsed { width: min(280px, calc(100vw - 32px)); }
+}

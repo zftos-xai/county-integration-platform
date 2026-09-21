@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 public class UserAdministrationServiceImpl implements UserAdministrationService {
 
     private static final Pattern LOGIN_PATTERN = Pattern.compile("[A-Za-z0-9._-]{3,64}");
-    private static final int MINIMUM_PASSWORD_LENGTH = 12;
+    private static final int MINIMUM_PASSWORD_LENGTH = 9;
     private static final int MAXIMUM_PASSWORD_LENGTH = 128;
     private final AccessMapper mapper;
     private final OrganizationService organizationService;
@@ -266,14 +266,28 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         return updated;
     }
 
-    /** @param actor 操作人 @param user 用户 @param action 动作 @param summary 不含敏感内容的摘要 */
+    /**
+     * 追加不包含DDL全文和连接信息的管理审计事件。
+     *
+     * @param actor 操作人
+     * @param user 用户
+     * @param action 动作
+     * @param summary 不含敏感内容的摘要
+     */
     private void audit(AccessActor actor, ManagedUserVO user, String action, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, user.primaryOrganizationId(),
                 user.organizationCode(), action, "USER", user.loginName(), "SUCCESS", summary,
                 ManagementAuditServiceImpl.currentRequestId()));
     }
 
-    /** @param actor 操作人 @param user 用户 @param action 动作 @param summary 不含敏感内容的摘要 */
+    /**
+     * 追加不包含DDL全文和连接信息的管理审计事件。
+     *
+     * @param actor 操作人
+     * @param user 用户
+     * @param action 动作
+     * @param summary 不含敏感内容的摘要
+     */
     private void audit(AccessActor actor, ManagedUserSummary user, String action, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, user.primaryOrganizationId(),
                 user.organizationCode(), action, "USER", user.loginName(), "SUCCESS", summary,
@@ -295,7 +309,12 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         );
     }
 
-    /** @param userId 用户主键 @return 存在的用户 */
+    /**
+     * 读取用户；不存在时抛出资源不存在异常。
+     *
+     * @param userId 用户主键
+     * @return 存在的用户
+     */
     private ManagedUserSummary requireUser(long userId) {
         if (userId <= 0) {
             throw new InvalidRequestException("userId 必须大于 0");
@@ -304,7 +323,12 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
                 .orElseThrow(() -> new ResourceNotFoundException("Platform user was not found"));
     }
 
-    /** @param organizationId 机构主键 @return 已启用机构 */
+    /**
+     * 校验目标主机构存在且处于启用状态。
+     *
+     * @param organizationId 机构主键
+     * @return 已启用机构
+     */
     private OrganizationVO requireEnabledOrganization(long organizationId) {
         OrganizationVO organization = organizationService.get(organizationId);
         if (!organization.enabled()) {
@@ -313,14 +337,24 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         return organization;
     }
 
-    /** @param actor 操作人 @param organizationCode 机构代码 */
+    /**
+     * 校验当前操作人拥有目标机构数据范围。
+     *
+     * @param actor 操作人
+     * @param organizationCode 机构代码
+     */
     private void requireAccess(AccessActor actor, String organizationCode) {
         if (!actor.canAccess(organizationCode)) {
             throw new AccessDeniedException("当前账号无权访问该机构");
         }
     }
 
-    /** @param value 登录名 @return 规范化登录名 */
+    /**
+     * 规范化登录名并应用稳定大小写规则。
+     *
+     * @param value 登录名
+     * @return 规范化登录名
+     */
     private String normalizeLogin(String value) {
         String loginName = requireText(value, "loginName", 64).toLowerCase(Locale.ROOT);
         if (!LOGIN_PATTERN.matcher(loginName).matches()) {
@@ -329,7 +363,12 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         return loginName;
     }
 
-    /** @param password 密码 @param loginName 登录名 */
+    /**
+     * 校验密码长度及复杂度要求。
+     *
+     * @param password 密码
+     * @param loginName 登录名
+     */
     private void validatePassword(String password, String loginName) {
         if (password == null || password.length() < MINIMUM_PASSWORD_LENGTH
                 || password.length() > MAXIMUM_PASSWORD_LENGTH) {
@@ -340,7 +379,14 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         }
     }
 
-    /** @param value 文本 @param field 字段 @param maximumLength 最大长度 @return 裁剪值 */
+    /**
+     * 校验用户必填文本并返回裁剪后的值。
+     *
+     * @param value 文本
+     * @param field 字段
+     * @param maximumLength 最大长度
+     * @return 裁剪值
+     */
     private String requireText(String value, String field, int maximumLength) {
         if (value == null || value.isBlank() || value.trim().length() > maximumLength) {
             throw new InvalidRequestException(field + " is invalid");
@@ -348,7 +394,12 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         return value.trim();
     }
 
-    /** @param ids 原始主键 @return 去重后的正数主键 */
+    /**
+     * 去重并校验关系主键均为正数。
+     *
+     * @param ids 原始主键
+     * @return 去重后的正数主键
+     */
     private List<Long> distinctPositiveIds(List<Long> ids) {
         if (ids == null || ids.stream().anyMatch(id -> id == null || id <= 0)) {
             throw new InvalidRequestException("编号列表中包含无效值");
@@ -356,7 +407,11 @@ public class UserAdministrationServiceImpl implements UserAdministrationService 
         return ids.stream().distinct().sorted().toList();
     }
 
-    /** @param version 并发版本 */
+    /**
+     * 校验SQL Server行版本恰好为8字节。
+     *
+     * @param version 并发版本
+     */
     private void requireVersion(byte[] version) {
         if (version == null || version.length != Long.BYTES) {
             throw new InvalidRequestException("version 必须是 8 字节的 SQL Server 行版本号");

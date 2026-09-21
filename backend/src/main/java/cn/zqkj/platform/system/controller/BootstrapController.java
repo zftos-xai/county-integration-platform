@@ -34,7 +34,11 @@ public class BootstrapController {
         this.service = service;
     }
 
-    /** @return 不包含启动密钥内容的安全引导状态 */
+    /**
+     * 查询平台是否仍允许执行一次性安全引导。
+     *
+     * @return 不包含启动密钥内容的安全引导状态
+     */
     @GetMapping("/status")
     public ApiResponse<BootstrapStatusVO> status() {
         return ApiResponse.success(service.getBootstrapStatus());

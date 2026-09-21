@@ -42,26 +42,51 @@ public class RoleAdministrationController {
 
     private final RoleAdministrationService service;
 
-    /** @param service 角色管理服务 */
+    /**
+     * 创建角色和权限管理控制器。
+     *
+     * @param service 角色管理服务
+     */
     public RoleAdministrationController(RoleAdministrationService service) {
         this.service = service;
     }
 
-    /** @return 平台角色列表 */
+    /**
+     * 查询全部角色及其权限配置。
+     *
+     * <p>需要 {@code access:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @return 平台角色列表
+     */
     @GetMapping("/roles")
     @PreAuthorize("hasAuthority('access:read')")
     public ApiResponse<List<RoleVO>> findRoles() {
         return ApiResponse.success(service.findAll());
     }
 
-    /** @param roleId 角色主键 @return 角色详情 */
+    /**
+     * 按主键读取角色及其权限配置。
+     *
+     * <p>需要 {@code access:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param roleId 角色主键
+     * @return 角色详情
+     */
     @GetMapping("/roles/{roleId}")
     @PreAuthorize("hasAuthority('access:read')")
     public ApiResponse<RoleVO> getRole(@PathVariable @Positive long roleId) {
         return ApiResponse.success(service.get(roleId));
     }
 
-    /** @param request 创建请求 @param principal 当前用户 @return 新角色 */
+    /**
+     * 创建角色。
+     *
+     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param request 创建请求
+     * @param principal 当前用户
+     * @return 新角色
+     */
     @PostMapping("/roles")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('access:write')")
@@ -74,7 +99,16 @@ public class RoleAdministrationController {
         ));
     }
 
-    /** @param roleId 角色主键 @param request 修改请求 @param principal 当前用户 @return 修改后角色 */
+    /**
+     * 按并发版本更新角色资料。
+     *
+     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param roleId 角色主键
+     * @param request 修改请求
+     * @param principal 当前用户
+     * @return 修改后角色
+     */
     @PutMapping("/roles/{roleId}")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<RoleVO> updateRole(
@@ -87,7 +121,16 @@ public class RoleAdministrationController {
         ), actor(principal)));
     }
 
-    /** @param roleId 角色主键 @param request 删除请求 @param principal 当前用户 @return 空成功响应 */
+    /**
+     * 删除未被用户引用且不受平台保护的角色。
+     *
+     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param roleId 角色主键
+     * @param request 删除请求
+     * @param principal 当前用户
+     * @return 空成功响应
+     */
     @DeleteMapping("/roles/{roleId}")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<Void> deleteRole(
@@ -99,7 +142,16 @@ public class RoleAdministrationController {
         return ApiResponse.success(null);
     }
 
-    /** @param roleId 角色主键 @param request 权限请求 @param principal 当前用户 @return 修改后角色 */
+    /**
+     * 整体替换角色的功能权限集合。
+     *
+     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param roleId 角色主键
+     * @param request 权限请求
+     * @param principal 当前用户
+     * @return 修改后角色
+     */
     @PutMapping("/roles/{roleId}/permissions")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<RoleVO> replacePermissions(
@@ -112,19 +164,35 @@ public class RoleAdministrationController {
         ));
     }
 
-    /** @return 后端代码注册权限清单 */
+    /**
+     * 查询后端已注册的功能权限。
+     *
+     * <p>需要 {@code access:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @return 后端代码注册权限清单
+     */
     @GetMapping("/permissions")
     @PreAuthorize("hasAuthority('access:read')")
     public ApiResponse<List<PermissionVO>> findPermissions() {
         return ApiResponse.success(service.findPermissions());
     }
 
-    /** @param principal 当前用户 @return 审计操作人 */
+    /**
+     * 将当前登录主体转换为携带机构范围的服务层操作人。
+     *
+     * @param principal 当前用户
+     * @return 审计操作人
+     */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
 
-    /** @param value Base64版本 @return 8字节并发版本 */
+    /**
+     * 解码并校验客户端提交的SQL Server行版本。
+     *
+     * @param value Base64版本
+     * @return 8字节并发版本
+     */
     private byte[] decodeVersion(String value) {
         try {
             byte[] version = Base64.getDecoder().decode(value);

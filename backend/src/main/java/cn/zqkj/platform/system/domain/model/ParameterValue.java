@@ -3,7 +3,13 @@ package cn.zqkj.platform.system.domain.model;
 import java.time.LocalDateTime;
 
 /**
- * 已保存的平台按适用范围保存的参数值。
+ * 平台参数在指定环境和机构范围下的已保存值。
+ *
+ * <p>数据来源：主表 {@code dbo.sys_parameter_value}（平台参数值表），可选关联
+ * {@code dbo.org_organization}（机构表）补充机构代码。</p>
+ *
+ * <p>业务说明：参数定义和校验规则由代码注册表提供；本投影只表示按环境、
+ * 机构作用域落库的值及并发版本。</p>
  *
  * @param id 参数值主键
  * @param parameterKey 注册参数键

@@ -3,7 +3,11 @@ package cn.zqkj.platform.system.domain.model;
 import java.time.LocalDateTime;
 
 /**
- * 已确认外部系统快照。
+ * 已登记外部系统的只读快照。
+ *
+ * <p>对应表：{@code dbo.sys_external_system}（外部系统表）。</p>
+ *
+ * <p>业务说明：保存系统稳定代码和展示资料；具体环境、机构地址和凭证由端点表单独管理。</p>
  *
  * @param id 主键
  * @param systemCode 稳定系统代码

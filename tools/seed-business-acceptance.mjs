@@ -149,8 +149,8 @@ class ApiSession {
 
 function requireSecrets() {
   if (!ADMIN_PASSWORD) throw new Error('请设置 PLATFORM_ACCEPTANCE_ADMIN_PASSWORD')
-  if (!CLEANUP && TEMPORARY_PASSWORD.length < 12) {
-    throw new Error('请设置至少 12 个字符的 PLATFORM_ACCEPTANCE_TEMP_PASSWORD')
+  if (!CLEANUP && TEMPORARY_PASSWORD.length < 9) {
+    throw new Error('请设置至少 9 个字符的 PLATFORM_ACCEPTANCE_TEMP_PASSWORD')
   }
   if (!CLEANUP && userDefinitions.some(user => TEMPORARY_PASSWORD.toLowerCase().includes(user.login.toLowerCase()))) {
     throw new Error('PLATFORM_ACCEPTANCE_TEMP_PASSWORD 不能包含验收用户登录名')

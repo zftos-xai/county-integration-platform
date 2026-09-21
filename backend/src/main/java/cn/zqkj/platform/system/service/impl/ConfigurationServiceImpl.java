@@ -3,6 +3,17 @@ package cn.zqkj.platform.system.service.impl;
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.common.exception.ResourceNotFoundException;
+import cn.zqkj.platform.common.utils.Func;
+import cn.zqkj.platform.his.domain.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.dto.OrganizationQuery;
+import cn.zqkj.platform.his.domain.model.HospitalDirectoryEntry;
+import cn.zqkj.platform.his.domain.model.HospitalDirectoryType;
+import cn.zqkj.platform.his.domain.model.OrganizationEntry;
+import cn.zqkj.platform.his.domain.model.PhisResponse;
+import cn.zqkj.platform.his.exception.PhisCommunicationException;
+import cn.zqkj.platform.his.exception.PhisConfigurationException;
+import cn.zqkj.platform.his.exception.PhisProtocolException;
+import cn.zqkj.platform.his.service.PhisService;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryItemCommand;
 import cn.zqkj.platform.system.domain.dto.CreateDictionaryTypeCommand;
 import cn.zqkj.platform.system.domain.dto.DeleteParameterCommand;
@@ -21,6 +32,7 @@ import cn.zqkj.platform.system.domain.model.ParameterValue;
 import cn.zqkj.platform.system.domain.model.ParameterValueType;
 import cn.zqkj.platform.system.domain.model.ExternalEndpoint;
 import cn.zqkj.platform.system.domain.model.ExternalEndpointAuthentication;
+import cn.zqkj.platform.system.domain.model.ExternalEndpointVerificationStatus;
 import cn.zqkj.platform.system.domain.model.ExternalSystem;
 import cn.zqkj.platform.system.domain.vo.DictionaryItemVO;
 import cn.zqkj.platform.system.domain.vo.DictionaryTypeVO;
@@ -28,12 +40,14 @@ import cn.zqkj.platform.system.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.domain.vo.ParameterDefinitionVO;
 import cn.zqkj.platform.system.domain.vo.ParameterValueVO;
 import cn.zqkj.platform.system.domain.vo.ExternalEndpointVO;
+import cn.zqkj.platform.system.domain.vo.ExternalEndpointAuthenticationVO;
 import cn.zqkj.platform.system.domain.vo.ExternalSystemVO;
 import cn.zqkj.platform.system.mapper.ConfigurationMapper;
 import cn.zqkj.platform.system.service.ConfigurationService;
 import cn.zqkj.platform.system.service.OrganizationService;
 import cn.zqkj.platform.system.service.ParameterDefinitionRegistry;
 import cn.zqkj.platform.system.service.ManagementAuditService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,9 +77,37 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     private final OrganizationService organizationService;
     private final ManagementAuditService auditService;
     private final ExternalEndpointCredentialCipher credentialCipher;
+    private final PhisService phisService;
 
     /**
      * 创建平台配置服务。
+     *
+     * @param mapper 配置Mapper
+     * @param registry 代码注册参数清单
+     * @param organizationService 机构查询服务
+     * @param auditService 管理审计服务
+     * @param credentialCipher 机构接口认证信息加密器
+     * @param phisService 基层HIS交易入口
+     */
+    @Autowired
+    public ConfigurationServiceImpl(
+            ConfigurationMapper mapper,
+            ParameterDefinitionRegistry registry,
+            OrganizationService organizationService,
+            ManagementAuditService auditService,
+            ExternalEndpointCredentialCipher credentialCipher,
+            PhisService phisService
+    ) {
+        this.mapper = mapper;
+        this.registry = registry;
+        this.organizationService = organizationService;
+        this.auditService = auditService;
+        this.credentialCipher = credentialCipher;
+        this.phisService = phisService;
+    }
+
+    /**
+     * 兼容不涉及HIS校验的既有单元测试构造方式。
      *
      * @param mapper 配置Mapper
      * @param registry 代码注册参数清单
@@ -80,21 +122,17 @@ public class ConfigurationServiceImpl implements ConfigurationService {
             ManagementAuditService auditService,
             ExternalEndpointCredentialCipher credentialCipher
     ) {
-        this.mapper = mapper;
-        this.registry = registry;
-        this.organizationService = organizationService;
-        this.auditService = auditService;
-        this.credentialCipher = credentialCipher;
+        this(mapper, registry, organizationService, auditService, credentialCipher, null);
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 实际可配置项以代码注册表为准，不从数据库反向推导定义。 */
     @Transactional(readOnly = true)
     @Override
     public List<ParameterDefinitionVO> findParameterDefinitions() {
         return registry.findAll().stream().map(this::toDefinitionVO).toList();
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 返回前按操作人的机构范围过滤机构级参数。 */
     @Transactional(readOnly = true)
     @Override
     public List<ParameterValueVO> findParameterValues(AccessActor actor) {
@@ -104,7 +142,11 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 .toList();
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>校验参数定义、适用范围和值类型后执行新增或乐观锁更新；审计摘要不包含参数值。</p>
+     */
     @Transactional
     @Override
     public ParameterValueVO upsertParameter(String key, UpsertParameterCommand command, AccessActor actor) {
@@ -147,7 +189,11 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return result;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>精确匹配环境和机构范围并使用行版本删除；审计摘要不包含被删除的参数值。</p>
+     */
     @Transactional
     @Override
     public void deleteParameter(String key, DeleteParameterCommand command, AccessActor actor) {
@@ -170,14 +216,14 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 "已删除指定环境和机构范围的参数配置；参数值未写入审计摘要");
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 仅返回平台系统字典，不混入HIS业务目录。 */
     @Transactional(readOnly = true)
     @Override
     public List<DictionaryTypeVO> findDictionaryTypes() {
         return mapper.findDictionaryTypes().stream().map(this::toDictionaryTypeVO).toList();
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 规范化类型代码并在同一事务完成创建和审计。 */
     @Transactional
     @Override
     public DictionaryTypeVO createDictionaryType(CreateDictionaryTypeCommand command, AccessActor actor) {
@@ -198,7 +244,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return result;
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 使用行版本更新名称、说明和启用状态，并追加成功审计。 */
     @Transactional
     @Override
     public DictionaryTypeVO updateDictionaryType(
@@ -223,7 +269,11 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return result;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>仅允许删除不含任何字典项的类型；计数检查与乐观锁共同防止并发新增造成误删。</p>
+     */
     @Transactional
     @Override
     public void deleteDictionaryType(long typeId, byte[] expectedVersion, AccessActor actor) {
@@ -242,7 +292,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 "已删除不含字典项的字典类型");
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 查询前确认字典类型存在，并按调用方选择决定是否包含停用项。 */
     @Transactional(readOnly = true)
     @Override
     public List<DictionaryItemVO> findDictionaryItems(long typeId, boolean includeDisabled) {
@@ -250,7 +300,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return mapper.findDictionaryItems(typeId, includeDisabled).stream().map(this::toDictionaryItemVO).toList();
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 仅允许向启用的字典类型添加代码唯一、排序值合法的字典项。 */
     @Transactional
     @Override
     public DictionaryItemVO createDictionaryItem(
@@ -278,7 +328,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return result;
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 使用行版本更新展示文本、顺序和启用状态，不允许修改稳定代码。 */
     @Transactional
     @Override
     public DictionaryItemVO updateDictionaryItem(
@@ -304,7 +354,11 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return result;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>先检查业务引用再使用行版本删除；已经被使用的字典项只能停用，不能破坏历史含义。</p>
+     */
     @Transactional
     @Override
     public void deleteDictionaryItem(long itemId, byte[] expectedVersion, AccessActor actor) {
@@ -324,14 +378,14 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 type.typeCode() + ":" + current.itemCode(), "已删除未被业务数据使用的字典项");
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 返回外部系统身份和启用状态，不包含端点地址或认证信息。 */
     @Transactional(readOnly = true)
     @Override
     public List<ExternalSystemVO> findExternalSystems() {
         return mapper.findExternalSystems().stream().map(this::toExternalSystemVO).toList();
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 规范化稳定系统代码并创建外部系统身份，审计不记录连接信息。 */
     @Transactional
     @Override
     public ExternalSystemVO createExternalSystem(ExternalSystemCommand command, AccessActor actor) {
@@ -351,7 +405,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return result;
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 使用行版本更新展示信息和启用状态，稳定系统代码保持不变。 */
     @Transactional
     @Override
     public ExternalSystemVO updateExternalSystem(long systemId, ExternalSystemCommand command, AccessActor actor) {
@@ -370,7 +424,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return result;
     }
 
-    /** {@inheritDoc} */
+    /** {@inheritDoc} 按操作人的机构范围过滤端点，并以脱敏视图返回。 */
     @Transactional(readOnly = true)
     @Override
     public List<ExternalEndpointVO> findExternalEndpoints(long systemId, AccessActor actor) {
@@ -382,7 +436,11 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 .toList();
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>校验系统状态、机构范围和作用域唯一性后，加密保存认证信息；新端点必须完成自动验证后才能用于同步。</p>
+     */
     @Transactional
     @Override
     public ExternalEndpointVO createExternalEndpoint(
@@ -396,7 +454,8 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         }
         validateEndpointScope(command, actor);
         ExternalEndpointAuthenticationCommand authentication = mergeAuthentication(null, command.authentication(), true);
-        ExternalEndpointCommand normalized = normalizeEndpoint(command, authentication, command.enabled(), null);
+        ExternalEndpointCommand normalized = normalizeEndpoint(command, authentication, false, null);
+        requirePrimaryHisOrganization(system, normalized);
         if (mapper.externalEndpointScopeExists(systemId, null, normalized)) {
             throw new ResourceConflictException("该外部系统、环境和机构已经配置了服务地址");
         }
@@ -405,13 +464,40 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         ExternalEndpointVO result = toExternalEndpointVO(requireExternalEndpoint(id));
         audit(actor, result.organizationId(), result.organizationCode(), "EXTERNAL_ENDPOINT_CREATED",
                 "EXTERNAL_ENDPOINT", String.valueOf(id),
-                normalized.enabled()
-                        ? "已创建并启用服务地址；地址和认证信息未写入审计摘要"
-                        : "已创建停用服务地址；地址和认证信息未写入审计摘要");
+                "已保存机构接口配置，需完成100-008自动校验后才可用于同步；地址和接入信息未写入审计摘要");
         return result;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>仅向有机构权限的配置管理员返回解密结果，并追加查看审计；认证正文不进入审计摘要。</p>
+     */
+    @Transactional
+    @Override
+    public ExternalEndpointAuthenticationVO findExternalEndpointAuthentication(
+            long endpointId,
+            AccessActor actor
+    ) {
+        ExternalEndpoint endpoint = requireExternalEndpoint(endpointId);
+        requireEndpointAccess(endpoint, actor);
+        ExternalEndpointAuthentication authentication = mapper.findExternalEndpointCredential(endpointId)
+                .map(credentialCipher::decrypt)
+                .orElseThrow(() -> new ResourceNotFoundException("该机构尚未保存HIS接入信息"));
+        audit(actor, endpoint.organizationId(), endpoint.organizationCode(),
+                "EXTERNAL_ENDPOINT_AUTHENTICATION_VIEWED", "EXTERNAL_ENDPOINT", String.valueOf(endpointId),
+                "已在配置编辑页查看机构HIS接入信息；接入内容未写入审计摘要");
+        return new ExternalEndpointAuthenticationVO(
+                authentication.vendorCode(), Objects.requireNonNullElse(authentication.username(), ""),
+                Objects.requireNonNullElse(authentication.password(), ""), authentication.authorizationCode()
+        );
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>使用行版本更新端点和加密认证信息；任何影响连接或机构范围的修改都会使原验证结果失效。</p>
+     */
     @Transactional
     @Override
     public ExternalEndpointVO updateExternalEndpoint(
@@ -429,15 +515,10 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 command.authentication(),
                 organizationChanged
         );
-        if (command.enabled() && !current.credentialConfigured() && authentication == null) {
-            throw new InvalidRequestException("启用连接前必须配置接口认证信息");
-        }
         ExternalEndpointCommand normalized = normalizeEndpoint(
-                command, authentication, command.enabled(), command.expectedVersion()
+                command, authentication, false, command.expectedVersion()
         );
-        if (normalized.enabled() && !requireExternalSystem(current.externalSystemId()).enabled()) {
-            throw new ResourceConflictException("外部系统已停用，不能启用其服务地址");
-        }
+        requirePrimaryHisOrganization(requireExternalSystem(current.externalSystemId()), normalized);
         if (mapper.externalEndpointScopeExists(current.externalSystemId(), endpointId, normalized)) {
             throw new ResourceConflictException("该外部系统、环境和机构已经存在接口配置");
         }
@@ -450,11 +531,99 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         ExternalEndpointVO result = toExternalEndpointVO(requireExternalEndpoint(endpointId));
         audit(actor, result.organizationId(), result.organizationCode(), "EXTERNAL_ENDPOINT_UPDATED",
                 "EXTERNAL_ENDPOINT", String.valueOf(endpointId),
-                "已修改机构、环境、接口地址、超时或启用状态；地址和接入信息未写入审计摘要");
+                "已修改机构接口配置，原自动校验结果已失效；需重新100-008校验后才可用于同步；地址和接入信息未写入审计摘要");
         return result;
     }
 
-    /** @param definition 参数定义 @return API元数据 */
+    /**
+     * 以同一事务保存100-008机构确认、100-003能力验证结果和成功审计记录。
+     *
+     * <p>HIS调用先于本地写入发生；事务在调用期间不修改本地数据，避免校验成功却因审计写入失败而
+     * 向调用方返回不确定结果。</p>
+     *
+     * {@inheritDoc}
+     */
+    @Transactional
+    @Override
+    public ExternalEndpointVO verifyExternalEndpoint(long endpointId, AccessActor actor) {
+        ExternalEndpoint endpoint = requireExternalEndpoint(endpointId);
+        requireEndpointAccess(endpoint, actor);
+        if (!"PRIMARY_HIS".equals(requireExternalSystem(endpoint.externalSystemId()).systemCode())) {
+            throw new InvalidRequestException("只有基层HIS接口需要执行机构自动校验");
+        }
+        if (endpoint.organizationId() == null) {
+            throw new InvalidRequestException("基层HIS接口必须绑定到一个平台机构");
+        }
+        if (!endpoint.credentialConfigured()) {
+            throw new InvalidRequestException("请先保存该机构的HIS接入信息，再执行接口校验");
+        }
+        OrganizationVO organization = organizationService.get(endpoint.organizationId());
+        String organizationName = organization == null ? null : organization.organizationName();
+        if (phisService == null) {
+            throw new IllegalStateException("基层HIS校验服务未装配");
+        }
+        String verificationStep = "100-008";
+        try {
+            PhisResponse<List<OrganizationEntry>> response = phisService.verifyOrganizationConfiguration(
+                    endpoint.organizationId(), endpoint.environment(), new OrganizationQuery(organizationName));
+            if (!response.success()) {
+                return markEndpointVerificationFailure(endpoint, ExternalEndpointVerificationStatus.FAILED,
+                        safeVerificationMessage(response.errorMessage(), "HIS明确拒绝了100-008机构查询"), actor);
+            }
+            List<OrganizationEntry> entries = response.data() == null ? List.of() : response.data().stream()
+                    .filter(Objects::nonNull)
+                    .filter(entry -> Func.trimToNull(entry.sourceOrganizationId()) != null)
+                    .filter(entry -> Func.trimToNull(entry.hospitalName()) != null)
+                    .toList();
+            if (entries.size() != 1) {
+                return markEndpointVerificationFailure(endpoint, ExternalEndpointVerificationStatus.FAILED,
+                        entries.isEmpty()
+                                ? "100-008未找到与填写医院名称对应的机构，请核对名称和授权范围"
+                                : "100-008返回多个机构，请填写更准确的医院名称后重新校验", actor);
+            }
+            OrganizationEntry source = entries.get(0);
+            String returnedSourceId = Func.trimToNull(source.sourceOrganizationId());
+            if (endpoint.sourceOrganizationId() != null
+                    && !endpoint.sourceOrganizationId().equalsIgnoreCase(returnedSourceId)) {
+                return markEndpointVerificationFailure(endpoint, ExternalEndpointVerificationStatus.FAILED,
+                        "100-008返回的机构编码与上次确认结果不一致，请核对HIS机构资料", actor);
+            }
+            verificationStep = "100-003";
+            PhisResponse<List<HospitalDirectoryEntry>> capability = phisService.verifyHospitalDirectoryCapability(
+                    endpoint.organizationId(), endpoint.environment(), new HospitalDirectoryQuery(
+                            HospitalDirectoryType.DEPARTMENT, null,
+                            Func.requireText(endpoint.organizationCode(), "平台机构编码", 64)
+                    ));
+            if (!capability.success()) {
+                return markEndpointVerificationFailure(endpoint, ExternalEndpointVerificationStatus.FAILED,
+                        safeVerificationMessage(capability.errorMessage(),
+                                "HIS明确拒绝了100-003医院综合目录查询"), actor);
+            }
+            if (mapper.markExternalEndpointVerified(endpointId,
+                    returnedSourceId, Func.trimToNull(source.hospitalName()),
+                    requireActor(actor.loginName())) != 1) {
+                throw new ResourceConflictException("接口校验结果保存失败，请重新读取后再试");
+            }
+            ExternalEndpointVO result = toExternalEndpointVO(requireExternalEndpoint(endpointId));
+            audit(actor, result.organizationId(), result.organizationCode(), "PRIMARY_HIS_ENDPOINT_VERIFIED",
+                "EXTERNAL_ENDPOINT", String.valueOf(endpointId),
+                    "100-008已确认唯一来源机构，100-003医院综合目录查询能力已验证");
+            return result;
+        } catch (PhisCommunicationException | PhisProtocolException exception) {
+            return markEndpointVerificationFailure(endpoint, ExternalEndpointVerificationStatus.RESULT_UNKNOWN,
+                    "未能确认" + verificationStep + "处理结果，请先查看HIS交易记录，不要直接重复提交", actor);
+        } catch (PhisConfigurationException exception) {
+            return markEndpointVerificationFailure(endpoint, ExternalEndpointVerificationStatus.FAILED,
+                    safeVerificationMessage(exception.getMessage(), "HIS接口配置不可用"), actor);
+        }
+    }
+
+    /**
+     * 把代码注册参数定义转换为API输出。
+     *
+     * @param definition 参数定义
+     * @return API元数据
+     */
     private ParameterDefinitionVO toDefinitionVO(ParameterDefinition definition) {
         return new ParameterDefinitionVO(
                 definition.key(), definition.name(), definition.valueType().name(),
@@ -464,7 +633,13 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         );
     }
 
-    /** @param value 参数值 @param definition 参数定义 @return 安全输出 */
+    /**
+     * 把参数值快照转换为安全API输出，并隐藏敏感值。
+     *
+     * @param value 参数值
+     * @param definition 参数定义
+     * @return 安全输出
+     */
     private ParameterValueVO toParameterValueVO(ParameterValue value, ParameterDefinition definition) {
         return new ParameterValueVO(
                 value.id(), value.parameterKey(), value.valueType().name(), value.environment().name(),
@@ -474,7 +649,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         );
     }
 
-    /** @param type 字典类型 @return API输出 */
+    /**
+     * 把字典类型快照转换为API输出。
+     *
+     * @param type 字典类型
+     * @return API输出
+     */
     private DictionaryTypeVO toDictionaryTypeVO(DictionaryType type) {
         return new DictionaryTypeVO(
                 type.id(), type.typeCode(), type.typeName(), type.description(), type.enabled(),
@@ -482,7 +662,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         );
     }
 
-    /** @param item 字典项 @return API输出 */
+    /**
+     * 把字典项快照转换为API输出。
+     *
+     * @param item 字典项
+     * @return API输出
+     */
     private DictionaryItemVO toDictionaryItemVO(DictionaryItem item) {
         return new DictionaryItemVO(
                 item.id(), item.dictionaryTypeId(), item.itemCode(), item.itemLabel(), item.sortOrder(),
@@ -490,30 +675,53 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         );
     }
 
-    /** @param system 外部系统 @return API输出 */
+    /**
+     * 把外部系统快照转换为API输出。
+     *
+     * @param system 外部系统
+     * @return API输出
+     */
     private ExternalSystemVO toExternalSystemVO(ExternalSystem system) {
         return new ExternalSystemVO(system.id(), system.systemCode(), system.systemName(), system.description(),
                 system.enabled(), system.createdAt(), system.updatedAt(),
                 Base64.getEncoder().encodeToString(system.version()));
     }
 
-    /** @param endpoint 外部服务地址 @return 不含认证信息明文的API输出 */
+    /**
+     * 把端点快照转换为不含认证秘密的API输出。
+     *
+     * @param endpoint 外部服务地址
+     * @return 不含认证信息明文的API输出
+     */
     private ExternalEndpointVO toExternalEndpointVO(ExternalEndpoint endpoint) {
         return new ExternalEndpointVO(endpoint.id(), endpoint.externalSystemId(), endpoint.environment().name(),
                 endpoint.organizationId(), endpoint.organizationCode(), endpoint.baseUrl(),
                 endpoint.connectTimeoutMs(), endpoint.readTimeoutMs(),
                 endpoint.credentialConfigured(),
                 endpoint.enabled(), endpoint.createdAt(), endpoint.updatedAt(),
-                Base64.getEncoder().encodeToString(endpoint.version()));
+                Base64.getEncoder().encodeToString(endpoint.version()),
+                endpoint.sourceOrganizationId(), endpoint.sourceOrganizationName(),
+                endpoint.verificationStatus().name(), endpoint.verifiedAt(), endpoint.verificationFailureSummary());
     }
 
-    /** @param key 参数键 @return 已注册定义 */
+    /**
+     * 读取代码注册参数定义；未知参数键立即拒绝。
+     *
+     * @param key 参数键
+     * @return 已注册定义
+     */
     private ParameterDefinition requireDefinition(String key) {
         return registry.find(key)
                 .orElseThrow(() -> new InvalidRequestException("Parameter key is not registered"));
     }
 
-    /** @param definition 参数定义 @param command 写入命令 @param actor 操作人 */
+    /**
+     * 校验参数环境、机构作用域和当前操作人范围。
+     *
+     * @param definition 参数定义
+     * @param command 写入命令
+     * @param actor 操作人
+     */
     private void validateParameterScope(
             ParameterDefinition definition,
             UpsertParameterCommand command,
@@ -536,7 +744,13 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         }
     }
 
-    /** @param definition 参数定义 @param rawValue 原始值 @return 规范化值 */
+    /**
+     * 按代码注册类型和边界校验并规范化参数值。
+     *
+     * @param definition 参数定义
+     * @param rawValue 原始值
+     * @return 规范化值
+     */
     private String validateAndNormalizeValue(ParameterDefinition definition, String rawValue) {
         if (rawValue == null) {
             throw new InvalidRequestException("必须提供参数值");
@@ -573,7 +787,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         }
     }
 
-    /** @param expression 可选正则 @param value 文本值 */
+    /**
+     * 按参数定义的完整正则约束校验文本值。
+     *
+     * @param expression 可选正则
+     * @param value 文本值
+     */
     private void validatePattern(String expression, String value) {
         if (expression == null) {
             return;
@@ -587,7 +806,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         }
     }
 
-    /** @param typeId 类型主键 @return 存在的字典类型 */
+    /**
+     * 读取字典类型；不存在时抛出资源不存在异常。
+     *
+     * @param typeId 类型主键
+     * @return 存在的字典类型
+     */
     private DictionaryType requireDictionaryType(long typeId) {
         if (typeId <= 0) {
             throw new InvalidRequestException("dictionaryTypeId 必须大于 0");
@@ -596,7 +820,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dictionary type was not found"));
     }
 
-    /** @param itemId 字典项主键 @return 存在的字典项 */
+    /**
+     * 读取字典项；不存在时抛出资源不存在异常。
+     *
+     * @param itemId 字典项主键
+     * @return 存在的字典项
+     */
     private DictionaryItem requireDictionaryItem(long itemId) {
         if (itemId <= 0) {
             throw new InvalidRequestException("dictionaryItemId 必须大于 0");
@@ -605,7 +834,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dictionary item was not found"));
     }
 
-    /** @param systemId 外部系统主键 @return 已存在系统 */
+    /**
+     * 读取外部系统；不存在时抛出资源不存在异常。
+     *
+     * @param systemId 外部系统主键
+     * @return 已存在系统
+     */
     private ExternalSystem requireExternalSystem(long systemId) {
         if (systemId <= 0) {
             throw new InvalidRequestException("externalSystemId 必须大于 0");
@@ -614,7 +848,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 .orElseThrow(() -> new ResourceNotFoundException("External system was not found"));
     }
 
-    /** @param endpointId 外部服务地址主键 @return 已存在服务地址 */
+    /**
+     * 读取外部系统端点；不存在时抛出资源不存在异常。
+     *
+     * @param endpointId 外部服务地址主键
+     * @return 已存在服务地址
+     */
     private ExternalEndpoint requireExternalEndpoint(long endpointId) {
         if (endpointId <= 0) {
             throw new InvalidRequestException("externalEndpointId 必须大于 0");
@@ -623,7 +862,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 .orElseThrow(() -> new ResourceNotFoundException("External endpoint was not found"));
     }
 
-    /** @param command 服务地址命令 @param actor 操作人 */
+    /**
+     * 校验端点环境、机构范围、地址、超时和启用前提。
+     *
+     * @param command 服务地址命令
+     * @param actor 操作人
+     */
     private void validateEndpointScope(ExternalEndpointCommand command, AccessActor actor) {
         if (command == null || command.environment() == null) {
             throw new InvalidRequestException("必须选择外部系统服务地址的使用环境");
@@ -636,14 +880,26 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         }
     }
 
-    /** @param endpoint 服务地址 @param actor 操作人 */
+    /**
+     * 校验当前操作人有权管理端点所属机构。
+     *
+     * @param endpoint 服务地址
+     * @param actor 操作人
+     */
     private void requireEndpointAccess(ExternalEndpoint endpoint, AccessActor actor) {
         if (endpoint.organizationCode() != null && !actor.canAccess(endpoint.organizationCode())) {
             throw new AccessDeniedException("当前账号无权访问该机构");
         }
     }
 
-    /** @param command 原命令 @param enabled 是否启用 @param version 并发版本 @return 规范化命令 */
+    /**
+     * 规范化端点地址并拒绝凭证、片段和未知查询参数。
+     *
+     * @param command 原命令
+     * @param enabled 是否启用
+     * @param version 并发版本
+     * @return 规范化命令
+     */
     private ExternalEndpointCommand normalizeEndpoint(
             ExternalEndpointCommand command,
             ExternalEndpointAuthenticationCommand authentication,
@@ -661,7 +917,74 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                 command.connectTimeoutMs(), command.readTimeoutMs(), authentication, enabled, version);
     }
 
-    /** @param actor 操作人 @param organizationId 机构主键 @param organizationCode 机构代码 @param action 动作 @param targetType 目标类型 @param targetId 目标标识 @param summary 不含敏感内容的摘要 */
+    /**
+     * 对基层HIS机构配置强制要求一个平台机构；100-008查询条件由平台机构资料自动提供。
+     *
+     * @param system 外部系统
+     * @param command 已规范化端点命令
+     */
+    private void requirePrimaryHisOrganization(ExternalSystem system, ExternalEndpointCommand command) {
+        if (!"PRIMARY_HIS".equals(system.systemCode())) {
+            return;
+        }
+        if (command.organizationId() == null) {
+            throw new InvalidRequestException("基层HIS接口必须绑定到一个平台机构");
+        }
+    }
+
+    /**
+     * 保存100-008不能确认唯一机构的结果，并让端点保持不可参与业务调用的状态。
+     *
+     * @param endpoint 当前端点
+     * @param verificationStatus 明确失败或结果未知状态
+     * @param summary 面向管理员的安全摘要
+     * @param actor 操作人
+     * @return 回读后的端点输出
+     */
+    private ExternalEndpointVO markEndpointVerificationFailure(
+            ExternalEndpoint endpoint,
+            ExternalEndpointVerificationStatus verificationStatus,
+            String summary,
+            AccessActor actor
+    ) {
+        if (mapper.markExternalEndpointVerificationFailed(endpoint.id(), verificationStatus.name(), summary,
+                requireActor(actor.loginName())) != 1) {
+            throw new ResourceConflictException("接口校验结果保存失败，请重新读取后再试");
+        }
+        ExternalEndpointVO result = toExternalEndpointVO(requireExternalEndpoint(endpoint.id()));
+        audit(actor, result.organizationId(), result.organizationCode(), "PRIMARY_HIS_ENDPOINT_VERIFICATION_"
+                        + verificationStatus.name(),
+                "EXTERNAL_ENDPOINT", String.valueOf(endpoint.id()),
+                "100-008未确认唯一来源机构，接口未启用：" + summary);
+        return result;
+    }
+
+    /**
+     * 规范化可展示给管理员的100-008失败信息。
+     *
+     * @param message HIS返回或本地配置错误
+     * @param fallback 默认提示
+     * @return 不超过500字的安全摘要
+     */
+    private String safeVerificationMessage(String message, String fallback) {
+        String value = Func.trimToNull(message);
+        if (value == null) {
+            return fallback;
+        }
+        return value.length() <= 500 ? value : value.substring(0, 500);
+    }
+
+    /**
+     * 追加不包含DDL全文和连接信息的管理审计事件。
+     *
+     * @param actor 操作人
+     * @param organizationId 机构主键
+     * @param organizationCode 机构代码
+     * @param action 动作
+     * @param targetType 目标类型
+     * @param targetId 目标标识
+     * @param summary 不含敏感内容的摘要
+     */
     private void audit(AccessActor actor, Long organizationId, String organizationCode, String action,
                        String targetType, String targetId, String summary) {
         auditService.recordSuccess(new ManagementAuditCommand(actor, null, organizationId, organizationCode,
@@ -672,8 +995,9 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     /**
      * 校验并规范化外部系统服务地址。
      *
-     * <p>县域医疗系统存在正式发布的HTTP WebService，因此允许HTTP和HTTPS。地址仍不得包含
-     * 用户信息、查询参数或片段；SOAP操作由接入程序根据已确认WSDL设置，不拼入基础地址。</p>
+     * <p>县域医疗系统存在正式发布的HTTP WebService，因此允许HTTP和HTTPS。兼容并保留用户从ASMX
+     * 帮助页复制的{@code ?op=PHIS_Interface}完整地址，确保保存后能够原样回显；其他查询参数、用户信息
+     * 和片段仍被拒绝。协议客户端仅在实际SOAP调用时移除操作页参数。</p>
      *
      * @param value 地址
      * @return 规范化HTTP或HTTPS地址
@@ -684,10 +1008,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
             URI uri = new URI(normalized);
             boolean supportedScheme = "http".equalsIgnoreCase(uri.getScheme())
                     || "https".equalsIgnoreCase(uri.getScheme());
+            boolean supportedOperationQuery = uri.getQuery() == null
+                    || "op=PHIS_Interface".equals(uri.getRawQuery());
             if (!supportedScheme || uri.getHost() == null || uri.getUserInfo() != null
-                    || uri.getQuery() != null || uri.getFragment() != null) {
+                    || !supportedOperationQuery || uri.getFragment() != null) {
                 throw new InvalidRequestException(
-                        "baseUrl 必须是 HTTP 或 HTTPS 服务地址，且不能包含账号、密码、查询参数或片段"
+                        "baseUrl 必须是 HTTP 或 HTTPS 服务地址；只兼容op=PHIS_Interface操作参数"
                 );
             }
             return uri.normalize().toASCIIString();
@@ -734,7 +1060,13 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return new ExternalEndpointAuthenticationCommand(vendorCode, username, password, authorizationCode);
     }
 
-    /** @param endpointId 服务地址主键 @param authentication 完整认证信息 @param actor 操作人 */
+    /**
+     * 加密并新增或替换端点认证信息。
+     *
+     * @param endpointId 服务地址主键
+     * @param authentication 完整认证信息
+     * @param actor 操作人
+     */
     private void saveAuthentication(
             long endpointId,
             ExternalEndpointAuthenticationCommand authentication,
@@ -755,7 +1087,14 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         }
     }
 
-    /** @param submitted 本次提交值 @param current 已保存值 @param maximumLength 最大长度 @return 规范化后的保留或新值 */
+    /**
+     * 从现有密文恢复未在更新请求中重新提交的认证字段。
+     *
+     * @param submitted 本次提交值
+     * @param current 已保存值
+     * @param maximumLength 最大长度
+     * @return 规范化后的保留或新值
+     */
     private String retained(String submitted, String current, int maximumLength) {
         if (submitted == null || submitted.isBlank()) {
             return current == null || current.isBlank() ? null : current;
@@ -767,7 +1106,13 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return normalized;
     }
 
-    /** @param value 代码 @param field 字段名 @return 规范化代码 */
+    /**
+     * 规范化稳定业务代码并拒绝空白。
+     *
+     * @param value 代码
+     * @param field 字段名
+     * @return 规范化代码
+     */
     private String normalizeCode(String value, String field) {
         String code = requireText(value, field, 64).toUpperCase(Locale.ROOT);
         if (!CODE_PATTERN.matcher(code).matches()) {
@@ -776,7 +1121,12 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return code;
     }
 
-    /** @param value 参数键 @return 规范化的小写参数键 */
+    /**
+     * 规范化代码注册的参数键。
+     *
+     * @param value 参数键
+     * @return 规范化的小写参数键
+     */
     private String normalizeParameterKey(String value) {
         String key = requireText(value, "parameterKey", 64).toLowerCase(Locale.ROOT);
         if (!PARAMETER_KEY_PATTERN.matcher(key).matches()) {
@@ -785,7 +1135,14 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return key;
     }
 
-    /** @param value 文本 @param field 字段名 @param maximumLength 最大长度 @return 裁剪值 */
+    /**
+     * 校验必填文本并返回裁剪后的值。
+     *
+     * @param value 文本
+     * @param field 字段名
+     * @param maximumLength 最大长度
+     * @return 裁剪值
+     */
     private String requireText(String value, String field, int maximumLength) {
         if (value == null || value.isBlank() || value.trim().length() > maximumLength) {
             throw new InvalidRequestException(field + " is invalid");
@@ -793,19 +1150,32 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return value.trim();
     }
 
-    /** @param actor 操作人 @return 裁剪后的操作人 */
+    /**
+     * 校验服务层收到可信且完整的操作人。
+     *
+     * @param actor 操作人
+     * @return 裁剪后的操作人
+     */
     private String requireActor(String actor) {
         return requireText(actor, "actor", 64);
     }
 
-    /** @param version SQL Server并发版本 */
+    /**
+     * 校验SQL Server行版本恰好为8字节。
+     *
+     * @param version SQL Server并发版本
+     */
     private void requireVersion(byte[] version) {
         if (version == null || version.length != Long.BYTES) {
             throw new InvalidRequestException("version 必须是 8 字节的 SQL Server 行版本号");
         }
     }
 
-    /** @param sortOrder 展示顺序 */
+    /**
+     * 校验字典项排序值在数据库约束范围内。
+     *
+     * @param sortOrder 展示顺序
+     */
     private void validateSortOrder(int sortOrder) {
         if (sortOrder < 0 || sortOrder > 999999) {
             throw new InvalidRequestException("sortOrder 超出允许范围");

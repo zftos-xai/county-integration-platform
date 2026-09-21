@@ -67,7 +67,7 @@ test('正式管理端采用参考图的宽侧栏、三层页面标题和全局�
   const layout = await readFile('web-admin/src/layout/AppLayout.vue', 'utf8')
   const styles = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8')
 
-  assert.match(layout, /active-class="prototype-route-parent" exact-active-class="router-link-active"/)
+  assert.match(layout, /active-class="prototype-route-parent"\s+exact-active-class="router-link-active"/)
   assert.match(layout, /prototype-breadcrumb[\s\S]*pageContext\.section[\s\S]*route\.meta\.title[\s\S]*<h1>\{\{ route\.meta\.title \}\}<\/h1>/)
   assert.match(layout, /prototype-main-footer/)
   assert.match(layout, /prototype-product-meta/)

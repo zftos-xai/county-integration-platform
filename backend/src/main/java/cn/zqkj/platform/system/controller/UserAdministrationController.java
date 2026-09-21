@@ -52,14 +52,29 @@ public class UserAdministrationController {
         this.service = service;
     }
 
-    /** @param principal 当前用户 @return 机构范围内用户 */
+    /**
+     * 查询当前调用方可见的平台用户列表。
+     *
+     * <p>需要 {@code identity:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param principal 当前用户
+     * @return 机构范围内用户
+     */
     @GetMapping
     @PreAuthorize("hasAuthority('identity:read')")
     public ApiResponse<List<ManagedUserVO>> findAll(@AuthenticationPrincipal PlatformUserPrincipal principal) {
         return ApiResponse.success(service.findAll(actor(principal)));
     }
 
-    /** @param userId 用户主键 @param principal 当前用户 @return 用户详情 */
+    /**
+     * 按主键读取平台用户；不存在时由调用边界按约定处理。
+     *
+     * <p>需要 {@code identity:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param userId 用户主键
+     * @param principal 当前用户
+     * @return 用户详情
+     */
     @GetMapping("/{userId}")
     @PreAuthorize("hasAuthority('identity:read')")
     public ApiResponse<ManagedUserVO> get(
@@ -69,7 +84,15 @@ public class UserAdministrationController {
         return ApiResponse.success(service.get(userId, actor(principal)));
     }
 
-    /** @param request 创建请求 @param principal 当前用户 @return 新用户 */
+    /**
+     * 创建平台用户并返回最新视图。
+     *
+     * <p>需要 {@code identity:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param request 创建请求
+     * @param principal 当前用户
+     * @return 新用户
+     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('identity:write')")
@@ -82,7 +105,16 @@ public class UserAdministrationController {
         ), actor(principal)));
     }
 
-    /** @param userId 用户主键 @param request 修改请求 @param principal 当前用户 @return 修改后用户 */
+    /**
+     * 按并发版本更新平台用户并返回最新视图。
+     *
+     * <p>需要 {@code identity:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param userId 用户主键
+     * @param request 修改请求
+     * @param principal 当前用户
+     * @return 修改后用户
+     */
     @PutMapping("/{userId}")
     @PreAuthorize("hasAuthority('identity:write')")
     public ApiResponse<ManagedUserVO> update(
@@ -95,7 +127,16 @@ public class UserAdministrationController {
         ), actor(principal)));
     }
 
-    /** @param userId 用户主键 @param request 启停请求 @param principal 当前用户 @return 修改后用户 */
+    /**
+     * 按并发版本修改平台用户的启用状态。
+     *
+     * <p>需要 {@code identity:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param userId 用户主键
+     * @param request 启停请求
+     * @param principal 当前用户
+     * @return 修改后用户
+     */
     @PatchMapping("/{userId}/enabled")
     @PreAuthorize("hasAuthority('identity:write')")
     public ApiResponse<ManagedUserVO> setEnabled(
@@ -108,7 +149,16 @@ public class UserAdministrationController {
         ));
     }
 
-    /** @param userId 用户主键 @param request 重置请求 @param principal 当前用户 @return 空成功响应 */
+    /**
+     * 重置用户密码并要求其下次登录后修改密码。
+     *
+     * <p>需要 {@code identity:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param userId 用户主键
+     * @param request 重置请求
+     * @param principal 当前用户
+     * @return 空成功响应
+     */
     @PostMapping("/{userId}/password-reset")
     @PreAuthorize("hasAuthority('identity:write')")
     public ApiResponse<Void> resetPassword(
@@ -120,7 +170,16 @@ public class UserAdministrationController {
         return ApiResponse.success(null);
     }
 
-    /** @param userId 用户主键 @param request 角色请求 @param principal 当前用户 @return 修改后用户 */
+    /**
+     * 整体替换用户角色集合。
+     *
+     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param userId 用户主键
+     * @param request 角色请求
+     * @param principal 当前用户
+     * @return 修改后用户
+     */
     @PutMapping("/{userId}/roles")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<ManagedUserVO> replaceRoles(
@@ -131,7 +190,16 @@ public class UserAdministrationController {
         return ApiResponse.success(service.replaceRoles(userId, request.roleIds(), actor(principal)));
     }
 
-    /** @param userId 用户主键 @param request 范围请求 @param principal 当前用户 @return 修改后用户 */
+    /**
+     * 整体替换用户的机构数据范围。
+     *
+     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param userId 用户主键
+     * @param request 范围请求
+     * @param principal 当前用户
+     * @return 修改后用户
+     */
     @PutMapping("/{userId}/organization-scopes")
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<ManagedUserVO> replaceOrganizationScopes(
@@ -144,12 +212,22 @@ public class UserAdministrationController {
         ));
     }
 
-    /** @param principal 当前用户 @return 应用服务操作人信息 */
+    /**
+     * 将当前登录主体转换为携带机构范围的服务层操作人。
+     *
+     * @param principal 当前用户
+     * @return 应用服务操作人信息
+     */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
 
-    /** @param value Base64版本 @return 8字节并发版本 */
+    /**
+     * 解码并校验客户端提交的SQL Server行版本。
+     *
+     * @param value Base64版本
+     * @return 8字节并发版本
+     */
     private byte[] decodeVersion(String value) {
         try {
             byte[] version = Base64.getDecoder().decode(value);

@@ -1,33 +1,132 @@
 package cn.zqkj.platform.his.service;
 
+import cn.zqkj.platform.his.domain.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.dto.MedicalDirectoryCountQuery;
+import cn.zqkj.platform.his.domain.dto.MedicalDirectoryQuery;
+import cn.zqkj.platform.his.domain.dto.OrganizationQuery;
+import cn.zqkj.platform.his.domain.model.HospitalDirectoryEntry;
+import cn.zqkj.platform.his.domain.model.MedicalDirectoryEntry;
+import cn.zqkj.platform.his.domain.model.OrganizationEntry;
 import cn.zqkj.platform.his.domain.model.PhisResponse;
+import cn.zqkj.platform.his.exception.PhisCommunicationException;
+import cn.zqkj.platform.his.exception.PhisConfigurationException;
+import cn.zqkj.platform.his.exception.PhisProtocolException;
+import cn.zqkj.platform.his.exception.PhisRequestException;
 import cn.zqkj.platform.system.domain.model.ParameterEnvironment;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import java.util.List;
 
 /**
  * 按机构配置调用基层HIS的业务入口。
+ *
+ * <p>每个方法只执行一次外部请求，不自动重试。调用前配置或参数错误、通信状态未知、
+ * 已接收响应不符合协议分别通过不同异常类型表达；HIS明确返回的业务失败保留在响应中。</p>
  */
 public interface PhisService {
 
-    /** @param organizationId 机构主键 @param environment 部署环境 @return 接口测试结果 */
-    PhisResponse testConnection(long organizationId, ParameterEnvironment environment);
-
-    /** @param organizationId 机构主键 @param environment 部署环境 @return 登录验证结果 */
-    PhisResponse login(long organizationId, ParameterEnvironment environment);
-
     /**
-     * 调用使用机构授权码的交易。
+     * 查询基层HIS中的科室、医生、病区或床位目录。
      *
      * @param organizationId 机构主键
      * @param environment 部署环境
-     * @param tradeCode 交易码
-     * @param parameters 不含可信授权码的业务参数
-     * @return HIS业务响应
+     * @param query 业务查询条件，不含授权码和交易码
+     * @return 强类型的医院综合目录响应
+     * @throws PhisConfigurationException 当前机构没有可用端点或认证配置时抛出
+     * @throws PhisRequestException 查询条件不符合发送要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
      */
-    PhisResponse invokeAuthorized(
+    PhisResponse<List<HospitalDirectoryEntry>> queryHospitalDirectory(
             long organizationId,
             ParameterEnvironment environment,
-            String tradeCode,
-            ObjectNode parameters
+            HospitalDirectoryQuery query
+    );
+
+    /**
+     * 分页查询指定约定时间范围的中药、西药、诊疗或耗材目录。
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 部署环境
+     * @param query 强类型分页查询条件
+     * @return 强类型目录响应
+     * @throws PhisConfigurationException 当前机构没有可用端点或认证配置时抛出
+     * @throws PhisRequestException 查询范围或分页条件不符合发送要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<List<MedicalDirectoryEntry>> queryMedicalDirectory(
+            long organizationId, ParameterEnvironment environment, MedicalDirectoryQuery query);
+
+    /**
+     * 查询与100-004分页完全相同范围的来源声明行数。
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 部署环境
+     * @param query 强类型数量查询条件
+     * @return 来源声明行数
+     * @throws PhisConfigurationException 当前机构没有可用端点或认证配置时抛出
+     * @throws PhisRequestException 查询范围不符合发送要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<Long> countMedicalDirectory(
+            long organizationId, ParameterEnvironment environment, MedicalDirectoryCountQuery query);
+
+    /**
+     * 使用已保存但尚未启用的机构配置验证100-003医院综合目录查询能力。
+     *
+     * <p>该调用只用于接口配置校验，不写入目录数据，也不能替代正式同步。</p>
+     *
+     * @param organizationId 机构主键
+     * @param environment 部署环境
+     * @param query 最小能力验证查询条件
+     * @return HIS对100-003的明确业务响应
+     * @throws PhisConfigurationException 当前机构没有已保存的待校验端点或认证配置时抛出
+     * @throws PhisRequestException 查询条件不符合发送要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<List<HospitalDirectoryEntry>> verifyHospitalDirectoryCapability(
+            long organizationId,
+            ParameterEnvironment environment,
+            HospitalDirectoryQuery query
+    );
+
+    /**
+     * 查询基层HIS来源医疗机构，供100-008机构映射核查使用。
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 部署环境
+     * @param query 医院名称查询条件
+     * @return 强类型来源机构响应
+     * @throws PhisConfigurationException 当前机构没有可用端点或认证配置时抛出
+     * @throws PhisRequestException 查询条件不符合发送要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<List<OrganizationEntry>> queryOrganizations(
+            long organizationId,
+            ParameterEnvironment environment,
+            OrganizationQuery query
+    );
+
+    /**
+     * 使用已保存但尚未启用的机构配置执行100-008自动校验。
+     *
+     * <p>该调用只能用于确认来源机构，不能替代后续业务同步的可用端点解析。</p>
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 部署环境
+     * @param query 医院名称查询条件
+     * @return 强类型来源机构响应
+     * @throws PhisConfigurationException 当前机构没有已保存的待校验端点或认证配置时抛出
+     * @throws PhisRequestException 查询条件不符合发送要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<List<OrganizationEntry>> verifyOrganizationConfiguration(
+            long organizationId,
+            ParameterEnvironment environment,
+            OrganizationQuery query
     );
 }

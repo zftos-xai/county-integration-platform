@@ -32,7 +32,7 @@ public class IdentityServiceImpl implements IdentityService {
 
     private static final String BOOTSTRAP_ACTOR = "platform-bootstrap";
     private static final int MINIMUM_BOOTSTRAP_SECRET_LENGTH = 32;
-    private static final int MINIMUM_PASSWORD_LENGTH = 12;
+    private static final int MINIMUM_PASSWORD_LENGTH = 9;
     private static final int MAXIMUM_PASSWORD_LENGTH = 128;
     private static final Pattern LOGIN_PATTERN = Pattern.compile("[A-Za-z0-9._-]{3,64}");
     private static final Map<String, String> INITIAL_PERMISSIONS = initialPermissions();
@@ -117,7 +117,7 @@ public class IdentityServiceImpl implements IdentityService {
                 normalized.loginName(),
                 organization.id(),
                 organization.organizationCode(),
-                true
+                false
         );
     }
 
@@ -246,6 +246,8 @@ public class IdentityServiceImpl implements IdentityService {
         permissions.put("configuration:read", "查询平台配置");
         permissions.put("configuration:write", "维护平台配置");
         permissions.put("audit:read", "查询管理审计");
+        permissions.put("master-data:read", "查询基础数据");
+        permissions.put("master-data:sync", "发起基础数据同步");
         return Map.copyOf(permissions);
     }
 }

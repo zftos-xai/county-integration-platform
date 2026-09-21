@@ -1,0 +1,81 @@
+{
+  "schema": "vista-web-report-1.0",
+  "task_id": "vista-20260919-master-data",
+  "contract_sha256": "10fe8d8b8fd4f05eb8d79f32b9b1fa574f68debd6db61f26017df63ec7706fb9",
+  "started_at": "2026-09-19T15:17:26Z",
+  "finished_at": "2026-09-19T15:37:10Z",
+  "actual_environments": [
+    {"id": "browser-main", "result": "Chrome真实会话完成DOM、路由和只读数据核对；截图接口超时，未作为视觉证据。"},
+    {"id": "browser-compact", "result": "隔离浏览器完成1280x720批次页、详情页和对话框检查。独立HIS机构校验页面已撤销，不再纳入验收对象。"}
+  ],
+  "area_inventory": {
+    "methods": ["dom-structure", "full-scroll", "conditional-surfaces", "fixed-and-overlay"],
+    "complete": true,
+    "scroll_root": ".prototype-main / .prototype-content",
+    "notes": "盘点侧栏、标题、列表、分页、同步弹层、批次详情、暂存表、校验问题和全局页脚；未触发任何业务写操作。独立HIS机构校验页面的历史结论已废止。"
+  },
+  "area_checks": [
+    {"area_id": "content-root", "environment": "browser-main", "status": "passed", "observation": "侧栏、三层标题和全局内容区无重叠。", "evidence": ["cua-chrome-dom"]},
+    {"area_id": "primary-content", "environment": "browser-main", "status": "passed", "observation": "批次筛选、四列表格和分页层级清楚。", "evidence": ["cua-chrome-dom"]},
+    {"area_id": "batch-start-dialog", "environment": "browser-main", "status": "passed", "observation": "同步弹层字段和底部操作完整，未提交。", "evidence": ["cua-iab-visual"]},
+    {"area_id": "batch-detail", "environment": "browser-main", "status": "passed", "observation": "来源、数量、状态和发布边界分区清楚。", "evidence": ["cua-iab-visual"]},
+    {"area_id": "stage-table", "environment": "browser-main", "status": "passed", "observation": "暂存数据列固定布局并对长文本省略。", "evidence": ["source-trace-master-data-detail"]},
+    {"area_id": "blocking-issues", "environment": "browser-main", "status": "passed", "observation": "只显示系统校验问题，不提供人工确认通过。", "evidence": ["source-trace-master-data-detail"]},
+    {"area_id": "surface-end", "environment": "browser-main", "status": "passed", "observation": "分页、历史记录折叠项和全局页脚可达。", "evidence": ["cua-iab-visual"]},
+    {"area_id": "content-root", "environment": "browser-compact", "status": "passed", "observation": "紧凑桌面宽度下侧栏和内容区无覆盖。", "evidence": ["cua-iab-visual"]},
+    {"area_id": "primary-content", "environment": "browser-compact", "status": "passed", "observation": "筛选区和操作列不再互相挤压。", "evidence": ["cua-iab-visual"]},
+    {"area_id": "batch-start-dialog", "environment": "browser-compact", "status": "passed", "observation": "弹层高度和底部操作可达。", "evidence": ["cua-iab-visual"]},
+    {"area_id": "batch-detail", "environment": "browser-compact", "status": "passed", "observation": "详情内容无页面级横向溢出。", "evidence": ["cua-iab-visual"]},
+    {"area_id": "stage-table", "environment": "browser-compact", "status": "passed", "observation": "表格滚动限制在容器内。", "evidence": ["source-trace-master-data-detail"]},
+    {"area_id": "blocking-issues", "environment": "browser-compact", "status": "passed", "observation": "问题空态与阻断说明可读。", "evidence": ["source-trace-master-data-detail"]},
+    {"area_id": "surface-end", "environment": "browser-compact", "status": "passed", "observation": "历史记录和页脚均可访问。", "evidence": ["cua-iab-tab-17-final"]}
+  ],
+  "requirement_results": [
+    {"id": "component-consumption", "status": "passed", "observation": "按钮改用现有prototype-button和work-quiet-button体系，未出现浏览器默认控件。", "evidence": ["cua-iab-visual", "npm-verify-frontend"]},
+    {"id": "theme", "status": "passed", "observation": "颜色、边框、禁用态和成功/阻断语义与管理端一致。", "evidence": ["cua-iab-tab-17-final"]},
+    {"id": "layout", "status": "partial", "observation": "批次工具栏已复验；独立HIS机构校验页面因业务模型错误已移除，本次不再将其视觉结果视为正式页面验收。", "evidence": ["cua-iab-visual"]},
+    {"id": "iconography", "status": "passed", "observation": "使用Lucide图标；图标按钮均具有文本或可访问名称。", "evidence": ["source-trace-ui"]},
+    {"id": "content", "status": "partial", "observation": "独立HIS机构校验入口已撤除；现有批次页面仍带有旧发布语义，须在新模型实施时一并替换。", "evidence": ["docs/plans/基础数据业务详细计划.md"]},
+    {"id": "page-end", "status": "passed", "observation": "列表分页、详情末端和全局页脚未被覆盖。", "evidence": ["cua-iab-visual"]},
+    {"id": "business-validity", "status": "partial", "observation": "已确认机构校验应并入外部系统配置、同步应自动更新或保留旧版本；现有批次实现仍待按新模型重构，不能判定通过。", "evidence": ["docs/plans/基础数据业务详细计划.md"]},
+    {"id": "api-data-integrity", "status": "partial", "observation": "旧页面曾读取正式API，但其映射业务模型已撤销；新模型尚未完成真实API闭环，不再以历史读取结果作为完成证据。", "evidence": ["docs/plans/基础数据业务详细计划.md"]}
+  ],
+  "defects": [
+    {"id": "D-001", "severity": "high", "status": "open", "title": "批次发布被错误设计为人工复核流程", "resolution": "旧实现仍需替换为系统自动更新或失败保留上一版本；不再以局部移除人工结论作为修复结论。"},
+    {"id": "D-002", "severity": "medium", "status": "fixed", "title": "未定义按钮类导致浏览器默认控件", "resolution": "统一使用项目标准按钮类并完成视觉复验。"},
+    {"id": "D-003", "severity": "high", "status": "fixed", "title": "机构映射页面卡片套娃且业务依赖人工挑选候选", "resolution": "撤销整个独立页面、菜单及专用前端接口。机构归属由外部系统中的机构级 HIS 配置确定，100-008仅自动保存HIS来源机构编码。"},
+    {"id": "D-004", "severity": "high", "status": "open", "title": "后端把 HIS 来源机构编码错误地要求等同于平台机构编码", "resolution": "新模型中应由机构配置自动保存100-008返回编码，不假定两个编码相等；旧映射服务待移除。"},
+    {"id": "D-005", "severity": "medium", "status": "fixed", "title": "格式化后菜单和页面测试依赖单行源码", "resolution": "校验器和测试改为容忍正常换行的结构匹配。"},
+    {"id": "D-006", "severity": "blocker", "status": "open", "title": "把配置校验误建成独立基础数据业务", "resolution": "业务模型已重定义，但外部系统配置、同步服务和批次页面尚待按新模型重构；在此之前不得宣布修复完成。"}
+  ],
+  "attempts": [
+    {"id": "A-001", "action": "VISTA区域盘点和首轮浏览器验收", "result": "发现人工复核、默认按钮、布局拥挤和机构映射套娃。"},
+    {"id": "A-002", "action": "按缺陷即验即改并运行前端全量校验", "result": "类型检查、构建、菜单检查和118项前端测试通过。"},
+    {"id": "A-003", "action": "编译后端同编码约束", "result": "backend Maven compile通过。"},
+    {"id": "A-004", "action": "复核独立HIS机构校验页面的业务必要性", "result": "判定该页面不应存在；历史视觉复验结论废止，旧地址改为跳转外部系统。"}
+  ],
+  "evidence_index": [
+    {"id": "cua-iab-visual", "type": "screenshot-and-ax", "location": "Codex IAB local UI read-only acceptance session"},
+    {"id": "cua-chrome-dom", "type": "dom", "location": "Chrome user session local UI read-only inspection"},
+    {"id": "source-trace-ui", "type": "source-trace", "location": "web-admin/src/views/master-data and web-admin/src/layout/AppLayout.vue"},
+    {"id": "source-trace-api", "type": "source-trace", "location": "web-admin/src/api/master-data"},
+    {"id": "source-trace-backend", "type": "source-trace", "location": "backend/src/main/java/cn/zqkj/platform/masterdata/service/impl/OrganizationMappingServiceImpl.java"},
+    {"id": "source-trace-master-data-detail", "type": "source-trace", "location": "web-admin/src/views/master-data/batch/MasterDataBatchDetailView.vue"},
+    {"id": "npm-verify-frontend", "type": "engineering", "location": "npm run verify:frontend"}
+  ],
+  "scope_result": "partial",
+  "layer_results": {
+    "implementation": "partial",
+    "engineering": "passed",
+    "local_ui": "partial",
+    "business_flow": "partial",
+    "physical_device_certification": "not-applicable",
+    "release": "not-run"
+  },
+  "uncovered": [
+    "按合同禁止执行重新校验、发布和重新同步，因此未产生新的写入回读证据。",
+    "基础数据业务模型已推翻并进入重构；不得把本报告中的旧批次页面验收视为业务验收。",
+    "未验证物理设备、生产环境和发布批准。"
+  ],
+  "summary": "此前独立HIS机构校验页面的验收结论已撤回：该页面本不应存在。基础数据必须按机构配置自动校验、医院综合目录自动同步、自动更新或保留旧版本的模型重构后，重新开展页面和业务验收。"
+}

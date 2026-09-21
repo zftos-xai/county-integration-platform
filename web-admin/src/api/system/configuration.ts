@@ -2,7 +2,9 @@ import { apiRequest } from '@/utils/request'
 import { isRecord } from '@/utils/validation'
 import {
   configurationWriteRequest, dictionaryItemPath, dictionaryItemsPath, dictionaryTypePath,
-  externalEndpointPath, externalEndpointsPath, externalSystemPath, parameterValuePath,
+  externalEndpointAuthenticationPath, externalEndpointPath, externalEndpointVerificationPath,
+  externalEndpointsPath, externalSystemPath,
+  parameterValuePath,
 } from './configurationApiPaths'
 
 /** 平台参数支持的值类型。 */
@@ -109,19 +111,26 @@ export type ExternalEndpoint = {
   createdAt: string
   updatedAt: string
   version: string
+  sourceOrganizationId: string | null
+  sourceOrganizationName: string | null
+  verificationStatus: 'NOT_VERIFIED' | 'VERIFIED' | 'FAILED' | 'RESULT_UNKNOWN'
+  verifiedAt: string | null
+  verificationFailureSummary: string | null
 }
 
 /** 创建外部系统的请求。 */
 export type CreateExternalSystemInput = Pick<ExternalSystem, 'systemCode' | 'systemName' | 'description'>
 /** 更新外部系统的请求。 */
 export type UpdateExternalSystemInput = Pick<ExternalSystem, 'systemName' | 'description' | 'enabled' | 'version'>
-/** 管理端只写的机构HIS接口认证信息；查询接口不会回显字段值。 */
+/** 管理端写入的机构HIS接口认证信息。 */
 export type ExternalEndpointAuthenticationInput = {
   vendorCode: string
   username: string
   password: string
   authorizationCode: string
 }
+/** 仅在管理员主动查看时返回的机构HIS接入信息。 */
+export type ExternalEndpointAuthentication = ExternalEndpointAuthenticationInput
 /** 创建机构服务地址的请求。 */
 export type CreateExternalEndpointInput = Pick<ExternalEndpoint, 'environment' | 'organizationId' | 'baseUrl' | 'connectTimeoutMs' | 'readTimeoutMs' | 'enabled'> & {
   authentication: ExternalEndpointAuthenticationInput
@@ -194,6 +203,16 @@ export function isExternalEndpoint(value: unknown): value is ExternalEndpoint {
     && Number.isInteger(value.readTimeoutMs) && typeof value.credentialConfigured === 'boolean'
     && typeof value.enabled === 'boolean' && typeof value.createdAt === 'string'
     && typeof value.updatedAt === 'string' && typeof value.version === 'string'
+    && isNullableString(value.sourceOrganizationId)
+    && isNullableString(value.sourceOrganizationName) && ['NOT_VERIFIED', 'VERIFIED', 'FAILED', 'RESULT_UNKNOWN'].includes(value.verificationStatus as string)
+    && isNullableString(value.verifiedAt) && isNullableString(value.verificationFailureSummary)
+}
+
+/** 校验按需查看接口返回的机构HIS接入信息。 */
+export function isExternalEndpointAuthentication(value: unknown): value is ExternalEndpointAuthentication {
+  if (!isRecord(value)) return false
+  return typeof value.vendorCode === 'string' && typeof value.username === 'string'
+    && typeof value.password === 'string' && typeof value.authorizationCode === 'string'
 }
 
 const isParameterDefinitionList = (value: unknown): value is ParameterDefinition[] => Array.isArray(value) && value.every(isParameterDefinition)
@@ -283,6 +302,15 @@ export function listExternalEndpoints(systemId: number, signal?: AbortSignal) {
   return apiRequest<ExternalEndpoint[]>(externalEndpointsPath(systemId), { signal }, isExternalEndpointList)
 }
 
+/** 按需读取一个机构已保存的HIS接入信息；调用结果不得写入本地存储。 */
+export function getExternalEndpointAuthentication(endpointId: number, signal?: AbortSignal) {
+  return apiRequest<ExternalEndpointAuthentication>(
+    externalEndpointAuthenticationPath(endpointId),
+    { signal, cache: 'no-store' },
+    isExternalEndpointAuthentication,
+  )
+}
+
 /** 新增一个默认停用的机构服务地址。 */
 export function createExternalEndpoint(systemId: number, input: CreateExternalEndpointInput) {
   return apiRequest<ExternalEndpoint>(
@@ -294,5 +322,12 @@ export function createExternalEndpoint(systemId: number, input: CreateExternalEn
 export function updateExternalEndpoint(id: number, input: UpdateExternalEndpointInput) {
   return apiRequest<ExternalEndpoint>(
     externalEndpointPath(id), configurationWriteRequest('PUT', input), isExternalEndpoint,
+  )
+}
+
+/** 调用100-008确认当前保存的基层HIS配置，并写回唯一的来源机构。 */
+export function verifyExternalEndpoint(id: number) {
+  return apiRequest<ExternalEndpoint>(
+    externalEndpointVerificationPath(id), configurationWriteRequest('POST', {}), isExternalEndpoint,
   )
 }

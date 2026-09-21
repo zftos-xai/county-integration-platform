@@ -79,12 +79,23 @@ class OrganizationAdministrationServiceTest {
                 () -> service.setEnabled(10L, false, new byte[Long.BYTES], actor()));
     }
 
-    /** @return 固定操作人 */
+    /**
+     * 创建具有测试机构范围的服务层操作人。
+     *
+     * @return 固定操作人
+     */
     private AccessActor actor() {
         return new AccessActor(1L, "admin", Set.of("ORG001"));
     }
 
-    /** @param id 主键 @param code 编码 @param parentId 父机构 @return 机构记录 */
+    /**
+     * 创建机构测试快照。
+     *
+     * @param id 主键
+     * @param code 编码
+     * @param parentId 父机构
+     * @return 机构记录
+     */
     private OrganizationVO organization(long id, String code, Long parentId) {
         return new OrganizationVO(
                 id, code, "Organization", "HOSPITAL", parentId, true,

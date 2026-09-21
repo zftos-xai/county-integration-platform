@@ -43,7 +43,7 @@ export function validateUserForm(form: UserForm, creating: boolean): string | nu
 
 /** 校验临时密码长度及不得包含登录名的项目规则。 */
 export function validateTemporaryPassword(password: string, loginName: string): string | null {
-  if (password.length < 12 || password.length > 128) return '临时密码长度需为 12—128 个字符'
+  if (password.length < 9 || password.length > 128) return '临时密码长度需为 9—128 个字符'
   if (loginName && password.toLowerCase().includes(loginName.toLowerCase())) return '临时密码不能包含登录名'
   return null
 }

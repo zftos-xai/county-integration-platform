@@ -13,10 +13,21 @@ import java.util.Set;
 @Mapper
 public interface ManagementAuditMapper {
 
-    /** @param command 事件命令 @return 新事件主键 */
+    /**
+     * 追加一条不可修改的管理审计事件并返回主键。
+     *
+     * @param command 事件命令
+     * @return 新事件主键
+     */
     long insert(ManagementAuditCommand command);
 
-    /** @param organizationCodes 可访问机构代码 @param query 查询条件 @return 时间倒序事件 */
+    /**
+     * 查询当前操作人机构范围内可见的管理审计事件。
+     *
+     * @param organizationCodes 可访问机构代码
+     * @param query 查询条件
+     * @return 时间倒序事件
+     */
     List<ManagementAuditEvent> findVisible(@Param("organizationCodes") Set<String> organizationCodes,
                                            @Param("query") ManagementAuditQuery query);
 }

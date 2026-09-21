@@ -75,7 +75,30 @@ class ConfigurationSecurityWebTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** @param permission 可选功能权限 @return 测试用户 */
+    /**
+     * 验证接入信息回显要求配置写权限，普通配置读取权限不能查看明文。
+     *
+     * @throws Exception MockMvc调用失败时抛出
+     */
+    @Test
+    void protectsExternalEndpointAuthenticationWithWritePermission() throws Exception {
+        PlatformUserPrincipal reader = principal("configuration:read");
+        prepareActiveAccount("configuration:read");
+        mockMvc.perform(get("/api/v1/configuration/external-endpoints/9/authentication").with(user(reader)))
+                .andExpect(status().isForbidden());
+
+        PlatformUserPrincipal writer = principal("configuration:write");
+        prepareActiveAccount("configuration:write");
+        mockMvc.perform(get("/api/v1/configuration/external-endpoints/9/authentication").with(user(writer)))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * 创建具有指定功能权限的测试登录主体。
+     *
+     * @param permission 可选功能权限
+     * @return 测试用户
+     */
     private PlatformUserPrincipal principal(String permission) {
         List<SimpleGrantedAuthority> authorities = permission == null
                 ? List.of(new SimpleGrantedAuthority("ORG:ORG001"))
@@ -88,7 +111,11 @@ class ConfigurationSecurityWebTest {
         );
     }
 
-    /** @param permission 可选数据库当前功能权限 */
+    /**
+     * 准备处于启用状态的测试账号。
+     *
+     * @param permission 可选数据库当前功能权限
+     */
     private void prepareActiveAccount(String permission) {
         when(identityMapper.findById(1L)).thenReturn(
                 new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false)

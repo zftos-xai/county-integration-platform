@@ -31,11 +31,14 @@ import cn.zqkj.platform.system.domain.vo.DictionaryTypeVO;
 import cn.zqkj.platform.system.domain.vo.ParameterDefinitionVO;
 import cn.zqkj.platform.system.domain.vo.ParameterValueVO;
 import cn.zqkj.platform.system.domain.vo.ExternalEndpointVO;
+import cn.zqkj.platform.system.domain.vo.ExternalEndpointAuthenticationVO;
 import cn.zqkj.platform.system.domain.vo.ExternalSystemVO;
 import cn.zqkj.platform.system.service.ConfigurationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -64,19 +67,36 @@ public class ConfigurationController {
 
     private final ConfigurationService service;
 
-    /** @param service 平台配置服务 */
+    /**
+     * 创建平台参数、字典和外部系统配置控制器。
+     *
+     * @param service 平台配置服务
+     */
     public ConfigurationController(ConfigurationService service) {
         this.service = service;
     }
 
-    /** @return 代码注册参数元数据 */
+    /**
+     * 查询由后端代码注册的参数定义和校验边界。
+     *
+     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @return 代码注册参数元数据
+     */
     @GetMapping("/parameter-definitions")
     @PreAuthorize("hasAuthority('configuration:read')")
     public ApiResponse<List<ParameterDefinitionVO>> parameterDefinitions() {
         return ApiResponse.success(service.findParameterDefinitions());
     }
 
-    /** @param principal 当前用户 @return 当前机构范围内及全局参数值 */
+    /**
+     * 查询当前操作人可见的平台参数值。
+     *
+     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param principal 当前用户
+     * @return 当前机构范围内及全局参数值
+     */
     @GetMapping("/parameters")
     @PreAuthorize("hasAuthority('configuration:read')")
     public ApiResponse<List<ParameterValueVO>> parameters(
@@ -85,7 +105,16 @@ public class ConfigurationController {
         return ApiResponse.success(service.findParameterValues(actor(principal)));
     }
 
-    /** @param key 注册参数键 @param request 写入请求 @param principal 当前用户 @return 写入后的安全值 */
+    /**
+     * 按参数键和适用范围新增或更新参数值。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param key 注册参数键
+     * @param request 写入请求
+     * @param principal 当前用户
+     * @return 写入后的安全值
+     */
     @PutMapping("/parameters/{key}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<ParameterValueVO> upsertParameter(
@@ -109,7 +138,16 @@ public class ConfigurationController {
         ));
     }
 
-    /** @param key 注册参数键 @param request 删除请求 @param principal 当前用户 @return 空成功响应 */
+    /**
+     * 按适用范围和并发版本删除参数值。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param key 注册参数键
+     * @param request 删除请求
+     * @param principal 当前用户
+     * @return 空成功响应
+     */
     @DeleteMapping("/parameters/{key}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<Void> deleteParameter(
@@ -128,14 +166,28 @@ public class ConfigurationController {
         return ApiResponse.success(null);
     }
 
-    /** @return 全部平台系统字典类型 */
+    /**
+     * 查询系统字典类型。
+     *
+     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @return 全部平台系统字典类型
+     */
     @GetMapping("/dictionaries")
     @PreAuthorize("hasAuthority('configuration:read')")
     public ApiResponse<List<DictionaryTypeVO>> dictionaries() {
         return ApiResponse.success(service.findDictionaryTypes());
     }
 
-    /** @param request 创建请求 @param principal 当前用户 @return 新字典类型 */
+    /**
+     * 创建系统字典类型。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param request 创建请求
+     * @param principal 当前用户
+     * @return 新字典类型
+     */
     @PostMapping("/dictionaries")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
@@ -149,7 +201,16 @@ public class ConfigurationController {
         ));
     }
 
-    /** @param typeId 类型主键 @param request 修改请求 @param principal 当前用户 @return 修改后类型 */
+    /**
+     * 使用行版本更新系统字典类型。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param typeId 类型主键
+     * @param request 修改请求
+     * @param principal 当前用户
+     * @return 修改后类型
+     */
     @PutMapping("/dictionaries/{typeId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<DictionaryTypeVO> updateDictionaryType(
@@ -166,7 +227,16 @@ public class ConfigurationController {
         ));
     }
 
-    /** @param typeId 类型主键 @param request 删除请求 @param principal 当前用户 @return 空成功响应 */
+    /**
+     * 删除未包含字典项的系统字典类型。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param typeId 类型主键
+     * @param request 删除请求
+     * @param principal 当前用户
+     * @return 空成功响应
+     */
     @DeleteMapping("/dictionaries/{typeId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<Void> deleteDictionaryType(
@@ -178,7 +248,15 @@ public class ConfigurationController {
         return ApiResponse.success(null);
     }
 
-    /** @param typeId 类型主键 @param includeDisabled 是否包含停用项 @return 字典项 */
+    /**
+     * 查询指定字典类型下的字典项。
+     *
+     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param typeId 类型主键
+     * @param includeDisabled 是否包含停用项
+     * @return 字典项
+     */
     @GetMapping("/dictionaries/{typeId}/items")
     @PreAuthorize("hasAuthority('configuration:read')")
     public ApiResponse<List<DictionaryItemVO>> dictionaryItems(
@@ -188,7 +266,16 @@ public class ConfigurationController {
         return ApiResponse.success(service.findDictionaryItems(typeId, includeDisabled));
     }
 
-    /** @param typeId 类型主键 @param request 创建请求 @param principal 当前用户 @return 新字典项 */
+    /**
+     * 在指定字典类型下创建字典项。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param typeId 类型主键
+     * @param request 创建请求
+     * @param principal 当前用户
+     * @return 新字典项
+     */
     @PostMapping("/dictionaries/{typeId}/items")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
@@ -204,7 +291,16 @@ public class ConfigurationController {
         ));
     }
 
-    /** @param itemId 字典项主键 @param request 修改请求 @param principal 当前用户 @return 修改后字典项 */
+    /**
+     * 使用行版本更新系统字典项。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param itemId 字典项主键
+     * @param request 修改请求
+     * @param principal 当前用户
+     * @return 修改后字典项
+     */
     @PutMapping("/dictionary-items/{itemId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<DictionaryItemVO> updateDictionaryItem(
@@ -221,7 +317,16 @@ public class ConfigurationController {
         ));
     }
 
-    /** @param itemId 字典项主键 @param request 删除请求 @param principal 当前用户 @return 空成功响应 */
+    /**
+     * 删除未被业务外键引用的系统字典项。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param itemId 字典项主键
+     * @param request 删除请求
+     * @param principal 当前用户
+     * @return 空成功响应
+     */
     @DeleteMapping("/dictionary-items/{itemId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<Void> deleteDictionaryItem(
@@ -233,14 +338,28 @@ public class ConfigurationController {
         return ApiResponse.success(null);
     }
 
-    /** @return 已确认外部系统 */
+    /**
+     * 查询已登记的外部系统。
+     *
+     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @return 已确认外部系统
+     */
     @GetMapping("/external-systems")
     @PreAuthorize("hasAuthority('configuration:read')")
     public ApiResponse<List<ExternalSystemVO>> externalSystems() {
         return ApiResponse.success(service.findExternalSystems());
     }
 
-    /** @param request 创建请求 @param principal 当前用户 @return 新外部系统 */
+    /**
+     * 创建外部系统登记信息。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param request 创建请求
+     * @param principal 当前用户
+     * @return 新外部系统
+     */
     @PostMapping("/external-systems")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
@@ -253,7 +372,16 @@ public class ConfigurationController {
         ), actor(principal)));
     }
 
-    /** @param systemId 系统主键 @param request 修改请求 @param principal 当前用户 @return 修改后系统 */
+    /**
+     * 使用行版本更新外部系统登记信息。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param systemId 系统主键
+     * @param request 修改请求
+     * @param principal 当前用户
+     * @return 修改后系统
+     */
     @PutMapping("/external-systems/{systemId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<ExternalSystemVO> updateExternalSystem(
@@ -266,7 +394,15 @@ public class ConfigurationController {
         ), actor(principal)));
     }
 
-    /** @param systemId 系统主键 @param principal 当前用户 @return 授权范围内服务地址 */
+    /**
+     * 查询指定外部系统的服务端点。
+     *
+     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param systemId 系统主键
+     * @param principal 当前用户
+     * @return 授权范围内服务地址
+     */
     @GetMapping("/external-systems/{systemId}/endpoints")
     @PreAuthorize("hasAuthority('configuration:read')")
     public ApiResponse<List<ExternalEndpointVO>> externalEndpoints(
@@ -276,7 +412,36 @@ public class ConfigurationController {
         return ApiResponse.success(service.findExternalEndpoints(systemId, actor(principal)));
     }
 
-    /** @param systemId 系统主键 @param request 创建请求 @param principal 当前用户 @return 新服务地址 */
+    /**
+     * 读取指定端点的认证配置状态，不返回任何明文凭证。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param endpointId 服务地址主键
+     * @param principal 当前用户
+     * @return 禁止缓存的机构HIS接入信息
+     */
+    @GetMapping("/external-endpoints/{endpointId}/authentication")
+    @PreAuthorize("hasAuthority('configuration:write')")
+    public ResponseEntity<ApiResponse<ExternalEndpointAuthenticationVO>> externalEndpointAuthentication(
+            @PathVariable @Positive long endpointId,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(ApiResponse.success(service.findExternalEndpointAuthentication(endpointId, actor(principal))));
+    }
+
+    /**
+     * 创建尚未投入业务运行的外部系统端点。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param systemId 系统主键
+     * @param request 创建请求
+     * @param principal 当前用户
+     * @return 新服务地址
+     */
     @PostMapping("/external-systems/{systemId}/endpoints")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
@@ -292,7 +457,16 @@ public class ConfigurationController {
         ), actor(principal)));
     }
 
-    /** @param endpointId 服务地址主键 @param request 修改请求 @param principal 当前用户 @return 修改后服务地址 */
+    /**
+     * 使用行版本更新端点并使旧验证结果失效。
+     *
+     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     *
+     * @param endpointId 服务地址主键
+     * @param request 修改请求
+     * @param principal 当前用户
+     * @return 修改后服务地址
+     */
     @PutMapping("/external-endpoints/{endpointId}")
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<ExternalEndpointVO> updateExternalEndpoint(
@@ -307,7 +481,28 @@ public class ConfigurationController {
         ), actor(principal)));
     }
 
-    /** @param request 可选认证请求 @return 服务层认证命令；未提交时为空 */
+    /**
+     * 以100-008确认当前保存的基层HIS配置只对应一个来源机构。
+     *
+     * @param endpointId 服务地址主键
+     * @param principal 当前用户
+     * @return 已写回自动校验结果的接口配置
+     */
+    @PostMapping("/external-endpoints/{endpointId}/verify")
+    @PreAuthorize("hasAuthority('configuration:write')")
+    public ApiResponse<ExternalEndpointVO> verifyExternalEndpoint(
+            @PathVariable @Positive long endpointId,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        return ApiResponse.success(service.verifyExternalEndpoint(endpointId, actor(principal)));
+    }
+
+    /**
+     * 将API认证输入转换为服务层认证命令。
+     *
+     * @param request 可选认证请求
+     * @return 服务层认证命令；未提交时为空
+     */
     private ExternalEndpointAuthenticationCommand authentication(ExternalEndpointAuthenticationRequest request) {
         if (request == null) {
             return null;
@@ -317,12 +512,22 @@ public class ConfigurationController {
         );
     }
 
-    /** @param principal 当前用户 @return 服务端可信操作人信息 */
+    /**
+     * 将当前登录主体转换为携带机构范围的服务层操作人。
+     *
+     * @param principal 当前用户
+     * @return 服务端可信操作人信息
+     */
     private AccessActor actor(PlatformUserPrincipal principal) {
         return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
     }
 
-    /** @param value 环境文本 @return 环境枚举 */
+    /**
+     * 解析并校验外部端点运行环境代码。
+     *
+     * @param value 环境文本
+     * @return 环境枚举
+     */
     private ParameterEnvironment parseEnvironment(String value) {
         try {
             return ParameterEnvironment.valueOf(value.trim().toUpperCase(Locale.ROOT));
@@ -331,12 +536,22 @@ public class ConfigurationController {
         }
     }
 
-    /** @param value 可选Base64版本 @return 解码值或空 */
+    /**
+     * 解码可选的SQL Server行版本；未提供时返回空值。
+     *
+     * @param value 可选Base64版本
+     * @return 解码值或空
+     */
     private byte[] decodeOptionalVersion(String value) {
         return value == null || value.isBlank() ? null : decodeVersion(value);
     }
 
-    /** @param value Base64版本 @return 8字节SQL Server并发版本 */
+    /**
+     * 解码并校验客户端提交的SQL Server行版本。
+     *
+     * @param value Base64版本
+     * @return 8字节SQL Server并发版本
+     */
     private byte[] decodeVersion(String value) {
         try {
             byte[] version = Base64.getDecoder().decode(value);

@@ -4,6 +4,8 @@ import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.system.domain.model.ExternalEndpoint;
 import cn.zqkj.platform.system.domain.model.ExternalEndpointAuthentication;
 import cn.zqkj.platform.system.domain.model.ExternalEndpointCredential;
+import cn.zqkj.platform.system.domain.model.ExternalEndpointRuntimeConfiguration;
+import cn.zqkj.platform.system.domain.model.ExternalEndpointScope;
 import cn.zqkj.platform.system.domain.model.ParameterEnvironment;
 import cn.zqkj.platform.system.mapper.ConfigurationMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -78,7 +81,51 @@ class ExternalEndpointResolutionServiceImplTest {
         assertFalse(exception.getMessage().contains(sensitiveValue));
     }
 
-    /** @param reference 认证信息引用 @return 测试接口配置 */
+    /** 验证运行配置和认证对象的字符串表示不会泄露地址、账号、密码或授权码。 */
+    @Test
+    void redactsRuntimeConfigurationStringRepresentations() {
+        ExternalEndpointAuthentication authentication = new ExternalEndpointAuthentication(
+                "V01", "sensitive-user", "sensitive-password", "sensitive-authorization-code");
+        ExternalEndpointRuntimeConfiguration configuration =
+                new ExternalEndpointRuntimeConfiguration(endpoint("managed://database"), authentication);
+
+        assertEquals("ExternalEndpointAuthentication[REDACTED]", authentication.toString());
+        assertEquals("ExternalEndpointRuntimeConfiguration[REDACTED]", configuration.toString());
+        assertFalse(authentication.toString().contains("sensitive"));
+        assertFalse(configuration.toString().contains("his.example.invalid"));
+    }
+
+    /** 验证可用范围会剔除无法解析认证信息的接口配置。 */
+    @Test
+    void listsOnlyScopesWithResolvableRuntimeConfiguration() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        ExternalEndpointCredentialCipher cipher = mock(ExternalEndpointCredentialCipher.class);
+        ExternalEndpointCredential credential = new ExternalEndpointCredential(
+                3L, new byte[]{1}, new byte[]{2}, 1);
+        ExternalEndpointScope scope = new ExternalEndpointScope(
+                8L, "ORG008", "测试机构", ParameterEnvironment.TEST);
+        when(mapper.findEnabledExternalEndpointScopes("PRIMARY_HIS", List.of("ORG008")))
+                .thenReturn(List.of(scope));
+        when(mapper.findEnabledExternalEndpoint("PRIMARY_HIS", ParameterEnvironment.TEST, 8L))
+                .thenReturn(Optional.of(endpoint("managed://database")));
+        when(mapper.findExternalEndpointCredential(3L)).thenReturn(Optional.of(credential));
+        when(cipher.decrypt(credential)).thenReturn(
+                new ExternalEndpointAuthentication("V01", null, null, "AUTH-008"));
+        ExternalEndpointResolutionServiceImpl service = new ExternalEndpointResolutionServiceImpl(
+                mapper, cipher, new ObjectMapper(), ignored -> null);
+
+        List<ExternalEndpointScope> result = service.findAvailableScopes(
+                "PRIMARY_HIS", List.of("ORG008"));
+
+        assertEquals(List.of(scope), result);
+    }
+
+    /**
+     * 创建满足指定验证状态的端点测试快照。
+     *
+     * @param reference 认证信息引用
+     * @return 测试接口配置
+     */
     private ExternalEndpoint endpoint(String reference) {
         LocalDateTime now = LocalDateTime.of(2026, 9, 18, 0, 0);
         return new ExternalEndpoint(3L, 2L, ParameterEnvironment.TEST, 8L, "ORG008",

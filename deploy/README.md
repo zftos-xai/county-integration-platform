@@ -52,6 +52,8 @@ docker compose --env-file ./deploy/.env -f ./deploy/docker-compose.yml up --buil
 
 首次启用 Flyway 前，应在 SQL Server 2012 SP4 测试实例上验证空库迁移和从上一版本升级。生产执行迁移前必须完成备份并保留执行记录。
 
+迁移完成后，可在SSMS中选择平台数据库并直接执行[`sqlserver/04-verify-database-contract.sql`](sqlserver/04-verify-database-contract.sql)。脚本只读取系统目录，不访问业务数据，也不修改数据库；发现版本、兼容级别、字段类型、长度、精度、空值、自增或计算属性差异时，会先返回明细结果集，再以错误结束。结果中的`DATABASE`表示数据库偏离Flyway契约，`MANUAL_REVIEW`表示发现迁移未声明的额外字段，需要人工确认来源。确需直接修复已有字段的长度或NULL属性时，使用[`sqlserver/05-repair-database-contract.sql`](sqlserver/05-repair-database-contract.sql)，并在执行前后分别运行`04`保留证据。
+
 ## 首次安全引导
 
 平台本地管理身份不提供固定默认账号或密码。首次启动前生成至少32个字符的一次性随机值，通过`PLATFORM_BOOTSTRAP_SECRET`交付。管理端应先调用`GET /api/v1/session/csrf`取得CSRF令牌，再调用一次`POST /api/v1/bootstrap`创建首个机构和管理员。
