@@ -19,6 +19,7 @@ import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
 import AdminPagination from '@/components/AdminPagination.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
 import UserEditorDrawer from './components/UserEditorDrawer.vue'
 import {
@@ -83,6 +84,19 @@ const filtered = computed(() => {
   })
 })
 const { page, pageSize, pagedRows } = useClientPagination(filtered)
+
+function applyListFilters() {
+  page.value = 1
+}
+
+function resetListFilters() {
+  query.value = ''
+  statusFilter.value = 'all'
+  organizationFilter.value = 'all'
+  roleFilter.value = 'all'
+  attentionFilter.value = 'all'
+  page.value = 1
+}
 function currentEditorSnapshot() {
   return JSON.stringify({ form: form.value, roles: roleDraft.value, scopes: scopeDraft.value, temporaryPassword: temporaryPassword.value })
 }
@@ -399,23 +413,21 @@ onBeforeUnmount(() => {
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
 
-    <div class="work-toolbar">
+    <ListQueryToolbar :summary="`${filtered.length} / ${users.length} 个用户`" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
       <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="姓名、登录名或机构编码" aria-label="搜索用户" /></label>
       <select v-model="statusFilter" aria-label="用户状态"><option value="all">全部状态</option><option value="enabled">正常使用</option><option value="disabled">已注销</option></select>
       <select v-model="organizationFilter" aria-label="主要机构"><option value="all">全部主要机构</option><option v-for="organization in organizations" :key="organization.id" :value="String(organization.id)">{{ organization.organizationName }}</option></select>
       <select v-model="roleFilter" aria-label="用户角色"><option value="all">全部角色</option><option v-for="role in roles" :key="role.id" :value="String(role.id)">{{ role.roleName }}</option></select>
       <select v-model="attentionFilter" aria-label="需要处理的用户"><option value="all">全部情况</option><option value="needsAttention">只看需要处理</option></select>
-      <span>{{ filtered.length }} / {{ users.length }} 个用户</span>
-      <button class="work-quiet-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" :class="{ spinning: isRefreshing }" />刷新</button>
-      <button v-if="canCreate" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增用户</button>
-    </div>
+      <template #actions><button v-if="canCreate" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增用户</button></template>
+    </ListQueryToolbar>
 
     <section class="prototype-section work-table-section user-panel action-column-table">
       <div v-if="isLoading" class="page-state" aria-live="polite"><LoaderCircle class="spinning" :size="28" /><strong>正在加载用户数据</strong></div>
       <div v-else-if="!error && users.length === 0" class="page-state"><UserRound :size="30" /><strong>当前范围内暂无用户</strong></div>
       <div v-else-if="users.length" class="prototype-table-wrap">
         <table class="work-table user-table">
-          <thead><tr><th>用户</th><th>归属机构</th><th title="角色决定功能权限，数据范围单独授权">权限角色</th><th title="当前账号可访问的机构范围">数据范围</th><th>登录要求</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
+          <thead><tr><th>姓名 / 登录名</th><th>归属机构</th><th title="角色决定功能权限，数据范围单独授权">权限角色</th><th title="当前账号可访问的机构范围">数据范围</th><th>登录要求</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
           <tbody><tr v-for="user in pagedRows" :key="user.id">
             <td><div class="user-inline-identity"><button class="work-row-link" type="button" :title="user.displayName" @click="openUser(user)">{{ user.displayName }}</button><span :title="user.loginName">{{ user.loginName }}</span></div></td>
             <td><span class="user-cell-text" :title="`${organizationById.get(user.primaryOrganizationId)?.organizationName ?? user.organizationCode} · ${user.organizationCode}`">{{ organizationById.get(user.primaryOrganizationId)?.organizationName ?? user.organizationCode }}</span></td>
@@ -474,9 +486,9 @@ onBeforeUnmount(() => {
 .user-table th:nth-child(6) { width: 9%; }
 .user-table th:nth-child(7) { width: 11%; }
 .user-table td { height: 52px; overflow: hidden; white-space: nowrap; }
-.user-inline-identity { min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; }
+.user-inline-identity { min-width: 0; display: flex; align-items: baseline; gap: 7px; overflow: hidden; }
 .user-inline-identity .work-row-link { flex: none; max-width: 65%; overflow: hidden; text-overflow: ellipsis; }
-.user-inline-identity > span { min-width: 0; overflow: hidden; color: #7c8993; font-size: 11px; text-overflow: ellipsis; }
+.user-inline-identity > span { min-width: 0; overflow: hidden; color: #72818d; font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; }
 .user-cell-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-table .attention-text { color: #a45437; }
 .user-actions { text-align: right; white-space: nowrap; }

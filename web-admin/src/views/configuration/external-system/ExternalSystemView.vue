@@ -15,6 +15,7 @@ import { listOrganizations } from '@/api/system/organization'
 import type { Organization } from '@/api/system/organization'
 import AdminPagination from '@/components/AdminPagination.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
 import { authState, hasPermission } from '@/store/modules/auth'
 import { formatLocalDateTime } from '@/utils/managementDisplay'
@@ -401,20 +402,12 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
         </div>
       </section>
 
-      <section class="prototype-section connection-matrix">
-        <div v-if="endpointGroups.length" class="matrix-toolbar">
-          <form class="matrix-filters" @submit.prevent="applyFilters">
+      <section class="prototype-section connection-matrix action-column-table">
+        <ListQueryToolbar v-if="endpointGroups.length" :summary="`显示 ${filteredEndpointGroups.length} / ${endpointGroups.length} 个机构`" :refreshing="isRefreshing" @query="applyFilters" @reset="resetFilters" @refresh="loadPage(true)">
             <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="搜索机构名称或编码" aria-label="搜索机构名称或编码" /></label>
             <label class="status-filter"><span>同步状态</span><select v-model="endpointStatus"><option value="all">全部</option><option value="ready">有可用环境</option><option value="attention">无可用环境</option></select></label>
             <label class="incomplete-filter"><input v-model="onlyIncomplete" type="checkbox" />仅看配置缺项</label>
-            <button class="prototype-button filter-submit" type="submit"><Search :size="14" />查询</button>
-            <button class="work-quiet-button filter-reset" type="button" @click="resetFilters">重置</button>
-          </form>
-          <div class="matrix-toolbar-result">
-            <span class="matrix-count">显示 {{ filteredEndpointGroups.length }} / {{ endpointGroups.length }} 个机构</span>
-            <button class="prototype-icon" type="button" aria-label="刷新接口配置" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="16" :class="{ spinning: isRefreshing }" /></button>
-          </div>
-        </div>
+        </ListQueryToolbar>
 
         <div v-if="isEndpointLoading" class="page-state"><LoaderCircle class="spinning" :size="28" /><strong>正在加载机构接口配置</strong></div>
         <div v-else-if="selectedSystem && endpointGroups.length === 0" class="endpoint-empty"><ServerCog :size="32" aria-hidden="true" /><h2>还没有可展示的机构</h2><p>当前没有可见的机构或接口配置；请检查机构数据范围，或先为 {{ selectedSystem.systemName }} 添加接口配置。</p><button v-if="canWrite && selectedSystem.enabled" class="prototype-button" type="button" @click="openEndpointCreate()"><Plus :size="15" />新增机构接口配置</button></div>
@@ -463,17 +456,10 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .context-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .context-edit { border-color: #7dafaa; color: #176f63; }
 .connection-matrix { min-height: 520px; }
-.matrix-toolbar { min-height: 64px; padding: 12px 14px; border-bottom: 1px solid #e6ebed; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.matrix-filters,.matrix-toolbar-result { min-width: 0; display: flex; align-items: center; gap: 12px; }
-.matrix-filters { flex-wrap: wrap; }
-.matrix-toolbar-result { flex: none; margin-left: auto; }
-.matrix-toolbar .prototype-search { width: min(360px, 32vw); }
 .status-filter { display: inline-flex; align-items: center; gap: 8px; color: #4b6069; font-size: 12px; white-space: nowrap; }
 .status-filter select { min-height: 36px; padding: 0 32px 0 11px; border: 1px solid #ced8dc; border-radius: 4px; background: white; color: #455b65; }
 .incomplete-filter { display: inline-flex; align-items: center; gap: 7px; color: #4b6069; font-size: 12px; white-space: nowrap; }
 .incomplete-filter input { width: 15px; height: 15px; accent-color: #147467; }
-.filter-submit,.filter-reset { min-height: 36px; white-space: nowrap; }
-.matrix-count { color: #718189; font-size: 11px; white-space: nowrap; }
 .matrix-table-wrap { overflow-x: auto; }
 .matrix-table { min-width: 1830px; table-layout: fixed; }
 .matrix-table .org-column { width: 210px; }.matrix-table .org-code-column { width: 255px; }.matrix-table .state-column { width: 110px; }.matrix-table .url-column { width: 260px; }.matrix-table .credential-column { width: 105px; }.matrix-table .source-column { width: 230px; }.matrix-table .updated-column { width: 150px; }.matrix-table .action-column { width: 80px; }
@@ -493,6 +479,6 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .feedback.page-error { margin-bottom: 0; }
 .spinning { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media(max-width:1100px){.system-context{grid-template-columns:minmax(260px,1fr) auto}.system-context>strong,.system-state{display:none}.context-actions{grid-column:auto;justify-content:flex-end}.matrix-toolbar .prototype-search{width:min(280px,32vw)}}
-@media(max-width:700px){.first-system-empty,.endpoint-empty{min-height:300px;padding:42px 20px}.system-context{grid-template-columns:1fr}.context-actions{grid-column:auto;align-items:stretch;flex-direction:column}.matrix-toolbar{align-items:stretch;flex-direction:column}.matrix-filters{gap:10px}.matrix-toolbar .prototype-search{width:100%}.matrix-toolbar-result{width:100%;margin-left:0;justify-content:space-between}}
+@media(max-width:1100px){.system-context{grid-template-columns:minmax(260px,1fr) auto}.system-context>strong,.system-state{display:none}.context-actions{grid-column:auto;justify-content:flex-end}}
+@media(max-width:700px){.first-system-empty,.endpoint-empty{min-height:300px;padding:42px 20px}.system-context{grid-template-columns:1fr}.context-actions{grid-column:auto;align-items:stretch;flex-direction:column}}
 </style>

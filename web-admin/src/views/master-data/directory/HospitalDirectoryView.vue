@@ -135,7 +135,7 @@ onBeforeUnmount(() => { mounted = false; controller?.abort() })
     @retry="load()"
   >
     <div ref="tableWrap" class="directory-table-wrap">
-          <table class="directory-table">
+          <table class="directory-table action-column-table">
             <thead><tr><th>目录编码</th><th>{{ typeLabels[directoryType] }}名称</th><th>助记码</th><th>类别</th><th>有效关系</th><th>最近同步</th><th>来源批次</th><th>操作</th></tr></thead>
             <tbody>
               <template v-for="item in items" :key="item.id">

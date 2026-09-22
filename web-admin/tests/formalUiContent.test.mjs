@@ -107,6 +107,23 @@ test('侧栏账号区展示真实角色与主机构名称，长名称保持在�
   assert.match(styles, /\.prototype-sidebar-foot \{[^}]*min-height: 72px;[^}]*padding: 9px 16px;/)
 })
 
+test('用户编辑按资料、访问权限和密码操作分区，登录页不暴露内部契约错误', async () => {
+  const [users, editor, login] = await Promise.all([
+    readFile('web-admin/src/views/system/user/UserView.vue', 'utf8'),
+    readFile('web-admin/src/views/system/user/components/UserEditorDrawer.vue', 'utf8'),
+    readFile('web-admin/src/views/login/LoginView.vue', 'utf8'),
+  ])
+
+  assert.match(users, /<th>姓名 \/ 登录名<\/th>/)
+  assert.match(editor, /用户编辑区域/)
+  assert.match(editor, /基础资料/)
+  assert.match(editor, /访问权限/)
+  assert.match(editor, /密码操作/)
+  assert.match(editor, /保存数据范围/)
+  assert.match(login, /登录服务暂时异常，请稍后重试。/)
+  assert.doesNotMatch(login, /请求编号：\{\{ error\.requestId \}\}/)
+})
+
 test('用户列表将真实角色与机构范围分列并保持单行', async () => {
   const source = await readFile('web-admin/src/views/system/user/UserView.vue', 'utf8')
 
@@ -171,8 +188,8 @@ test('正式列表的操作列表头可见并与行内操作保持右对齐', as
   assert.match(medical, /<th scope="col">操作<\/th>/)
   assert.match(hospital, /<th>操作<\/th>/)
   assert.doesNotMatch(medical + hospital, /visually-hidden">操作/)
-  assert.match(sharedStyles, /\.action-column-table th:last-child, \.action-column-table td:last-child\s*\{[^}]*text-align: right/s)
-  assert.match(sharedStyles, /\.action-column-table td:last-child > \.prototype-icon,[\s\S]*?display: inline-grid; vertical-align: middle;/)
+  assert.match(sharedStyles, /\.action-column-table th:last-child, \.action-column-table td:last-child:not\(\[colspan\]\)\s*\{[^}]*text-align: right/s)
+  assert.match(sharedStyles, /\.action-column-table td:last-child:not\(\[colspan\]\) > \.prototype-icon,[\s\S]*?display: inline-grid; vertical-align: middle;/)
   assert.match(directoryStyles, /\.directory-table th:last-child,\.directory-table \.directory-actions\s*\{ text-align:right; \}/)
   assert.match(batch, /\.batch-table-section th:nth-child\(5\)\s*\{[^}]*text-align: right;/s)
   assert.match(external, /\.matrix-table th:last-child,\.matrix-table td:last-child\s*\{ text-align: right; \}/)

@@ -18,6 +18,7 @@ import type { ManagedUser } from '@/api/system/user'
 import { authState, hasPermission } from '@/store/modules/auth'
 import AdminPagination from '@/components/AdminPagination.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
 import { organizationTypeLabel } from '@/utils/managementDisplay'
 import {
@@ -83,6 +84,16 @@ const filtered = computed(() => {
   })
 })
 const { page, pageSize, pagedRows } = useClientPagination(filtered)
+function applyListFilters() {
+  page.value = 1
+}
+
+function resetListFilters() {
+  query.value = ''
+  statusFilter.value = 'all'
+  typeFilter.value = 'all'
+  page.value = 1
+}
 const unavailableParentIds = computed(() => {
   const ids = new Set<number>()
   if (!selected.value) return ids
@@ -335,14 +346,12 @@ onBeforeUnmount(() => {
       <button class="text-button" type="button" :disabled="isRefreshing" @click="loadOrganizations(true)"><RefreshCw :size="15" />重试</button>
     </div>
 
-    <div class="work-toolbar organization-work-toolbar">
+    <ListQueryToolbar :summary="`${filtered.length} / ${organizations.length} 个机构`" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadOrganizations(true)">
       <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="机构名称、编码或类型" aria-label="搜索机构" /></label>
-      <span>{{ filtered.length }} / {{ organizations.length }} 个机构</span>
       <label class="status-field"><span class="visually-hidden">有效状态</span><select v-model="statusFilter" aria-label="机构有效状态"><option value="all">全部有效状态</option><option value="attention">只看需要处理</option><option value="active">正常使用</option><option value="future">尚未生效</option><option value="expired">已过期</option><option value="disabled">已撤销</option></select></label>
       <select v-model="typeFilter" aria-label="机构类型"><option value="all">全部机构类型</option><option v-for="type in organizationTypes" :key="type" :value="type">{{ organizationTypeLabel(type) }}（{{ type }}）</option></select>
-      <button class="work-quiet-button" type="button" :disabled="isRefreshing" @click="loadOrganizations(true)"><RefreshCw :size="15" :class="{ spinning: isRefreshing }" />刷新</button>
-      <button v-if="canWrite" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增机构</button>
-    </div>
+      <template #actions><button v-if="canWrite" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增机构</button></template>
+    </ListQueryToolbar>
 
     <section class="organization-panel prototype-section work-table-section action-column-table">
 

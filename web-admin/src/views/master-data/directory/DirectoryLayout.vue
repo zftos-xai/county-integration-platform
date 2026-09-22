@@ -1,11 +1,12 @@
 <!-- 数据目录共用布局：统一机构选择、目录导航、查询和读取状态；业务表格由页面提供。 -->
 <script setup lang="ts" generic="T extends string">
-import { AlertCircle, Building2, CheckCircle2, Database, RefreshCw, Search } from 'lucide-vue-next'
+import { AlertCircle, Building2, CheckCircle2, Database, Search } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { listOrganizations, type Organization } from '@/api/system/organization'
 import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError } from '@/utils/request'
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
 
 const props = defineProps<{
   title: string
@@ -146,13 +147,18 @@ onBeforeUnmount(() => request.abort())
         </button>
       </nav>
       <section class="directory-panel">
-        <form class="directory-toolbar" @submit.prevent="emit('search')">
+        <ListQueryToolbar
+          class="directory-toolbar"
+          :summary="`共 ${isLoading || error ? '—' : total} 条`"
+          :refreshing="isRefreshing"
+          :disabled="isBusy || !organizationCode"
+          @query="emit('search')"
+          @reset="clearFilters"
+          @refresh="emit('refresh')"
+        >
           <label class="directory-search"><Search :size="17" aria-hidden="true" /><input v-model="keyword" maxlength="50" aria-label="搜索名称、编码或助记码" placeholder="搜索名称、编码或助记码" /></label>
           <slot name="filters" />
-          <button class="prototype-button" type="submit" :disabled="isBusy || !organizationCode">查询</button>
-          <button class="work-quiet-button" type="button" :disabled="isBusy || !organizationCode" @click="clearFilters">清除</button><span>共 {{ isLoading || error ? '—' : total }} 条</span>
-          <button class="work-quiet-button" type="button" :disabled="isBusy || !organizationCode" @click="emit('refresh')"><RefreshCw :size="16" aria-hidden="true" :class="{ spinning: isRefreshing }" />刷新</button>
-        </form>
+        </ListQueryToolbar>
         <p v-if="error" class="feedback danger" role="alert"><AlertCircle :size="18" aria-hidden="true" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="text-button" type="button" @click="emit('retry')">重试</button></p>
         <div v-else-if="isInitializing" class="directory-state" role="status">正在读取机构…</div>
         <div v-else-if="!organizationCode" class="directory-state" role="status">当前账号没有可查看的机构</div>
@@ -209,15 +215,15 @@ onBeforeUnmount(() => request.abort())
 .directory-tabs button.active span { background:#e2f1ed; color:var(--accent); }
 .directory-tabs button .directory-new-mark,.directory-tabs button.active .directory-new-mark { position:absolute; top:2px; right:0; margin:0; padding:0 3px; border-radius:3px; background:#b6432d; color:#fff; font-size:8px; font-weight:750; line-height:12px; letter-spacing:.02em; }
 .directory-panel { min-width:0; background:var(--surface); }
-.directory-toolbar { padding:11px 16px; border-bottom:1px solid var(--line-soft); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-.directory-toolbar>span { margin-left:auto; color:var(--muted); font-size:12px; white-space:nowrap; }
+.directory-toolbar { border:0; border-bottom:1px solid var(--line-soft); border-radius:0; box-shadow:none; }
 .directory-search { min-width:0; height:36px; padding:0 11px; border:1px solid #ccd9dc; border-radius:6px; display:flex; align-items:center; gap:8px; color:var(--muted); }
-.directory-toolbar>.directory-search { flex:1 1 230px; max-width:420px; }
+.directory-toolbar :deep(.standard-list-toolbar__filters) { flex:1 1 230px; }
+.directory-toolbar :deep(.directory-search) { flex:1 1 230px; max-width:420px; }
 .directory-state { min-height:260px; padding:30px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; color:var(--muted); text-align:center; }
 .directory-state strong { color:var(--ink); }
 .directory-state span { font-size:12px; }
 button:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 @media(max-width:1100px) { .directory-layout { grid-template-columns:220px minmax(0,1fr); } .directory-context { flex-wrap:wrap; } }
 @media(max-width:780px) { .directory-layout { grid-template-columns:minmax(0,1fr); } .organization-rail { position:static; } .organization-list { max-height:210px; } }
-@media(max-width:520px) { .directory-context { display:grid; } .directory-tabs { gap:20px; } .directory-toolbar>.directory-search { flex-basis:100%; max-width:none; } }
+@media(max-width:520px) { .directory-context { display:grid; } .directory-tabs { gap:20px; } .directory-toolbar :deep(.directory-search) { flex-basis:100%; max-width:none; } }
 </style>

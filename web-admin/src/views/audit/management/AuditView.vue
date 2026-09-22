@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { listManagementAuditEvents } from '@/api/system/audit'
 import type { ManagementAuditEvent } from '@/api/system/audit'
 import AdminPagination from '@/components/AdminPagination.vue'
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
 import { useModalDialog } from '@/composables/useModalDialog'
 import { authState } from '@/store/modules/auth'
@@ -171,7 +172,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="content audit-page">
     <div class="audit-readonly-note" role="note"><ClipboardList :size="18" /><span><strong>操作记录只供查询</strong><small>记录由系统自动生成，不能在本页面新增、修改或删除；需要处理业务数据时请打开对应业务对象。医院尚未确定具体保留年限前，系统不会自动清理这些记录；确定期限后须经审批实施归档或清理。</small></span></div>
-    <form class="work-toolbar audit-filters" aria-label="审计筛选" @submit.prevent="submitFilters">
+    <ListQueryToolbar class="audit-filters" :summary="`已读取 ${events.length} 条记录`" :refreshing="isLoading" @query="submitFilters" @reset="clearFilters" @refresh="loadEvents()">
       <label class="prototype-search"><Search :size="16" /><input v-model="actorLogin" maxlength="128" autocomplete="off" placeholder="操作人登录名" aria-label="操作人登录名" /></label>
       <label class="audit-field"><span>操作</span><select v-model="actionCode" aria-label="操作类型"><option value="">全部操作</option><option v-for="([code, label]) in actionOptions" :key="code" :value="code">{{ label }}</option></select></label>
       <label class="audit-field"><span>操作对象</span><select v-model="targetType" aria-label="操作对象"><option value="">全部对象</option><option v-for="([code, label]) in targetOptions" :key="code" :value="code">{{ label }}</option></select></label>
@@ -181,12 +182,9 @@ onBeforeUnmount(() => {
       <label class="audit-date"><span>开始时间</span><input v-model="occurredFrom" type="datetime-local" aria-label="开始时间" /></label>
       <label class="audit-date"><span>结束时间</span><input v-model="occurredTo" type="datetime-local" aria-label="结束时间" /></label>
       <label class="audit-limit"><span>查看最近</span><select v-model.number="limit" aria-label="最多读取条数"><option :value="50">50 条</option><option :value="100">100 条</option><option :value="200">200 条</option></select></label>
-      <button class="prototype-button" type="submit" :disabled="isLoading"><Search :size="15" />查询</button>
-      <button class="work-quiet-button" type="button" :disabled="isLoading" @click="clearFilters">清除</button>
-      <button class="work-quiet-button" type="button" :disabled="isLoading" @click="loadEvents()"><RefreshCw :size="15" :class="{ spinning: isLoading }" />刷新</button>
-    </form>
+    </ListQueryToolbar>
 
-    <p class="audit-scope-note">已读取 {{ events.length }} 条符合条件的记录；可继续加载更早记录，时间按当前设备所在时区显示。</p>
+    <p class="audit-scope-note">可继续加载更早记录，时间按当前设备所在时区显示。</p>
     <div v-if="filterError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ filterError }}</span></div>
 
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}<small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" @click="loadEvents()">重试</button></div>
@@ -196,7 +194,7 @@ onBeforeUnmount(() => {
       <div v-else-if="!error && events.length === 0" class="page-state"><ClipboardList :size="30" /><strong>当前条件下没有审计记录</strong><span>可清除目标筛选后重新查询；页面只展示当前账号机构范围内的脱敏记录。</span></div>
       <div v-else-if="events.length" class="prototype-table-wrap">
         <table class="work-table audit-table">
-          <thead><tr><th>时间</th><th>操作人 / 涉及机构</th><th>操作</th><th>对象</th><th>结果</th><th>变更摘要</th><th>查看</th></tr></thead>
+          <thead><tr><th>时间</th><th>操作人 / 涉及机构</th><th>操作</th><th>对象</th><th>结果</th><th>变更摘要</th><th>操作</th></tr></thead>
           <tbody><tr v-for="event in pagedRows" :key="event.id">
             <td>{{ formatLocalDateTime(event.occurredAt) }}</td>
             <td><strong>{{ event.actorLogin }}</strong><small>{{ event.organizationCode || '平台范围' }}</small></td>

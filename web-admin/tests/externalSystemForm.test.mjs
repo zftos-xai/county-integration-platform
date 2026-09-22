@@ -97,7 +97,7 @@ test('机构接口字段都在主列表展示，不保留重复的展开详情',
 test('外部系统页按数据阶段收敛空状态操作', async () => {
   const source = await readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8')
   assert.match(source, /v-else-if="!error && systems\.length === 0" class="prototype-section first-system-empty"/)
-  assert.match(source, /v-if="endpointGroups\.length" class="matrix-toolbar"/)
+  assert.match(source, /<ListQueryToolbar v-if="endpointGroups\.length"/)
   assert.match(source, /v-else-if="selectedSystem && endpointGroups\.length === 0" class="endpoint-empty"/)
   assert.match(source, /登记第一个外部系统/)
 })
@@ -115,11 +115,9 @@ test('机构接口搜索包含未建配置的可见机构并支持查询与重�
   assert.match(source, /latestEndpoint: null/)
   assert.match(source, /@click="openEndpointCreate\(group\.organizationId\)"/)
   assert.match(source, /仅看配置缺项/)
-  assert.match(source, /<form class="matrix-filters" @submit\.prevent="applyFilters">/)
-  assert.match(source, /type="submit"><Search :size="14" \/>查询<\/button>/)
-  assert.match(source, /@click="resetFilters">重置<\/button>/)
+  assert.match(source, /@query="applyFilters" @reset="resetFilters" @refresh="loadPage\(true\)"/)
   assert.match(source, /appliedFilters\.value = \{ query: '', endpointStatus: 'all', onlyIncomplete: false \}/)
-  assert.match(source, /显示 \{\{ filteredEndpointGroups\.length \}\} \/ \{\{ endpointGroups\.length \}\} 个机构/)
+  assert.match(source, /:summary="`显示 \$\{filteredEndpointGroups\.length\} \/ \$\{endpointGroups\.length\} 个机构`"/)
 })
 
 test('外部系统与机构接口配置抽屉使用完整字段和固定操作区', async () => {

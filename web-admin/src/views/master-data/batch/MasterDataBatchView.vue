@@ -13,6 +13,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AdminPagination from '@/components/AdminPagination.vue';
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue';
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue';
 import {
   cancelMasterDataBatch,
   getMasterDataBatch,
@@ -686,7 +687,14 @@ onBeforeUnmount(() => {
       :target-id="auditTarget?.targetId"
       @close="closeNotice"
     />
-    <form class="work-toolbar batch-toolbar" @submit.prevent="applyFilters">
+    <ListQueryToolbar
+      class="batch-toolbar"
+      :summary="!isLoading && !error ? `共 ${total} 个批次` : ''"
+      :refreshing="isRefreshing"
+      @query="applyFilters"
+      @reset="clearFilters"
+      @refresh="reloadPage"
+    >
       <div class="batch-filter-row">
         <input
           v-model="requestKeyFilter"
@@ -726,20 +734,7 @@ onBeforeUnmount(() => {
           </option>
         </select>
       </div>
-      <div class="batch-action-row">
-        <button class="work-quiet-button" type="submit">查询</button>
-        <button class="work-quiet-button" type="button" @click="clearFilters">
-          清除
-        </button>
-        <span v-if="!isLoading && !error">共 {{ total }} 个批次</span>
-        <button
-          class="work-quiet-button"
-          type="button"
-          :disabled="isRefreshing"
-          @click="reloadPage"
-        >
-          <RefreshCw :size="15" :class="{ spinning: isRefreshing }" />刷新
-        </button>
+      <template #actions>
         <button
           v-if="canStart"
           class="prototype-button"
@@ -754,8 +749,8 @@ onBeforeUnmount(() => {
         >
           <Plus :size="15" />发起同步
         </button>
-      </div>
-    </form>
+      </template>
+    </ListQueryToolbar>
 
     <section
       v-if="canStart && !error && !isSyncSourceLoading && syncSourceError"
@@ -1143,10 +1138,10 @@ onBeforeUnmount(() => {
 }
 .batch-toolbar {
   min-width: 0;
-  display: grid;
-  gap: 10px;
-  padding: 12px;
+  display: flex;
+  align-items: stretch;
 }
+.batch-toolbar :deep(.standard-list-toolbar__filters) { flex: 1 1 780px; }
 .batch-filter-row {
   min-width: 0;
   display: grid;
@@ -1159,22 +1154,6 @@ onBeforeUnmount(() => {
 }
 .batch-filter-row > * {
   min-width: 0;
-}
-.batch-action-row {
-  min-width: 0;
-  padding-top: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 9px;
-  border-top: 1px solid #edf0f1;
-}
-.batch-action-row > span {
-  margin-left: 4px;
-  margin-right: auto;
-  color: #718087;
-  font-size: 11px;
-  white-space: nowrap;
 }
 .batch-request-search {
   width: 100%;
@@ -1442,15 +1421,6 @@ onBeforeUnmount(() => {
   }
   .batch-filter-row {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .batch-action-row {
-    align-items: stretch;
-    flex-wrap: wrap;
-  }
-  .batch-action-row > span {
-    order: -1;
-    width: 100%;
-    margin: 0;
   }
   .count-grid {
     grid-template-columns: 1fr 1fr;

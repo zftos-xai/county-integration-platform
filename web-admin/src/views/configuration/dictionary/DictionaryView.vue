@@ -13,6 +13,7 @@ import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
 import AdminPagination from '@/components/AdminPagination.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
 import { formatLocalDateTime } from '@/utils/managementDisplay'
 import DictionaryEditorDrawer from './components/DictionaryEditorDrawer.vue'
@@ -72,6 +73,15 @@ const duplicateSortOrders = computed(() => {
 })
 const { page: typePage, pageSize: typePageSize, pagedRows: pagedTypes } = useClientPagination(filteredTypes)
 const { page: itemPage, pageSize: itemPageSize, pagedRows: pagedItems } = useClientPagination(itemRows)
+
+function applyTypeFilter() {
+  typePage.value = 1
+}
+
+function resetTypeFilter() {
+  query.value = ''
+  typePage.value = 1
+}
 const editorTitle = computed(() => {
   if (editorKind.value === 'type-create') return '新增字典类型'
   if (editorKind.value === 'type-edit') return selectedType.value?.typeName ?? '编辑字典类型'
@@ -266,7 +276,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); itemController
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}</span><button class="prototype-text-button" type="button" @click="loadTypes(true)"><RefreshCw :size="15" />重试</button></div>
     <div v-if="deleteError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ deleteError.message }}<small v-if="deleteError.requestId">请求编号：{{ deleteError.requestId }}</small></span><button class="prototype-text-button" type="button" @click="deleteError = null">关闭</button></div>
-    <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="类型名称、代码或用途" aria-label="搜索字典类型" /></label><span>{{ filteredTypes.length }} / {{ types.length }} 个类型</span><button class="work-quiet-button" type="button" :disabled="isRefreshing" @click="loadTypes(true)"><RefreshCw :size="15" :class="{ spinning: isRefreshing }" />刷新</button><button v-if="canWrite" class="prototype-button" type="button" @click="openTypeCreate"><Plus :size="15" />新增类型</button></div>
+    <ListQueryToolbar :summary="`${filteredTypes.length} / ${types.length} 个类型`" :refreshing="isRefreshing" @query="applyTypeFilter" @reset="resetTypeFilter" @refresh="loadTypes(true)"><label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="类型名称、代码或用途" aria-label="搜索字典类型" /></label><template #actions><button v-if="canWrite" class="prototype-button" type="button" @click="openTypeCreate"><Plus :size="15" />新增类型</button></template></ListQueryToolbar>
     <section class="prototype-section work-table-section dictionary-workspace action-column-table">
       <div v-if="isLoading" class="page-state"><LoaderCircle class="spinning" :size="28" /><strong>正在加载数据字典</strong></div>
       <div v-else-if="!error && types.length === 0" class="page-state"><BookOpen :size="30" /><strong>平台暂无字典类型</strong><span v-if="canWrite">通过“新增类型”建立受控字典，再维护其字典项。</span></div>

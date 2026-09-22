@@ -13,6 +13,7 @@ import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
 import AdminPagination from '@/components/AdminPagination.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
 import { environmentLabel, parameterValueTypeLabel, formatLocalDateTime } from '@/utils/managementDisplay'
 import ParameterEditorDrawer from './components/ParameterEditorDrawer.vue'
@@ -86,6 +87,17 @@ const newConfigurationScope = computed<NewParameterScope | null>(() => {
   return null
 })
 const { page, pageSize, pagedRows } = useClientPagination(rows)
+
+function applyListFilters() {
+  page.value = 1
+}
+
+function resetListFilters() {
+  query.value = ''
+  environment.value = 'all'
+  configurationStatus.value = 'all'
+  page.value = 1
+}
 
 function asApiError(caught: unknown, message: string) {
   return caught instanceof ApiClientError ? caught : new ApiClientError('UNKNOWN_ERROR', message, 0)
@@ -245,7 +257,7 @@ onBeforeUnmount(() => { mounted = false; controller?.abort() })
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}</span><button class="prototype-text-button" type="button" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
     <div class="parameter-summary" aria-label="参数配置概况"><span><strong>{{ definitions.length }}</strong> 个参数</span><span><strong>{{ configuredCount }}</strong> 项已启用配置</span><span :class="{ warning: missingCount > 0 }"><strong>{{ missingCount }}</strong> 项尚未配置</span></div>
-    <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="参数名称、键或机构" aria-label="搜索参数" /></label><select v-model="environment" aria-label="运行环境"><option value="all">全部环境</option><option value="DEVELOPMENT">开发环境</option><option value="TEST">测试环境</option><option value="PRODUCTION">生产环境</option></select><select v-model="configurationStatus" aria-label="配置状态"><option value="all">全部配置状态</option><option value="configured">已配置并启用</option><option value="missing">尚未配置</option><option value="disabled">已配置但停用</option></select><span>{{ rows.length }} / {{ expandedRows.length }} 项</span><button v-if="canWrite" class="prototype-button" type="button" :disabled="!newConfigurationScope" :title="newConfigurationScope ? '为尚未配置的环境或机构新增参数值' : '所有允许的环境和机构范围都已配置'" @click="openNewConfiguration"><Plus :size="15" />新增配置</button><button class="work-quiet-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" :class="{ spinning: isRefreshing }" />刷新</button></div>
+    <ListQueryToolbar :summary="`${rows.length} / ${expandedRows.length} 项`" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)"><label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="参数名称、键或机构" aria-label="搜索参数" /></label><select v-model="environment" aria-label="运行环境"><option value="all">全部环境</option><option value="DEVELOPMENT">开发环境</option><option value="TEST">测试环境</option><option value="PRODUCTION">生产环境</option></select><select v-model="configurationStatus" aria-label="配置状态"><option value="all">全部配置状态</option><option value="configured">已配置并启用</option><option value="missing">尚未配置</option><option value="disabled">已配置但停用</option></select><template #actions><button v-if="canWrite" class="prototype-button" type="button" :disabled="!newConfigurationScope" :title="newConfigurationScope ? '为尚未配置的环境或机构新增参数值' : '所有允许的环境和机构范围都已配置'" @click="openNewConfiguration"><Plus :size="15" />新增配置</button></template></ListQueryToolbar>
     <section class="prototype-section work-table-section parameter-panel action-column-table">
       <div v-if="isLoading" class="page-state"><LoaderCircle class="spinning" :size="28" /><strong>正在加载参数定义</strong></div>
       <div v-else-if="!error && definitions.length === 0" class="page-state"><Settings2 :size="30" /><strong>尚无代码注册参数</strong><span>参数必须先在后端完成定义、约束和代码评审，管理页不会创建任意参数键。</span></div>

@@ -47,6 +47,20 @@ async function mountLayout(t, { query = {}, codes = ['ORG-A', 'ORG-B'], organiza
     '@/api/system/organization': { listOrganizations: async () => { if (organizationFailure) throw new ApiClientError('机构读取失败', organizationFailure); return organizationResult } },
     '@/store/modules/auth': { authState, hasPermission: () => true },
     '@/utils/request': { ApiClientError },
+    '@/components/ListQueryToolbar.vue': {
+      default: {
+        props: ['summary'],
+        emits: ['query', 'reset', 'refresh'],
+        setup(props, { emit, slots }) {
+          return () => Vue.h('form', { onSubmit: event => { event.preventDefault(); emit('query') } }, [
+            slots.default?.(),
+            Vue.h('span', props.summary),
+            Vue.h('button', { type: 'button', onClick: () => emit('reset') }, '重置'),
+            Vue.h('button', { type: 'button', onClick: () => emit('refresh') }, '刷新'),
+          ])
+        },
+      },
+    },
   }
   const module = { exports: {} }
   new Function('require', 'module', 'exports', outputText)(name => {
@@ -157,7 +171,7 @@ test('未授权的URL机构不进入请求，无机构时不发出目录加载�
 test('无匹配、清除、失败和加载状态保留共用结构，不伪装成当前目录为空', async t => {
   const { root, props, events } = await mountLayout(t, { keyword: '不存在' })
   assert.match(text(root), /没有符合查询条件的科室/)
-  descendants(root).find(item => item.type === 'button' && text(item) === '清除').props.onClick()
+  descendants(root).find(item => item.type === 'button' && text(item) === '重置').props.onClick()
   await flush()
   assert.equal(props.keyword, '')
   assert.deepEqual(events.slice(-2), ['clear', 'search'])

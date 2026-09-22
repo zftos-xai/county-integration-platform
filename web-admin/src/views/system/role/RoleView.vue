@@ -13,6 +13,7 @@ import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
 import AdminPagination from '@/components/AdminPagination.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
+import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
 import RoleEditorDrawer from './components/RoleEditorDrawer.vue'
 import { emptyRoleForm, roleToForm, toCreateRoleInput, toUpdateRoleInput, validateRoleForm } from './form'
@@ -72,6 +73,18 @@ const filteredRoles = computed(() => {
   })
 })
 const { page, pageSize, pagedRows } = useClientPagination(filteredRoles)
+
+function applyListFilters() {
+  page.value = 1
+}
+
+function resetListFilters() {
+  query.value = ''
+  statusFilter.value = 'all'
+  typeFilter.value = 'all'
+  attentionFilter.value = 'all'
+  page.value = 1
+}
 
 function asApiError(caught: unknown, message = '角色数据处理失败，请稍后重试') {
   return caught instanceof ApiClientError ? caught : new ApiClientError('UNKNOWN_ERROR', message, 0)
@@ -305,15 +318,13 @@ onBeforeUnmount(() => {
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
 
-    <div class="work-toolbar">
+    <ListQueryToolbar :summary="`${filteredRoles.length} / ${roles.length} 个角色`" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
       <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="角色名称或代码" aria-label="搜索角色" /></label>
       <select v-model="statusFilter" aria-label="角色状态"><option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select>
       <select v-model="typeFilter" aria-label="角色类型"><option value="all">全部类型</option><option value="system">系统保护角色</option><option value="custom">自定义角色</option></select>
       <select v-model="attentionFilter" aria-label="需要处理的角色"><option value="all">全部情况</option><option value="needsAttention">只看需要处理</option></select>
-      <span>{{ filteredRoles.length }} / {{ roles.length }} 个角色</span>
-      <button class="work-quiet-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" :class="{ spinning: isRefreshing }" />刷新</button>
-      <button v-if="canWrite" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增角色</button>
-    </div>
+      <template #actions><button v-if="canWrite" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增角色</button></template>
+    </ListQueryToolbar>
 
     <section class="prototype-section work-table-section role-panel action-column-table">
       <div v-if="isLoading" class="page-state" aria-live="polite"><LoaderCircle class="spinning" :size="28" /><strong>正在加载角色权限</strong></div>

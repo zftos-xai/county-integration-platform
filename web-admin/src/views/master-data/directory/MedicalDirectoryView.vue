@@ -293,7 +293,7 @@ onBeforeUnmount(() => {
       </label>
     </template>
     <div ref="tableWrap" class="directory-table-wrap">
-      <table class="directory-table">
+      <table class="directory-table action-column-table">
         <thead>
           <tr>
             <th scope="col">名称 / 目录编码</th>
