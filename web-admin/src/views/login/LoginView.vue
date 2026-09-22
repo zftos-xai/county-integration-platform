@@ -1,6 +1,6 @@
 <!-- 正式登录页面：使用服务端会话，不展示或保存演示凭据。 -->
 <script setup lang="ts">
-import { Database, Eye, EyeOff, LogIn } from 'lucide-vue-next'
+import { Eye, EyeOff, LogIn } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authState, authenticate } from '@/store/modules/auth'
