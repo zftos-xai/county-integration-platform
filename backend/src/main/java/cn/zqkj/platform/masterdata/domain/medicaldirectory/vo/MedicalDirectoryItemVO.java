@@ -32,6 +32,8 @@ import java.time.OffsetDateTime;
  * @param latestBatchId 最近成功批次主键
  * @param latestBatchNo 最近成功批次编号
  * @param sourceOrganizationId 最近调用实际使用的HIS来源机构参数
+ * @param firstSeenAt 平台首次记录该来源目录的时间
+ * @param newToday 平台是否在北京时间今天首次记录该目录
  * @param lastSeenAt 最近成功同步时间
  */
 public record MedicalDirectoryItemVO(
@@ -61,6 +63,8 @@ public record MedicalDirectoryItemVO(
         long latestBatchId,
         String latestBatchNo,
         String sourceOrganizationId,
+        OffsetDateTime firstSeenAt,
+        boolean newToday,
         OffsetDateTime lastSeenAt
 ) {
 }

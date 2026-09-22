@@ -40,6 +40,7 @@ import { ApiClientError } from '@/utils/request';
 import StartBatchDrawer from './components/StartBatchDrawer.vue';
 import DirectorySyncResultPanel from './components/DirectorySyncResultPanel.vue';
 import MedicalDirectorySyncResultPanel from './components/MedicalDirectorySyncResultPanel.vue';
+import { formatBatchDuration, formatBatchTime as formatTime } from './batchTime';
 import {
   emptyMasterDataBatchForm,
   masterDataCategoryLabels,
@@ -81,18 +82,26 @@ const lastStartInput = ref<StartMasterDataBatchInput | null>(null);
 const organizationOptions = ref<Array<{ code: string; name: string }>>([]);
 const syncOptions = ref<MasterDataSyncOptions>({ sources: [], businesses: [] });
 const isSyncSourceLoading = ref(true);
+const hasLoadedSyncSources = ref(false);
+const syncSourceError = ref<ApiClientError | null>(null);
+const currentTime = ref(Date.now());
 let listController: AbortController | null = null;
+let syncSourceController: AbortController | null = null;
 let detailController: AbortController | null = null;
 let mounted = true;
 let detailPollTimer: ReturnType<typeof setTimeout> | null = null;
+let durationTimer: ReturnType<typeof setInterval> | null = null;
 
 const canStart = computed(() => hasPermission('master-data:sync'));
 const hasSyncOption = computed(
   () =>
+    hasLoadedSyncSources.value &&
     syncOptions.value.sources.length > 0 &&
     syncOptions.value.businesses.length > 0,
 );
-const hasSyncSource = computed(() => syncOptions.value.sources.length > 0);
+const hasSyncSource = computed(
+  () => hasLoadedSyncSources.value && syncOptions.value.sources.length > 0,
+);
 const canRunSelectedBatch = computed(
   () =>
     hasPermission('master-data:sync') &&
@@ -179,6 +188,11 @@ async function loadBatches(background = false) {
   }
 }
 
+/** 同时重读批次和同步来源，恢复页面中彼此独立的读取状态。 */
+async function reloadPage() {
+  await Promise.all([loadBatches(true), loadSyncSources()]);
+}
+
 /** 在有机构查询权限时补充机构名称；否则仍使用当前账号的机构代码范围。 */
 async function loadOrganizationOptions() {
   if (!hasPermission('organization:read')) return;
@@ -200,15 +214,27 @@ async function loadSyncSources() {
     isSyncSourceLoading.value = false;
     return;
   }
+  syncSourceController?.abort();
+  const controller = new AbortController();
+  syncSourceController = controller;
   isSyncSourceLoading.value = true;
+  syncSourceError.value = null;
   try {
-    const options = await getMasterDataSyncOptions();
-    if (mounted) syncOptions.value = options;
+    const options = await getMasterDataSyncOptions(controller.signal);
+    if (mounted && !controller.signal.aborted) {
+      syncOptions.value = options;
+      hasLoadedSyncSources.value = true;
+    }
   } catch (caught) {
     const apiError = asApiError(caught, '无法读取可用的HIS接口配置');
-    if (!(await handleUnauthorized(apiError))) createError.value = apiError;
+    if (apiError.code !== 'REQUEST_ABORTED' &&
+        !(await handleUnauthorized(apiError)) && mounted && !controller.signal.aborted) {
+      syncOptions.value = { sources: [], businesses: [] };
+      hasLoadedSyncSources.value = false;
+      syncSourceError.value = apiError;
+    }
   } finally {
-    if (mounted) isSyncSourceLoading.value = false;
+    if (mounted && syncSourceController === controller) isSyncSourceLoading.value = false;
   }
 }
 
@@ -246,8 +272,8 @@ function changePageSize(value: number) {
   void loadBatches();
 }
 
-/** 打开基础数据同步窗口；只能选择已验证的HIS接口来源。 */
-function openCreator(mode: 'TIME_RANGE' | 'FULL' = 'TIME_RANGE') {
+/** 打开统一的基础数据同步窗口；只能选择已验证的HIS接口来源。 */
+function openCreator() {
   const currentCode = authState.user?.organizationCode ?? '';
   const defaultSource =
     syncOptions.value.sources.find(
@@ -259,8 +285,7 @@ function openCreator(mode: 'TIME_RANGE' | 'FULL' = 'TIME_RANGE') {
   }
   const defaultBusiness = syncOptions.value.businesses[0];
   if (defaultBusiness) form.value.category = defaultBusiness.category;
-  if (mode === 'FULL') form.value.category = 'MEDICAL_DIRECTORY';
-  form.value.mode = form.value.category === 'MEDICAL_DIRECTORY' ? mode : 'NOT_APPLICABLE';
+  form.value.mode = form.value.category === 'MEDICAL_DIRECTORY' ? 'TIME_RANGE' : 'NOT_APPLICABLE';
   formError.value = '';
   createError.value = null;
   lastStartInput.value = null;
@@ -310,12 +335,6 @@ async function submitBatch() {
     (item) => item.category === form.value.category,
   );
   if (!formError.value && !business) formError.value = '请选择可用的同步业务';
-  if (!formError.value && form.value.category === 'MEDICAL_DIRECTORY' && form.value.mode === 'FULL') {
-    const source = syncOptions.value.sources.find((item) => item.organizationCode === form.value.organizationCode);
-    if (!source?.fullSyncEnvironments?.includes(form.value.environment)) {
-      formError.value = '该机构及环境尚未确认全量来源范围';
-    }
-  }
   if (formError.value || isSaving.value) return;
   const input = toStartMasterDataBatchInput(form.value);
   lastStartInput.value = input;
@@ -589,33 +608,9 @@ function failureNextStep(item: MasterDataBatchSummary) {
   return '请先处理失败原因；不要重跑当前记录，处理完成后再新建同步。';
 }
 
-/** 格式化UTC接口时间为本地显示时间。 */
-function formatTime(value: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date);
-}
-
-/** 按毫秒、秒或分秒显示已经结束的批次耗时。 */
+/** 显示批次开始至结束或当前时刻的实际运行时长。 */
 function formatDuration(item: MasterDataBatchSummary) {
-  if (!item.startedAt) return '尚未开始';
-  if (!item.finishedAt) return '进行中';
-  const milliseconds = Math.max(
-    0,
-    new Date(item.finishedAt).getTime() - new Date(item.startedAt).getTime(),
-  );
-  if (milliseconds < 1000) return `${milliseconds}毫秒`;
-  const seconds = Math.floor(milliseconds / 1000);
-  if (seconds < 60) return `${seconds}秒`;
-  return `${Math.floor(seconds / 60)}分${seconds % 60}秒`;
+  return formatBatchDuration(item, currentTime.value);
 }
 
 /** 显示批次明确的机构或平台公共范围。 */
@@ -665,6 +660,7 @@ function currentDataExplanation(item: MasterDataBatchSummary) {
 }
 
 onMounted(() => {
+  durationTimer = setInterval(() => { currentTime.value = Date.now(); }, 1000);
   void Promise.all([
     loadBatches(),
     loadOrganizationOptions(),
@@ -673,8 +669,10 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   if (detailPollTimer) clearTimeout(detailPollTimer);
+  if (durationTimer) clearInterval(durationTimer);
   mounted = false;
   listController?.abort();
+  syncSourceController?.abort();
   detailController?.abort();
 });
 </script>
@@ -688,17 +686,6 @@ onBeforeUnmount(() => {
       :target-id="auditTarget?.targetId"
       @close="closeNotice"
     />
-    <div v-if="error && !isLoading" class="feedback danger" role="alert">
-      <AlertCircle :size="18" /><span
-        ><strong>{{ error.message }}</strong
-        ><small v-if="error.requestId"
-          >请求编号：{{ error.requestId }}</small
-        ></span
-      ><button class="text-button" type="button" @click="loadBatches(true)">
-        重试
-      </button>
-    </div>
-
     <form class="work-toolbar batch-toolbar" @submit.prevent="applyFilters">
       <div class="batch-filter-row">
         <input
@@ -744,12 +731,12 @@ onBeforeUnmount(() => {
         <button class="work-quiet-button" type="button" @click="clearFilters">
           清除
         </button>
-        <span>共 {{ total }} 个批次</span>
+        <span v-if="!isLoading && !error">共 {{ total }} 个批次</span>
         <button
           class="work-quiet-button"
           type="button"
           :disabled="isRefreshing"
-          @click="loadBatches(true)"
+          @click="reloadPage"
         >
           <RefreshCw :size="15" :class="{ spinning: isRefreshing }" />刷新
         </button>
@@ -767,27 +754,33 @@ onBeforeUnmount(() => {
         >
           <Plus :size="15" />发起同步
         </button>
-        <button
-          v-if="canStart"
-          class="work-quiet-button"
-          type="button"
-          :disabled="isSyncSourceLoading"
-          @click="openCreator('FULL')"
-        >
-          发起医疗目录全量同步
-        </button>
       </div>
     </form>
 
     <section
-      v-if="canStart && !isSyncSourceLoading && !hasSyncSource"
+      v-if="canStart && !error && !isSyncSourceLoading && syncSourceError"
+      class="sync-readiness-notice sync-readiness-error"
+      role="alert"
+    >
+      <AlertCircle :size="18" />
+      <div>
+        <strong>暂时无法确认可同步的机构</strong>
+        <span>{{ syncSourceError.message }}；不能据此判断机构是否可用。<template v-if="syncSourceError.requestId">请求编号：{{ syncSourceError.requestId }}</template></span>
+      </div>
+      <button class="work-quiet-button" type="button" @click="loadSyncSources">
+        重试读取
+      </button>
+    </section>
+
+    <section
+      v-if="canStart && !error && hasLoadedSyncSources && !hasSyncSource"
       class="sync-readiness-notice"
       aria-live="polite"
     >
       <AlertCircle :size="18" />
       <div>
-        <strong>当前没有可发起同步的机构</strong>
-        <span>请在“外部系统”保存并启用该机构的基层 HIS 接口和接入信息。保存后系统自动确认；确认成功后，这里即可发起同步。</span>
+        <strong>未找到当前账号可用的同步来源</strong>
+        <span>配置已读取，但没有可用的机构和接口环境组合；请核对机构授权与基层 HIS 接口状态。</span>
       </div>
       <button class="work-quiet-button" type="button" @click="openInterfaceConfiguration">
         查看接口配置
@@ -795,8 +788,29 @@ onBeforeUnmount(() => {
     </section>
 
     <section
+      v-if="canStart && !error && hasLoadedSyncSources && hasSyncSource && !hasSyncOption"
+      class="sync-readiness-notice"
+      aria-live="polite"
+    >
+      <AlertCircle :size="18" />
+      <div>
+        <strong>当前没有已开放的同步业务</strong>
+        <span>机构接口已可用，但尚无可执行的目录同步业务；请联系管理员确认业务接入状态。</span>
+      </div>
+    </section>
+
+    <section
       class="prototype-section work-table-section batch-table-section"
     >
+      <div v-if="error && !isLoading" class="batch-list-error" role="alert">
+        <AlertCircle :size="19" />
+        <div>
+          <strong>同步批次读取失败</strong>
+          <span>{{ error.message }}；本次查询未完成，无法确认批次总数。</span>
+          <small v-if="error.requestId">请求编号：{{ error.requestId }}</small>
+        </div>
+        <button class="work-quiet-button" type="button" @click="reloadPage">重试读取</button>
+      </div>
       <div v-if="isLoading" class="page-state" aria-live="polite">
         <LoaderCircle class="spinning" :size="27" /><strong
           >正在读取同步批次</strong
@@ -806,11 +820,11 @@ onBeforeUnmount(() => {
         <Database :size="29" /><strong>当前条件下没有同步批次</strong
         ><span>{{
           canStart && hasSyncOption
-            ? '选择已配置HIS接口的机构和已开放业务，发起首次同步。'
-            : '请先确认该机构的基层HIS接口配置；本页不会重复维护机构资料。'
+            ? '可选择已开放的业务发起新同步。'
+            : '可调整筛选条件，或稍后刷新查看最新记录。'
         }}</span>
       </div>
-      <div v-else-if="batches.length" class="table-scroll">
+      <div v-else-if="!error && batches.length" class="table-scroll">
         <table class="work-table">
           <thead>
             <tr>
@@ -855,7 +869,7 @@ onBeforeUnmount(() => {
                   >{{
                     statusPresentation(item.status, item.failureCode).label
                   }}</span
-                ><small>{{ item.finishedAt ? '耗时 ' : '' }}{{ formatDuration(item) }}</small>
+                ><small>{{ item.startedAt ? (item.finishedAt ? '耗时 ' : '已运行 ') : '' }}{{ formatDuration(item) }}</small>
                 <small
                   v-if="item.status === 'FAILED' || item.status === 'RESULT_UNKNOWN'"
                   class="batch-result-note"
@@ -890,7 +904,7 @@ onBeforeUnmount(() => {
         </table>
       </div>
       <AdminPagination
-        v-if="!isLoading && total > 0"
+        v-if="!isLoading && !error && total > 0"
         :total="total"
         :page="page"
         :page-size="pageSize"
@@ -981,21 +995,31 @@ onBeforeUnmount(() => {
               :results="medicalDirectoryResults"
               :loading="isDirectoryResultsLoading"
             />
-            <section class="batch-detail-section">
-              <h3>本次调用</h3>
-              <dl>
+            <section class="batch-detail-section batch-execution-section">
+              <h3>本次同步</h3>
+              <dl class="batch-execution-facts">
                 <div>
                   <dt>同步机构</dt>
                   <dd>{{ scopeLabel(selected) }}</dd>
                 </div>
                 <div>
-                  <dt>接口环境 / 交易</dt>
-                  <dd>
-                    {{ environmentLabel(selected) }} · {{ selected.dataTradeCode }}<template v-if="selected.countTradeCode"> / {{ selected.countTradeCode }}</template>
-                  </dd>
+                  <dt>接口环境</dt>
+                  <dd>{{ environmentLabel(selected) }}</dd>
                 </div>
                 <div>
-                  <dt>处理耗时</dt>
+                  <dt>接口交易</dt>
+                  <dd>{{ selected.dataTradeCode }}<template v-if="selected.countTradeCode">、{{ selected.countTradeCode }}</template></dd>
+                </div>
+                <div>
+                  <dt>开始时间</dt>
+                  <dd>{{ selected.startedAt ? formatTime(selected.startedAt) : '尚未开始' }}</dd>
+                </div>
+                <div>
+                  <dt>结束时间</dt>
+                  <dd>{{ selected.finishedAt ? formatTime(selected.finishedAt) : selected.startedAt ? '进行中' : '—' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ selected.finishedAt ? '总耗时' : '已运行' }}</dt>
                   <dd>{{ formatDuration(selected) }}</dd>
                 </div>
               </dl>
@@ -1098,6 +1122,8 @@ onBeforeUnmount(() => {
       v-if="isCreatorOpen"
       v-model:form="form"
       :options="syncOptions"
+      :is-source-loading="isSyncSourceLoading"
+      :source-error="syncSourceError"
       :is-saving="isSaving"
       :error="createError"
       :form-error="formError"
@@ -1105,6 +1131,7 @@ onBeforeUnmount(() => {
       @submit="submitBatch"
       @reload="reloadCreatedBatch"
       @configure="openInterfaceConfiguration"
+      @retry-sources="loadSyncSources"
     />
   </section>
 </template>
@@ -1181,6 +1208,27 @@ onBeforeUnmount(() => {
 .sync-readiness-notice strong { color: #6f4d16; font-size: 13px; }
 .sync-readiness-notice span { color: #805f2b; font-size: 12px; line-height: 1.55; }
 .sync-readiness-notice button { margin-left: auto; flex: 0 0 auto; }
+.sync-readiness-error {
+  border-color: #e6c9c5;
+  border-left-color: #ba5b4f;
+  background: #fff8f7;
+}
+.sync-readiness-error strong,
+.sync-readiness-error span { color: #8d4038; }
+.batch-list-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  color: #8d4038;
+  background: #fff8f7;
+  border-bottom: 1px solid #e6c9c5;
+}
+.batch-list-error > div { display: grid; gap: 4px; min-width: 0; }
+.batch-list-error strong { font-size: 14px; }
+.batch-list-error span,
+.batch-list-error small { font-size: 12px; line-height: 1.5; }
+.batch-list-error button { margin-left: auto; flex: 0 0 auto; }
 .table-scroll {
   overflow-x: auto;
 }
@@ -1199,6 +1247,7 @@ onBeforeUnmount(() => {
 }
 .batch-table-section th:nth-child(5) {
   width: 150px;
+  text-align: right;
 }
 .batch-table-section td {
   overflow: hidden;
@@ -1316,6 +1365,24 @@ onBeforeUnmount(() => {
   margin: 0;
   overflow-wrap: anywhere;
 }
+.batch-execution-section .batch-execution-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 18px;
+  row-gap: 14px;
+}
+.batch-execution-section .batch-execution-facts div {
+  display: block;
+  min-width: 0;
+}
+.batch-execution-section .batch-execution-facts dt {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.batch-execution-section .batch-execution-facts dd {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
 .count-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1366,6 +1433,13 @@ onBeforeUnmount(() => {
   }
 }
 @media (max-width: 640px) {
+  .sync-readiness-notice,
+  .batch-list-error { align-items: flex-start; flex-wrap: wrap; }
+  .sync-readiness-notice button,
+  .batch-list-error button { margin-left: 28px; }
+  .batch-execution-section .batch-execution-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .batch-filter-row {
     grid-template-columns: minmax(0, 1fr);
   }

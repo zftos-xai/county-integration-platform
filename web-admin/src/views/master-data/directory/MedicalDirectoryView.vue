@@ -1,7 +1,7 @@
 <!-- 医疗目录正式页面：只读展示100-004/100-005已完成数量核对后写入的当前数据。 -->
 <script setup lang="ts">
 import { ChevronDown, ChevronRight } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AdminPagination from '@/components/AdminPagination.vue'
 import {
@@ -22,6 +22,26 @@ const counts = ref<Record<MedicalDirectoryType, number>>({
   TREATMENT: 0,
   CONSUMABLE: 0,
 })
+const todayNewCounts = ref<Record<MedicalDirectoryType, number>>({
+  TRADITIONAL_MEDICINE: 0,
+  WESTERN_MEDICINE: 0,
+  TREATMENT: 0,
+  CONSUMABLE: 0,
+})
+const beijingOffsetMs = 8 * 60 * 60 * 1000
+const dayMs = 24 * 60 * 60 * 1000
+const emptyTodayNewCounts: Record<MedicalDirectoryType, number> = {
+  TRADITIONAL_MEDICINE: 0,
+  WESTERN_MEDICINE: 0,
+  TREATMENT: 0,
+  CONSUMABLE: 0,
+}
+const displayedBeijingDay = ref(beijingDay())
+const loadedBeijingDay = ref<number | null>(null)
+const todayMarkersAreCurrent = computed(() => loadedBeijingDay.value === displayedBeijingDay.value)
+const visibleTodayNewCounts = computed(() =>
+  todayMarkersAreCurrent.value ? todayNewCounts.value : emptyTodayNewCounts,
+)
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
@@ -35,7 +55,36 @@ const isLoading = ref(true)
 const isRefreshing = ref(false)
 const error = ref<ApiClientError | null>(null)
 let controller: AbortController | null = null
+let dayRolloverTimer: ReturnType<typeof setTimeout> | null = null
 let mounted = true
+
+/** 按北京时间确定每日新增的自然日，不沿用浏览器本地时区。 */
+function beijingDay() {
+  return Math.floor((Date.now() + beijingOffsetMs) / dayMs)
+}
+
+/** 跨日后立即撤销旧日标记，并向服务端重新读取今日新增数量。 */
+function refreshBeijingDay() {
+  const currentDay = beijingDay()
+  if (displayedBeijingDay.value === currentDay) return
+  displayedBeijingDay.value = currentDay
+  void load(true)
+}
+
+/** 页面跨午夜保持打开或从后台恢复时，今日标记仍以北京时间为准。 */
+function scheduleDayRollover() {
+  if (dayRolloverTimer) clearTimeout(dayRolloverTimer)
+  const nextDayStart = (beijingDay() + 1) * dayMs - beijingOffsetMs
+  dayRolloverTimer = setTimeout(() => {
+    refreshBeijingDay()
+    scheduleDayRollover()
+  }, Math.max(1, nextDayStart - Date.now()))
+}
+
+/** 从后台返回时补检可能被浏览器暂停的跨日定时器。 */
+function checkVisibleDay() {
+  if (!document.hidden) refreshBeijingDay()
+}
 
 /** 当前医疗目录类型对应的业务名称。 */
 const typeLabels: Record<MedicalDirectoryType, string> = {
@@ -60,6 +109,8 @@ function asApiError(caught: unknown) {
 /** 读取当前有效医疗目录；查看不会调用HIS或改变数据。 */
 async function load(background = false) {
   if (!organizationCode.value) return
+  const requestDay = beijingDay()
+  displayedBeijingDay.value = requestDay
   controller?.abort()
   const request = new AbortController()
   controller = request
@@ -80,7 +131,12 @@ async function load(background = false) {
       request.signal,
     )
     if (!mounted || request.signal.aborted) return
+    if (requestDay !== beijingDay()) {
+      refreshBeijingDay()
+      return
+    }
     items.value = result.items
+    loadedBeijingDay.value = requestDay
     total.value = result.total
     counts.value = {
       TRADITIONAL_MEDICINE: 0,
@@ -88,7 +144,16 @@ async function load(background = false) {
       TREATMENT: 0,
       CONSUMABLE: 0,
     }
-    for (const count of result.counts) counts.value[count.directoryType] = count.total
+    todayNewCounts.value = {
+      TRADITIONAL_MEDICINE: 0,
+      WESTERN_MEDICINE: 0,
+      TREATMENT: 0,
+      CONSUMABLE: 0,
+    }
+    for (const count of result.counts) {
+      counts.value[count.directoryType] = count.total
+      todayNewCounts.value[count.directoryType] = count.todayNewCount
+    }
   } catch (caught) {
     if (!mounted || request.signal.aborted) return
     const apiError = asApiError(caught)
@@ -118,6 +183,7 @@ function selectOrganization() {
   total.value = 0
   items.value = []
   for (const type of medicalDirectoryTypes) counts.value[type] = 0
+  for (const type of medicalDirectoryTypes) todayNewCounts.value[type] = 0
   void load()
 }
 
@@ -176,12 +242,20 @@ function formatTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
+    timeZone: 'Asia/Shanghai',
   }).format(date)
 }
+
+onMounted(() => {
+  scheduleDayRollover()
+  document.addEventListener('visibilitychange', checkVisibleDay)
+})
 
 onBeforeUnmount(() => {
   mounted = false
   controller?.abort()
+  if (dayRolloverTimer) clearTimeout(dayRolloverTimer)
+  document.removeEventListener('visibilitychange', checkVisibleDay)
 })
 </script>
 
@@ -194,6 +268,7 @@ onBeforeUnmount(() => {
     :type-labels="typeLabels"
     :directory-type="directoryType"
     :counts="counts"
+    :today-new-counts="visibleTodayNewCounts"
     :total="total"
     :is-loading="isLoading"
     :is-refreshing="isRefreshing"
@@ -224,17 +299,15 @@ onBeforeUnmount(() => {
             <th scope="col">名称 / 目录编码</th>
             <th scope="col">类别 / 状态</th>
             <th scope="col">规格 / 包装</th>
-            <th scope="col">
-              {{ directoryType === 'TREATMENT' ? '来源信息' : directoryType === 'CONSUMABLE' ? '厂家 / 材质' : '厂家 / 药品标识' }}
-            </th>
-            <th scope="col">地区</th>
+            <th scope="col">厂家 / 助记码</th>
+            <th scope="col">创建时间 / 记录时间</th>
             <th scope="col">HIS 启用值</th>
-            <th scope="col"><span class="visually-hidden">操作</span></th>
+            <th scope="col">操作</th>
           </tr>
         </thead>
         <tbody>
           <template v-for="item in items" :key="item.id">
-            <tr :class="{ expanded: selectedItemId === item.id }" @dblclick="toggleDetailFromRow(item.id, $event)">
+            <tr :class="{ expanded: selectedItemId === item.id, 'is-today-new': todayMarkersAreCurrent && item.newToday }" @dblclick="toggleDetailFromRow(item.id, $event)">
               <td :title="item.sourceRecordName">
                 <strong>{{ item.sourceRecordName }}</strong>
                 <small class="directory-code" :title="item.sourceRecordCode">{{ item.sourceRecordCode }}</small>
@@ -253,13 +326,14 @@ onBeforeUnmount(() => {
               </td>
               <td>
                 <strong v-if="item.manufacturerName">{{ item.manufacturerName }}</strong>
-                <strong v-else>创建 {{ item.sourceCreatedAt }}</strong>
-                <small v-if="item.approvalNumber">批准/注册号 {{ item.approvalNumber }}</small>
-                <small v-if="item.standardCode">本位码 {{ item.standardCode }}</small>
-                <small v-if="item.packageMaterial">材质 {{ item.packageMaterial }}</small>
-                <small v-if="item.category">来源类别 {{ item.category }}</small>
+                <strong v-else-if="item.mnemonicCode">助记码 {{ item.mnemonicCode }}</strong>
+                <strong v-else>—</strong>
+                <small v-if="item.manufacturerName && item.mnemonicCode">助记码 {{ item.mnemonicCode }}</small>
               </td>
-              <td :title="item.region || 'HIS 未返回地区'">{{ item.region || '—' }}</td>
+              <td>
+                <strong :title="`HIS 创建原文：${item.sourceCreatedAt}`">创建 {{ item.sourceCreatedAt }}</strong>
+                <small :title="`平台首次记录：${formatTime(item.firstSeenAt)}`">记录 {{ formatTime(item.firstSeenAt) }}</small>
+              </td>
               <td :title="item.sourceEnabledFlag">{{ item.sourceEnabledFlag }}</td>
               <td class="directory-actions">
                 <button type="button" :aria-expanded="selectedItemId === item.id" @click="toggleDetail(item.id)">
@@ -304,6 +378,7 @@ onBeforeUnmount(() => {
                       <div><dt>平台机构</dt><dd>{{ selectedItem.organizationName }}</dd></div>
                       <div><dt>实际请求机构参数</dt><dd>{{ selectedItem.sourceOrganizationId || '历史批次未保存' }}</dd></div>
                       <div><dt>最近成功同步</dt><dd>{{ formatTime(selectedItem.lastSeenAt) }}</dd></div>
+                      <div><dt>平台首次记录</dt><dd>{{ formatTime(selectedItem.firstSeenAt) }}</dd></div>
                       <div>
                         <dt>同步记录</dt>
                         <dd><RouterLink class="batch-link" :to="`/master-data/batches/${selectedItem.latestBatchId}`">{{ selectedItem.latestBatchNo }}</RouterLink></dd>
@@ -331,16 +406,17 @@ onBeforeUnmount(() => {
 
 <style scoped src="@/views/master-data/directory/directory-records.css"></style>
 <style scoped>
-.directory-table { min-width: 1140px; }
-.directory-table th:nth-child(1) { width: 23%; }
-.directory-table th:nth-child(2) { width: 13%; }
-.directory-table th:nth-child(3) { width: 17%; }
-.directory-table th:nth-child(4) { width: 19%; }
-.directory-table th:nth-child(5) { width: 11%; }
-.directory-table th:nth-child(6) { width: 9%; }
+.directory-table { min-width: 1260px; }
+.directory-table th:nth-child(1) { width: 22%; }
+.directory-table th:nth-child(2) { width: 10%; }
+.directory-table th:nth-child(3) { width: 15%; }
+.directory-table th:nth-child(4) { width: 21%; }
+.directory-table th:nth-child(5) { width: 18%; }
+.directory-table th:nth-child(6) { width: 6%; }
 .directory-table th:nth-child(7) { width: 8%; }
 .directory-table tbody tr:not(.directory-detail-row) td { height: 60px; }
 .directory-table td small { overflow: hidden; text-overflow: ellipsis; }
+.directory-table tr.is-today-new:not(.expanded) > td { background: #f6faf8; }
 .directory-table .directory-detail-row > td { height: auto; }
 .directory-extra-filter { flex:0 1 150px; min-width:120px; height:36px; padding:0 10px; border:1px solid #ccd9dc; border-radius:6px; display:flex; align-items:center; }
 .directory-extra-filter:focus-within { border-color:var(--accent); box-shadow:0 0 0 2px rgb(25 130 115 / 12%); }

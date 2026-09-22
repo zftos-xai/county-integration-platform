@@ -136,7 +136,7 @@ onBeforeUnmount(() => { mounted = false; controller?.abort() })
   >
     <div ref="tableWrap" class="directory-table-wrap">
           <table class="directory-table">
-            <thead><tr><th>目录编码</th><th>{{ typeLabels[directoryType] }}名称</th><th>助记码</th><th>类别</th><th>有效关系</th><th>最近同步</th><th>来源批次</th><th><span class="visually-hidden">操作</span></th></tr></thead>
+            <thead><tr><th>目录编码</th><th>{{ typeLabels[directoryType] }}名称</th><th>助记码</th><th>类别</th><th>有效关系</th><th>最近同步</th><th>来源批次</th><th>操作</th></tr></thead>
             <tbody>
               <template v-for="item in items" :key="item.id">
                 <tr :class="{ expanded: selectedItemId === item.id }"><td class="directory-code" :title="item.sourceRecordCode">{{ item.sourceRecordCode }}</td><td :title="item.sourceRecordName"><strong>{{ item.sourceRecordName }}</strong></td><td :title="item.mnemonicCode || '—'">{{ item.mnemonicCode || '—' }}</td><td :title="item.categoryName || '—'">{{ item.categoryName || '—' }}</td><td>{{ item.relationCount ? `${item.relationCount} 条` : '—' }}</td><td>{{ formatTime(item.lastSeenAt) }}</td><td><RouterLink class="batch-link" :to="`/master-data/batches/${item.latestBatchId}`">{{ item.latestBatchNo }}</RouterLink></td><td class="directory-actions"><button type="button" :aria-expanded="selectedItemId === item.id" @click="toggleDetail(item.id)"><ChevronDown v-if="selectedItemId === item.id" :size="15" /><ChevronRight v-else :size="15" />{{ selectedItemId === item.id ? '收起' : '查看' }}</button></td></tr>

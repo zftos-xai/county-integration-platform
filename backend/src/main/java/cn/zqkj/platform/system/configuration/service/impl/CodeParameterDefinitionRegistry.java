@@ -13,12 +13,11 @@ import static cn.zqkj.platform.system.configuration.domain.model.ParameterEnviro
 import static cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment.PRODUCTION;
 import static cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment.TEST;
 import static cn.zqkj.platform.system.configuration.domain.model.ParameterValueType.INTEGER;
-import static cn.zqkj.platform.system.configuration.domain.model.ParameterValueType.STRING;
 
 /**
  * 保存代码评审批准的平台注册参数清单。
  *
- * <p>管理默认项目前只保存配置；医疗目录全量规则由同步批次创建时按机构和环境读取。</p>
+ * <p>管理默认项目前只保存配置，不参与医疗目录查询范围计算。</p>
  */
 @Component
 public class CodeParameterDefinitionRegistry implements ParameterDefinitionRegistry {
@@ -48,18 +47,6 @@ public class CodeParameterDefinitionRegistry implements ParameterDefinitionRegis
                     null,
                     BigDecimal.TEN,
                     BigDecimal.valueOf(200),
-                    null
-            ),
-            new ParameterDefinition(
-                    "medical-directory.full-sync-rule",
-                    "医疗目录全量范围确认规则（JSON）",
-                    STRING,
-                    ALL_ENVIRONMENTS,
-                    true,
-                    false,
-                    1000,
-                    null,
-                    null,
                     null
             )
     );

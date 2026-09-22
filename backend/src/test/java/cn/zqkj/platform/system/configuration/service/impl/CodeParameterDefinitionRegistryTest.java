@@ -40,7 +40,7 @@ class CodeParameterDefinitionRegistryTest {
         assertEquals(BigDecimal.TEN, definition.minimumNumber());
         assertEquals(BigDecimal.valueOf(200), definition.maximumNumber());
         assertTrue(registry.findAll().contains(definition));
-        assertEquals(3, registry.findAll().size());
+        assertEquals(2, registry.findAll().size());
         assertTrue(definition.name().contains("未接入运行"));
     }
 }

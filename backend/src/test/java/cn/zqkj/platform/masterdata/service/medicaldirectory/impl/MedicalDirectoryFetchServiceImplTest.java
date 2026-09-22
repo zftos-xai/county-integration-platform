@@ -51,8 +51,9 @@ class MedicalDirectoryFetchServiceImplTest {
                     }
                     return new PhisResponse<>(true, "1", entries(101, 101), null);
                 });
+        ExchangeRuntimeRecordService records = mock(ExchangeRuntimeRecordService.class);
         MedicalDirectoryFetchServiceImpl service = new MedicalDirectoryFetchServiceImpl(
-                phisService, new MedicalDirectoryValidationServiceImpl(), mock(ExchangeRuntimeRecordService.class), "Asia/Shanghai");
+                phisService, new MedicalDirectoryValidationServiceImpl(), records, "Asia/Shanghai");
 
         var result = service.fetchAll(batch(), MedicalDirectoryType.CONSUMABLE);
 
@@ -61,8 +62,21 @@ class MedicalDirectoryFetchServiceImplTest {
         assertEquals(101, result.returnedCount());
         assertEquals(101, result.acceptedRecords().size());
         verify(phisService, times(2)).queryMedicalDirectory(eq(8L), eq(ParameterEnvironment.TEST), any());
+        verify(phisService).queryMedicalDirectory(eq(8L), eq(ParameterEnvironment.TEST), argThat(query ->
+                query.startRow() == 1 && query.endRow() == 100));
+        verify(phisService).queryMedicalDirectory(eq(8L), eq(ParameterEnvironment.TEST), argThat(query ->
+                query.startRow() == 101 && query.endRow() == 101));
         verify(phisService).countMedicalDirectory(eq(8L), eq(ParameterEnvironment.TEST), argThat(query ->
                 query.sourceOrganizationCode().equals("ORG-008") && query.rangeStart().equals(RANGE_START.plusHours(8))));
+        ArgumentCaptor<ExchangeRuntimeRecord> recordedCalls = ArgumentCaptor.forClass(ExchangeRuntimeRecord.class);
+        verify(records, times(3)).record(recordedCalls.capture());
+        assertEquals(List.of("100-005", "100-004", "100-004"),
+                recordedCalls.getAllValues().stream().map(ExchangeRuntimeRecord::interfaceCode).toList());
+        assertEquals(List.of("HIS声明101条", "HIS查询成功，返回100条", "HIS查询成功，返回1条"),
+                recordedCalls.getAllValues().stream().map(ExchangeRuntimeRecord::resultMessage).toList());
+        assertEquals(List.of("耗材；数量查询", "耗材；行范围1—100", "耗材；行范围101—101"),
+                recordedCalls.getAllValues().stream().map(ExchangeRuntimeRecord::requestSummary).toList());
+        assertTrue(recordedCalls.getAllValues().stream().allMatch(record -> "BD-TEST".equals(record.sourceRecordId())));
     }
 
     /** 验证来源明确拒绝第二页时立即停止，不能把不完整结果交给后续暂存或发布。 */

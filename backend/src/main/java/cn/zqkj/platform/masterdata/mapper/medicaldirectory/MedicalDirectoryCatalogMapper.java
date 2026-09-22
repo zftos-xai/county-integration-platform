@@ -3,6 +3,7 @@ package cn.zqkj.platform.masterdata.mapper.medicaldirectory;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryRecord;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectoryCountVO;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -34,12 +35,16 @@ public interface MedicalDirectoryCatalogMapper {
                                           @Param("organizationCodes") List<String> organizationCodes);
 
     /**
-     * 统计四类医疗目录当前有效记录数。
+     * 统计四类医疗目录当前有效记录数及北京时间今日新增数。
      *
      * @param organizationCode 可选机构筛选
      * @param organizationCodes 当前账号机构范围
-     * @return 按类型汇总的当前有效记录数
+     * @param todayStartUtc 北京时间今日零点对应的UTC时间
+     * @param tomorrowStartUtc 北京时间明日零点对应的UTC时间
+     * @return 按类型汇总的当前有效数和今日新增数
      */
     List<MedicalDirectoryCountVO> countByType(@Param("organizationCode") String organizationCode,
-                                                @Param("organizationCodes") List<String> organizationCodes);
+                                                @Param("organizationCodes") List<String> organizationCodes,
+                                                @Param("todayStartUtc") LocalDateTime todayStartUtc,
+                                                @Param("tomorrowStartUtc") LocalDateTime tomorrowStartUtc);
 }

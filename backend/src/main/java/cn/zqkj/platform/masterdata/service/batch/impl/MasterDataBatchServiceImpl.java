@@ -11,7 +11,6 @@ import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchStatus;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataCategory;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataSyncMode;
-import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryFullSyncRule;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchPageVO;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataSyncBusinessVO;
@@ -29,7 +28,6 @@ import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
 import cn.zqkj.platform.system.audit.service.ManagementAuditService;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointRuntimeConfiguration;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
-import cn.zqkj.platform.system.configuration.mapper.ConfigurationMapper;
 import cn.zqkj.platform.system.configuration.service.ExternalEndpointResolutionService;
 import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import java.util.ArrayList;
@@ -51,11 +49,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class MasterDataBatchServiceImpl implements MasterDataBatchService {
 
     private static final String SOURCE_SYSTEM_CODE = "PRIMARY_HIS";
-    private static final String FULL_SYNC_RULE_KEY = "medical-directory.full-sync-rule";
+    private static final String FULL_SYNC_RANGE_NOTE =
+            "用户指定的默认查询窗口：批次创建时刻向前20年至创建时刻；不证明HIS更早或无时间记录已覆盖";
     private static final List<MasterDataCategory> IMPLEMENTED_CATEGORIES = List.of(
             MasterDataCategory.HOSPITAL_DIRECTORY, MasterDataCategory.MEDICAL_DIRECTORY);
     private final MasterDataBatchMapper mapper;
-    private final ConfigurationMapper configurationMapper;
     private final HospitalDirectorySyncMapper hospitalDirectoryMapper;
     private final MedicalDirectorySyncMapper medicalDirectoryMapper;
     private final ManagementAuditService auditService;
@@ -68,7 +66,6 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
      * 创建基础数据同步批次服务。
      *
      * @param mapper 基础数据批次持久化边界
-     * @param configurationMapper 读取机构、环境绑定的全量来源规则
      * @param hospitalDirectoryMapper 100-003目录运行事实持久化边界
      * @param medicalDirectoryMapper 100-004/100-005目录运行事实持久化边界
      * @param auditService 管理审计追加服务
@@ -79,7 +76,6 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
      */
     public MasterDataBatchServiceImpl(
             MasterDataBatchMapper mapper,
-            ConfigurationMapper configurationMapper,
             HospitalDirectorySyncMapper hospitalDirectoryMapper,
             MedicalDirectorySyncMapper medicalDirectoryMapper,
             ManagementAuditService auditService,
@@ -89,7 +85,6 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
             TransactionTemplate transactions
     ) {
         this.mapper = mapper;
-        this.configurationMapper = configurationMapper;
         this.hospitalDirectoryMapper = hospitalDirectoryMapper;
         this.medicalDirectoryMapper = medicalDirectoryMapper;
         this.auditService = auditService;
@@ -232,20 +227,15 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
         for (var scope : scopes) {
             SourceBuilder source = grouped.get(scope.organizationCode());
             if (source == null) {
-                source = new SourceBuilder(scope.organizationCode(), scope.organizationName(),
-                        new ArrayList<>(), new ArrayList<>());
+                source = new SourceBuilder(scope.organizationCode(), scope.organizationName(), new ArrayList<>());
                 grouped.put(scope.organizationCode(), source);
             }
             source.environments().add(scope.environment());
-            if (fullRuleAvailable(scope.organizationId(), scope.environment())) {
-                source.fullSyncEnvironments().add(scope.environment());
-            }
         }
         List<MasterDataSyncSourceVO> sources = new ArrayList<>();
         for (SourceBuilder source : grouped.values()) {
             sources.add(new MasterDataSyncSourceVO(
-                    source.organizationCode(), source.organizationName(), List.copyOf(source.environments()),
-                    List.copyOf(source.fullSyncEnvironments())));
+                    source.organizationCode(), source.organizationName(), List.copyOf(source.environments())));
         }
         List<MasterDataSyncBusinessVO> businesses = new ArrayList<>();
         for (MasterDataCategory category : IMPLEMENTED_CATEGORIES) {
@@ -262,7 +252,8 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
     /**
      * 为已启用机构创建待执行同步批次，并记录创建审计。
      *
-     * <p>在同一事务内校验来源范围、创建幂等批次并追加成功审计；活动范围或请求标识重复时明确拒绝。</p>
+     * <p>全量模式由服务端冻结创建时刻及向前20年的查询起点，不接受调用方指定起止时间。
+     * 在同一事务内校验来源范围、创建幂等批次并追加成功审计；活动范围或请求标识重复时明确拒绝。</p>
      */
     @Transactional
     @Override
@@ -290,14 +281,12 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
         OffsetDateTime rangeEnd = request.rangeEnd();
         String fullRuleEvidence = null;
         if (request.mode() == MasterDataSyncMode.FULL) {
-            MedicalDirectoryFullSyncRule rule = requireFullRule(organizationId, request.environment(),
-                    runtime.endpoint().id());
-            rangeStart = rule.rangeStart();
             rangeEnd = OffsetDateTime.now(ZoneOffset.UTC).withNano(0);
+            rangeStart = rangeEnd.minusYears(20);
             if (!rangeEnd.isAfter(rangeStart)) {
-                throw new InvalidRequestException("已确认的全量规则起点不早于当前时间");
+                throw new InvalidRequestException("医疗目录全量查询范围无效");
             }
-            fullRuleEvidence = rule.evidence();
+            fullRuleEvidence = FULL_SYNC_RANGE_NOTE;
         }
         MasterDataBatchCreation creation = new MasterDataBatchCreation(
                 request.requestKey(), request.organizationCode(), request.environment(), request.category(),
@@ -407,42 +396,11 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
 
 
 
-    /** 只向页面开放与当前已验证端点匹配的全量规则。 */
-    private boolean fullRuleAvailable(long organizationId, ParameterEnvironment environment) {
-        var runtime = endpointResolutionService.findEnabledRuntime(SOURCE_SYSTEM_CODE, environment, organizationId);
-        if (runtime.isEmpty()) return false;
-        try {
-            MedicalDirectoryFullSyncRule rule = requireFullRule(
-                    organizationId, environment, runtime.get().endpoint().id());
-            return OffsetDateTime.now(ZoneOffset.UTC).isAfter(rule.rangeStart());
-        } catch (InvalidRequestException exception) {
-            return false;
-        }
-    }
-
-    /** 按机构和环境读取原子规则，缺失、停用或端点变化均拒绝全量创建。 */
-    private MedicalDirectoryFullSyncRule requireFullRule(
-            long organizationId, ParameterEnvironment environment, long endpointId) {
-        var saved = configurationMapper.findParameterValue(FULL_SYNC_RULE_KEY, environment, organizationId)
-                .filter(value -> value.enabled())
-                .orElseThrow(() -> new InvalidRequestException("该机构及环境尚未确认医疗目录全量查询规则"));
-        try {
-            MedicalDirectoryFullSyncRule rule = MedicalDirectoryFullSyncRule.parse(saved.value());
-            if (rule.endpointId() != endpointId) {
-                throw new InvalidRequestException("全量规则绑定的HIS端点与当前配置不一致");
-            }
-            return rule;
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("医疗目录全量查询规则无效，请重新确认来源口径");
-        }
-    }
-
     /** 汇总同一机构下的可用环境。 */
     private record SourceBuilder(
             String organizationCode,
             String organizationName,
-            List<ParameterEnvironment> environments,
-            List<ParameterEnvironment> fullSyncEnvironments
+            List<ParameterEnvironment> environments
     ) {
     }
 }

@@ -13,16 +13,19 @@ import type {
   MasterDataEnvironment,
   MasterDataSyncOptions,
 } from '@/api/master-data/batch'
-import type { MasterDataBatchForm } from '../form'
+import { previewFullSyncRange, type MasterDataBatchForm } from '../form'
 
 const props = defineProps<{
   options: MasterDataSyncOptions
+  isSourceLoading: boolean
+  sourceError: ApiClientError | null
   isSaving: boolean
   error: ApiClientError | null
   formError: string
 }>()
 const form = defineModel<MasterDataBatchForm>('form', { required: true })
-const emit = defineEmits<{ close: []; submit: []; reload: []; configure: [] }>()
+const fullRangePreview = ref(previewFullSyncRange(new Date()))
+const emit = defineEmits<{ close: []; submit: []; reload: []; configure: []; retrySources: [] }>()
 const isOpen = ref(true)
 const { dialogRef, handleDialogKeydown } = useModalDialog(isOpen, () =>
   emit('close'),
@@ -50,12 +53,6 @@ const selectedBusiness = computed(() =>
   ),
 )
 
-/** 全量范围必须由当前机构和接口环境的已确认规则提供。 */
-const fullSyncAvailable = computed(() =>
-  props.options.sources.find((item) => item.organizationCode === form.value.organizationCode)
-    ?.fullSyncEnvironments?.includes(form.value.environment) ?? false,
-)
-
 /** 将接口环境代码转换为业务人员可读名称。 */
 function environmentLabel(environment: MasterDataEnvironment) {
   if (environment === 'PRODUCTION') return '生产环境'
@@ -75,6 +72,24 @@ watch(
 )
 
 watch(
+  () => props.options.sources,
+  (sources) => {
+    if (sources.length && !sources.some((source) => source.organizationCode === form.value.organizationCode)) {
+      form.value.organizationCode = sources[0].organizationCode
+    }
+  },
+)
+
+watch(
+  () => props.options.businesses,
+  (businesses) => {
+    if (businesses.length && !businesses.some((business) => business.category === form.value.category)) {
+      form.value.category = businesses[0].category
+    }
+  },
+)
+
+watch(
   () => form.value.category,
   (category) => {
     form.value.mode = category === 'MEDICAL_DIRECTORY' ? 'TIME_RANGE' : 'NOT_APPLICABLE'
@@ -83,11 +98,12 @@ watch(
   },
 )
 
-watch(fullSyncAvailable, (available) => {
-  if (!available && form.value.category === 'MEDICAL_DIRECTORY' && form.value.mode === 'FULL') {
-    form.value.mode = 'TIME_RANGE'
-  }
-}, { immediate: true })
+watch(
+  () => form.value.mode,
+  (mode) => {
+    if (mode === 'FULL') fullRangePreview.value = previewFullSyncRange(new Date())
+  },
+)
 
 </script>
 
@@ -134,13 +150,32 @@ watch(fullSyncAvailable, (available) => {
         <div v-if="formError" class="feedback danger" role="alert">
           <AlertCircle :size="18" /><span>{{ formError }}</span>
         </div>
-        <section v-if="options.sources.length === 0" class="sync-source-unavailable">
+        <section v-if="isSourceLoading" class="sync-source-unavailable" role="status">
+          <LoaderCircle class="spinning" :size="20" />
+          <div><strong>正在读取可同步的机构</strong></div>
+        </section>
+        <section v-else-if="sourceError" class="sync-source-unavailable" role="alert">
+          <AlertCircle :size="20" />
+          <div>
+            <strong>暂时无法确认可同步的机构</strong>
+            <span>{{ sourceError.message }}；可用机构尚未确认。<template v-if="sourceError.requestId">请求编号：{{ sourceError.requestId }}</template></span>
+          </div>
+          <button class="work-quiet-button" type="button" @click="emit('retrySources')">重试读取</button>
+        </section>
+        <section v-else-if="options.sources.length === 0" class="sync-source-unavailable">
           <AlertCircle :size="20" />
           <div>
             <strong>当前还不能发起同步</strong>
-            <span>没有找到已启用并自动确认成功的基层 HIS 接口。机构编码和名称只在“机构管理”维护；请到接口配置补齐该机构的接口资料。</span>
+            <span>当前账号未取得可用的基层 HIS 机构和接口环境；请核对机构授权与接口状态。机构编码和名称只在“机构管理”维护。</span>
           </div>
           <button class="work-quiet-button" type="button" @click="emit('configure')">查看接口配置</button>
+        </section>
+        <section v-else-if="options.businesses.length === 0" class="sync-source-unavailable">
+          <AlertCircle :size="20" />
+          <div>
+            <strong>当前没有已开放的同步业务</strong>
+            <span>机构接口已可用，但尚无可执行的目录同步业务；请联系管理员确认业务接入状态。</span>
+          </div>
         </section>
         <form
           v-else
@@ -196,8 +231,8 @@ watch(fullSyncAvailable, (available) => {
             <fieldset v-if="selectedBusiness?.requiresTimeRange" class="batch-mode-field">
               <legend>本次同步方式</legend>
               <div class="batch-mode-options">
-                <label class="batch-mode-option" :class="{ 'is-selected': form.mode === 'FULL', 'is-disabled': !fullSyncAvailable }">
-                  <input v-model="form.mode" type="radio" value="FULL" :disabled="!fullSyncAvailable" />
+                <label class="batch-mode-option" :class="{ 'is-selected': form.mode === 'FULL' }">
+                  <input v-model="form.mode" type="radio" value="FULL" />
                   <span>全量同步</span>
                 </label>
                 <label class="batch-mode-option" :class="{ 'is-selected': form.mode === 'TIME_RANGE' }">
@@ -205,15 +240,15 @@ watch(fullSyncAvailable, (available) => {
                   <span>指定时间范围</span>
                 </label>
               </div>
-              <small v-if="!fullSyncAvailable" class="batch-mode-note">当前机构与环境尚未配置全量规则，暂不可选全量同步。</small>
             </fieldset>
-            <div v-if="selectedBusiness?.requiresTimeRange && form.mode === 'TIME_RANGE'" class="batch-range-field">
-              <strong>查询时间范围 <span>（北京时间）</span></strong>
+            <div v-if="selectedBusiness?.requiresTimeRange" class="batch-range-field">
+              <strong>查询时间范围 <span>（北京时间{{ form.mode === 'FULL' ? ' · 预计' : '' }}）</span></strong>
               <div class="batch-range-grid">
-                <label class="batch-form-field"><span>开始时间</span><input v-model="form.rangeStart" type="datetime-local" required /></label>
-                <label class="batch-form-field"><span>结束时间</span><input v-model="form.rangeEnd" type="datetime-local" required /></label>
+                <label class="batch-form-field"><span>开始时间</span><input v-if="form.mode === 'FULL'" :value="fullRangePreview.start" type="datetime-local" readonly /><input v-else v-model="form.rangeStart" type="datetime-local" required /></label>
+                <label class="batch-form-field"><span>结束时间</span><input v-if="form.mode === 'FULL'" :value="fullRangePreview.end" type="datetime-local" readonly /><input v-else v-model="form.rangeEnd" type="datetime-local" required /></label>
               </div>
-              <small>数量核对与目录查询使用同一范围，请按 HIS 提供方确认的口径填写。</small>
+              <small v-if="form.mode === 'FULL'">按创建时刻向前 20 年查询；以上为预览，实际范围以创建后的批次记录为准。更早或无时间记录不在范围内。</small>
+              <small v-else>数量核对与目录查询使用同一范围，请按 HIS 提供方确认的口径填写。</small>
             </div>
           </section>
         </form>
@@ -227,10 +262,10 @@ watch(fullSyncAvailable, (available) => {
         >
           取消</button
         ><button
-          v-if="options.sources.length > 0"
+          v-if="!isSourceLoading && !sourceError && options.sources.length > 0 && options.businesses.length > 0"
           class="prototype-button"
           type="button"
-          :disabled="isSaving || (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'FULL' && !fullSyncAvailable)"
+          :disabled="isSaving"
           @click="emit('submit')"
         >
           <LoaderCircle v-if="isSaving" class="spinning" :size="15" />{{
@@ -301,6 +336,10 @@ watch(fullSyncAvailable, (available) => {
   font-size: 12px;
   outline-color: var(--accent);
 }
+.batch-start-form input[readonly] {
+  background: #f5f9f8;
+  color: #35545d;
+}
 .batch-setup-grid,
 .batch-range-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .batch-field-help { display: block; margin-top: 6px; color: #718089; font-size: 11px; line-height: 1.5; }
@@ -309,9 +348,7 @@ watch(fullSyncAvailable, (available) => {
 .batch-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .batch-start-form .batch-mode-option { min-height: 42px; padding: 8px 11px; display: flex; align-items: center; gap: 9px; border: 1px solid #cfd9dd; border-radius: 5px; background: #fff; cursor: pointer; }
 .batch-mode-option.is-selected { border-color: #70ae9f; background: #f1f8f6; color: #176f61; }
-.batch-mode-option.is-disabled { color: #87949a; background: #f6f8f9; cursor: not-allowed; }
 .batch-mode-option input[type="radio"] { width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: #176f61; }
-.batch-mode-note { display: block; margin-top: 7px; color: #718089; font-size: 11px; line-height: 1.5; }
 .batch-range-field { margin-top: 12px; display: grid; gap: 6px; color: #40545d; }
 .batch-range-field > strong { font-size: 12px; }
 .batch-range-field > strong span { color: #718089; font-weight: 500; }

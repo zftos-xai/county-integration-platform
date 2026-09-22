@@ -33,7 +33,7 @@
             <arg column="source_endpoint_id" javaType="java.lang.Long"/>
             <!-- 创建批次时绑定的HIS端点行版本 -->
             <arg column="source_endpoint_version" javaType="_byte[]"/>
-            <!-- 全量规则的非敏感确认依据，其他模式为空 -->
+            <!-- 近20年全量模式的查询范围说明，其他模式为空；列名沿用既有结构 -->
             <arg column="full_rule_evidence" javaType="java.lang.String"/>
             <!-- 本批次查询数据范围的起始UTC时间，空值表示不限制起点 -->
             <arg column="query_started_at" javaType="java.time.LocalDateTime"/>
@@ -92,7 +92,7 @@
         batches.source_organization_id,        <!-- 已验证来源机构标识的批次快照 -->
         batches.source_endpoint_id,            <!-- 创建批次时绑定的HIS端点主键 -->
         batches.source_endpoint_version,       <!-- 创建批次时绑定的HIS端点行版本 -->
-        batches.full_rule_evidence,            <!-- 全量规则的非敏感确认依据 -->
+        batches.full_rule_evidence,            <!-- 近20年全量模式的查询范围说明，列名沿用既有结构 -->
         batches.query_started_at,              <!-- 查询范围起始UTC时间，不限起点时为空 -->
         batches.query_ended_at,                <!-- 查询范围结束UTC时间，不限终点时为空 -->
         batches.batch_status,                  <!-- 批次当前生命周期状态 -->
@@ -188,7 +188,7 @@
             source_organization_id,<!-- 已验证来源机构标识的批次快照 -->
             source_endpoint_id,    <!-- 创建时绑定的HIS服务端点主键 -->
             source_endpoint_version, <!-- 创建时绑定的HIS端点行版本 -->
-            full_rule_evidence,    <!-- 全量规则的非敏感确认依据 -->
+            full_rule_evidence,    <!-- 近20年全量模式的查询范围说明，列名沿用既有结构 -->
             query_started_at,      <!-- 查询范围起始UTC时间，不限起点时为空 -->
             query_ended_at,        <!-- 查询范围结束UTC时间，不限终点时为空 -->
             diagnosis_category,    <!-- 诊断目录分类，非诊断批次为空 -->

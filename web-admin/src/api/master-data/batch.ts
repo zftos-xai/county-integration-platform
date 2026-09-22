@@ -100,6 +100,7 @@ export type MasterDataBatchSummary = {
   countTradeCode: string | null
   sourceType: string | null
   sourceOrganizationId: string | null
+  /** 近20年全量模式的查询范围说明；属性名沿用既有批次接口。 */
   fullRuleEvidence?: string | null
   rangeStart: string | null
   rangeEnd: string | null
@@ -137,7 +138,6 @@ export type MasterDataSyncSource = {
   organizationCode: string
   organizationName: string
   environments: MasterDataEnvironment[]
-  fullSyncEnvironments?: MasterDataEnvironment[]
 }
 
 /** 平台当前已经具备完整执行闭环的基础数据业务。 */
@@ -160,7 +160,6 @@ export function isMasterDataSyncSource(
   value: unknown,
 ): value is MasterDataSyncSource {
   if (!isRecord(value) || !Array.isArray(value.environments)) return false
-  const environments: unknown[] = value.environments
   return (
     typeof value.organizationCode === 'string' &&
     typeof value.organizationName === 'string' &&
@@ -168,10 +167,7 @@ export function isMasterDataSyncSource(
     value.environments.every(
       (item) =>
         item === 'DEVELOPMENT' || item === 'TEST' || item === 'PRODUCTION',
-    ) &&
-    (value.fullSyncEnvironments === undefined ||
-      (Array.isArray(value.fullSyncEnvironments) &&
-        value.fullSyncEnvironments.every((item) => environments.includes(item))))
+    )
   )
 }
 

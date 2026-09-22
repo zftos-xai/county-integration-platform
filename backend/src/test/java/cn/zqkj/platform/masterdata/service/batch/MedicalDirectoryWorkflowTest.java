@@ -24,7 +24,6 @@ import cn.zqkj.platform.system.audit.service.ManagementAuditService;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpoint;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointRuntimeConfiguration;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
-import cn.zqkj.platform.system.configuration.mapper.ConfigurationMapper;
 import cn.zqkj.platform.system.configuration.service.ExternalEndpointResolutionService;
 import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import java.time.OffsetDateTime;
@@ -72,7 +71,7 @@ class MedicalDirectoryWorkflowTest {
         var transactions = new TransactionTemplate(manager);
         var fetch = new MedicalDirectoryFetchServiceImpl(his, new MedicalDirectoryValidationServiceImpl(), records, "Asia/Shanghai");
         var sync = new MedicalDirectorySyncServiceImpl(directoryMapper, fetch, audit, transactions, mapper);
-        var service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), directoryMapper,
+        var service = new MasterDataBatchServiceImpl(mapper, mock(HospitalDirectorySyncMapper.class), directoryMapper,
                 audit, endpoints, mock(HospitalDirectorySyncService.class), sync, transactions);
         var persisted = new AtomicReference<MasterDataBatchSnapshot>();
         when(mapper.findEnabledOrganizationId("ORG-008")).thenReturn(8L);

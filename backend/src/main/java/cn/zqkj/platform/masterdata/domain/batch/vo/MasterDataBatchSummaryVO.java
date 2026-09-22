@@ -24,7 +24,7 @@ import java.time.OffsetDateTime;
  * @param countTradeCode 数量查询交易码；来源不提供时为空
  * @param sourceType 来源接口目录类型；接口不需要时为空
  * @param sourceOrganizationId 发起批次时固化的来源机构标识；公共目录为空
- * @param fullRuleEvidence 全量规则的非敏感确认依据；非全量为空
+ * @param fullRuleEvidence 全量模式的查询范围说明；非全量为空，字段名沿用既有表结构
  * @param rangeStart 来源查询范围起点
  * @param rangeEnd 来源查询范围终点
  * @param status 批次状态

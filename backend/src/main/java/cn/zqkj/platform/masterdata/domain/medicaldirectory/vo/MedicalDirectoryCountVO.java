@@ -11,6 +11,7 @@ import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirector
  *
  * @param directoryType 医疗目录类型
  * @param total 当前有效记录数
+ * @param todayNewCount 北京时间今天首次写入平台且当前仍有效的记录数
  */
-public record MedicalDirectoryCountVO(MedicalDirectoryType directoryType, long total) {
+public record MedicalDirectoryCountVO(MedicalDirectoryType directoryType, long total, long todayNewCount) {
 }

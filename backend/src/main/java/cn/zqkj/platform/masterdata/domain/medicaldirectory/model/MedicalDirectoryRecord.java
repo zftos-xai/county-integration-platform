@@ -35,6 +35,7 @@ import java.time.LocalDateTime;
  * @param latestBatchId 最近成功批次主键
  * @param latestBatchNo 最近成功批次编号
  * @param sourceOrganizationId 最近调用实际使用的HIS来源机构参数
+ * @param firstSeenAt 平台首次记录该来源目录的UTC时间
  * @param lastSeenAt 最近成功同步时间
  */
 public record MedicalDirectoryRecord(
@@ -64,6 +65,7 @@ public record MedicalDirectoryRecord(
         long latestBatchId,
         String latestBatchNo,
         String sourceOrganizationId,
+        LocalDateTime firstSeenAt,
         LocalDateTime lastSeenAt
 ) {
 }

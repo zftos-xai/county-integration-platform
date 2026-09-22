@@ -1,0 +1,57 @@
+/* 批次详情沿用目录详情的紧凑字段栅格；独立命名避免覆盖已有 .detail-grid。 */
+.batch-detail-grid-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.batch-detail-grid-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.batch-detail-grid {
+  --detail-line: #b9cdd0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: max-content;
+  margin: 0;
+  gap: 0;
+  border-top: 1px dashed var(--detail-line);
+  border-left: 1px dashed var(--detail-line);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.batch-detail-grid > div {
+  display: grid;
+  grid-template-columns: var(--detail-label-width, 100px) minmax(max-content, 1fr);
+  min-width: 0;
+  border-right: 1px dashed var(--detail-line);
+  border-bottom: 1px dashed var(--detail-line);
+}
+
+.batch-detail-grid > .batch-detail-grid-wide {
+  grid-column: 1 / -1;
+}
+
+.batch-detail-grid dt,
+.batch-detail-grid dd {
+  padding: 4px 7px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.batch-detail-grid dt {
+  border-right: 1px dashed var(--detail-line);
+  background: #f6f8f9;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.batch-detail-grid dd {
+  min-width: 0;
+  margin: 0;
+  color: #3a515a;
+  font-size: 12px;
+}

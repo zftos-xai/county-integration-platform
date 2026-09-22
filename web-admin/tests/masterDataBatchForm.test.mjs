@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { emptyMasterDataBatchForm, toStartMasterDataBatchInput, validateMasterDataBatchForm } from '../src/views/master-data/batch/form.ts'
+import { emptyMasterDataBatchForm, previewFullSyncRange, toStartMasterDataBatchInput, validateMasterDataBatchForm } from '../src/views/master-data/batch/form.ts'
+
+test('全量范围预览按北京时间显示服务端的20年窗口，不依赖浏览器时区', () => {
+  const preview = previewFullSyncRange(new Date('2026-09-22T06:12:23Z'))
+  assert.deepEqual(preview, { start: '2006-09-22T14:12', end: '2026-09-22T14:12' })
+})
 
 test('医疗目录医院时间带明确偏移，不能依赖浏览器本地时区', () => {
   const form = { ...emptyMasterDataBatchForm('ORG001'), category: 'MEDICAL_DIRECTORY', mode: 'TIME_RANGE', rangeStart: '2026-09-01T09:00', rangeEnd: '2026-09-22T09:00' }

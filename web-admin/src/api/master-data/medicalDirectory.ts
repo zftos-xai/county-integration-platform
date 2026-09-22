@@ -44,6 +44,8 @@ export type MedicalDirectoryItem = {
   latestBatchId: number
   latestBatchNo: string
   sourceOrganizationId: string | null
+  firstSeenAt: string
+  newToday: boolean
   lastSeenAt: string
 }
 
@@ -51,6 +53,7 @@ export type MedicalDirectoryItem = {
 export type MedicalDirectoryCount = {
   directoryType: MedicalDirectoryType
   total: number
+  todayNewCount: number
 }
 
 /** 医疗目录分页响应。 */
@@ -102,6 +105,8 @@ export function isMedicalDirectoryItem(
     typeof value.latestBatchNo === 'string' &&
     (typeof value.sourceOrganizationId === 'string' ||
       value.sourceOrganizationId === null) &&
+    typeof value.firstSeenAt === 'string' &&
+    typeof value.newToday === 'boolean' &&
     typeof value.lastSeenAt === 'string'
   )
 }
@@ -119,7 +124,8 @@ export function isMedicalDirectoryPage(
       (count) =>
         isRecord(count) &&
         isMedicalDirectoryType(count.directoryType) &&
-        typeof count.total === 'number',
+        typeof count.total === 'number' &&
+        typeof count.todayNewCount === 'number',
     ) &&
     typeof value.total === 'number' &&
     typeof value.page === 'number' &&

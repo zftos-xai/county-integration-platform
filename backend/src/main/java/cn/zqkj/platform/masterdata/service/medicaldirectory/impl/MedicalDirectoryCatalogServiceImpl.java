@@ -8,6 +8,10 @@ import cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectoryIt
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectoryPageVO;
 import cn.zqkj.platform.masterdata.mapper.medicaldirectory.MedicalDirectoryCatalogMapper;
 import cn.zqkj.platform.masterdata.service.medicaldirectory.MedicalDirectoryCatalogService;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -19,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MedicalDirectoryCatalogServiceImpl implements MedicalDirectoryCatalogService {
 
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
     private final MedicalDirectoryCatalogMapper mapper;
 
     /**
@@ -39,12 +44,18 @@ public class MedicalDirectoryCatalogServiceImpl implements MedicalDirectoryCatal
     @Transactional(readOnly = true)
     public MedicalDirectoryPageVO findPage(MedicalDirectoryQuery query, List<String> allowedOrganizationCodes) {
         List<String> organizationCodes = List.copyOf(allowedOrganizationCodes);
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDateTime todayStartUtc = today.atStartOfDay(BUSINESS_ZONE)
+                .withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
+        LocalDateTime tomorrowStartUtc = today.plusDays(1).atStartOfDay(BUSINESS_ZONE)
+                .withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
         long total = mapper.countPage(query, organizationCodes);
         List<MedicalDirectoryItemVO> items = new ArrayList<>();
         for (MedicalDirectoryRecord record : mapper.findPage(query, organizationCodes)) {
-            items.add(toView(record));
+            items.add(toView(record, todayStartUtc, tomorrowStartUtc));
         }
-        List<MedicalDirectoryCountVO> counts = mapper.countByType(query.organizationCode(), organizationCodes);
+        List<MedicalDirectoryCountVO> counts = mapper.countByType(
+                query.organizationCode(), organizationCodes, todayStartUtc, tomorrowStartUtc);
         return new MedicalDirectoryPageVO(items, counts, total, query.page(), query.pageSize());
     }
 
@@ -52,9 +63,14 @@ public class MedicalDirectoryCatalogServiceImpl implements MedicalDirectoryCatal
      * 将数据库投影转换为不暴露内部字段的只读输出。
      *
      * @param record 当前有效医疗目录记录
+     * @param todayStartUtc 北京时间今日零点对应的UTC时间
+     * @param tomorrowStartUtc 北京时间明日零点对应的UTC时间
      * @return 对外只读视图
      */
-    private MedicalDirectoryItemVO toView(MedicalDirectoryRecord record) {
+    private MedicalDirectoryItemVO toView(MedicalDirectoryRecord record,
+                                          LocalDateTime todayStartUtc, LocalDateTime tomorrowStartUtc) {
+        boolean newToday = !record.firstSeenAt().isBefore(todayStartUtc)
+                && record.firstSeenAt().isBefore(tomorrowStartUtc);
         return new MedicalDirectoryItemVO(
                 record.id(), record.organizationCode(), record.organizationName(), record.directoryType(),
                 record.sourceRecordCode(), record.sourceRecordName(), record.mnemonicCode(), record.categoryName(),
@@ -62,6 +78,7 @@ public class MedicalDirectoryCatalogServiceImpl implements MedicalDirectoryCatal
                 record.sourceCreatedAt(), record.dosageForm(), record.remark(), record.packageUnit(),
                 record.conversionFactor(), record.approvalNumber(), record.standardCode(), record.packageMaterial(),
                 record.processingMethod(), record.region(), record.category(), record.latestBatchId(), record.latestBatchNo(),
-                record.sourceOrganizationId(), Func.toOffset(record.lastSeenAt()));
+                record.sourceOrganizationId(), Func.toOffset(record.firstSeenAt()), newToday,
+                Func.toOffset(record.lastSeenAt()));
     }
 }

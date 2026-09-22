@@ -7,13 +7,17 @@ import cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectoryCo
 import cn.zqkj.platform.masterdata.mapper.medicaldirectory.MedicalDirectoryCatalogMapper;
 import cn.zqkj.platform.masterdata.service.medicaldirectory.impl.MedicalDirectoryCatalogServiceImpl;
 import jakarta.validation.Validation;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -57,6 +61,10 @@ class MedicalDirectoryCatalogServiceTest {
         MedicalDirectoryCatalogService service = new MedicalDirectoryCatalogServiceImpl(mapper);
         MedicalDirectoryQuery query = new MedicalDirectoryQuery(
                 " ORG001 ", MedicalDirectoryType.WESTERN_MEDICINE, " 阿莫 ", "是", 1, 20);
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        LocalDateTime todayStartUtc = today.atStartOfDay(ZoneId.of("Asia/Shanghai"))
+                .withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
+        LocalDateTime tomorrowStartUtc = todayStartUtc.plusDays(1);
         LocalDateTime synchronizedAt = LocalDateTime.of(2026, 9, 21, 8, 30);
         when(mapper.countPage(any(), eq(List.of("ORG001")))).thenReturn(1L);
         when(mapper.findPage(any(), eq(List.of("ORG001")))).thenReturn(List.of(
@@ -64,9 +72,10 @@ class MedicalDirectoryCatalogServiceTest {
                         9L, "ORG001", "测试机构", MedicalDirectoryType.WESTERN_MEDICINE,
                         "W001", "阿莫西林", "AMXL", "西药", "盒", "0.25g", "测试厂家", "启用",
                         "2026-09-20", "胶囊剂", "来源备注", "盒", "24", "国药准字H001", "本位码001",
-                        "铝塑", "炮制说明", "四川", "抗感染", 25L, "BD-TEST", "HIS-ORG-01", synchronizedAt)));
-        when(mapper.countByType("ORG001", List.of("ORG001"))).thenReturn(List.of(
-                new MedicalDirectoryCountVO(MedicalDirectoryType.WESTERN_MEDICINE, 1L)));
+                        "铝塑", "炮制说明", "四川", "抗感染", 25L, "BD-TEST", "HIS-ORG-01",
+                        todayStartUtc.plusHours(1), synchronizedAt)));
+        when(mapper.countByType("ORG001", List.of("ORG001"), todayStartUtc, tomorrowStartUtc)).thenReturn(List.of(
+                new MedicalDirectoryCountVO(MedicalDirectoryType.WESTERN_MEDICINE, 1L, 1L)));
 
         var result = service.findPage(query, List.of("ORG001"));
 
@@ -83,8 +92,10 @@ class MedicalDirectoryCatalogServiceTest {
         assertEquals("炮制说明", result.items().get(0).processingMethod());
         assertEquals("四川", result.items().get(0).region());
         assertEquals("抗感染", result.items().get(0).category());
+        assertTrue(result.items().get(0).newToday());
+        assertEquals(1L, result.counts().get(0).todayNewCount());
         assertEquals(MedicalDirectoryType.WESTERN_MEDICINE, result.counts().get(0).directoryType());
-        verify(mapper).countByType("ORG001", List.of("ORG001"));
+        verify(mapper).countByType("ORG001", List.of("ORG001"), todayStartUtc, tomorrowStartUtc);
     }
 
     /** 验证空机构范围始终传给查询边界，不能退化成全机构查询。 */

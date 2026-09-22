@@ -13,6 +13,7 @@ const props = defineProps<{
   typeLabels: Record<T, string>
   directoryType: T
   counts: Record<T, number>
+  todayNewCounts?: Record<T, number>
   total: number
   isLoading: boolean
   isRefreshing: boolean
@@ -116,6 +117,7 @@ onBeforeUnmount(() => request.abort())
     <nav class="dataset-nav" aria-label="基础数据集">
       <RouterLink :class="{ active: route.path === '/master-data/directory' }" :to="{ path: '/master-data/directory', query: navigationQuery }">综合目录</RouterLink>
       <RouterLink :class="{ active: route.path === '/master-data/directory/medical' }" :to="{ path: '/master-data/directory/medical', query: navigationQuery }">三大目录</RouterLink>
+      <RouterLink :class="{ active: route.path === '/master-data/directory/icd10' }" to="/master-data/directory/icd10">ICD-10</RouterLink>
     </nav>
     <aside class="organization-rail" aria-label="平台机构">
       <header><h2>平台机构</h2><span>{{ visibleOrganizations.length }} 家</span></header>
@@ -138,7 +140,10 @@ onBeforeUnmount(() => request.abort())
         </span>
       </header>
       <nav class="directory-tabs" :aria-label="`${title}类型`">
-        <button v-for="type in types" :key="type" type="button" :aria-pressed="directoryType === type" :class="{ active: directoryType === type }" @click="emit('typeChange', type)">{{ typeLabels[type] }}<span>{{ isLoading || error ? '—' : counts[type] }}</span></button>
+        <button v-for="type in types" :key="type" type="button" :aria-pressed="directoryType === type" :class="{ active: directoryType === type, 'has-new': !isLoading && !error && Boolean(todayNewCounts?.[type]) }" @click="emit('typeChange', type)">
+          {{ typeLabels[type] }}<span>{{ isLoading || error ? '—' : counts[type] }}</span>
+          <span v-if="!isLoading && !error && todayNewCounts?.[type]" class="directory-new-mark" :title="`今日新增 ${todayNewCounts[type]} 条`" :aria-label="`今日新增 ${todayNewCounts[type]} 条`">NEW</span>
+        </button>
       </nav>
       <section class="directory-panel">
         <form class="directory-toolbar" @submit.prevent="emit('search')">
@@ -198,9 +203,11 @@ onBeforeUnmount(() => request.abort())
 .directory-published-state.is-empty { color:var(--muted); }
 .directory-tabs { padding:0 18px; border-top:1px solid var(--line-soft); border-bottom:1px solid var(--line); display:flex; gap:28px; overflow-x:auto; }
 .directory-tabs button { height:45px; padding:0 2px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--muted); font-size:12px; font-weight:600; white-space:nowrap; }
+.directory-tabs button.has-new { position:relative; padding-right:11px; }
 .directory-tabs button span { margin-left:5px; padding:1px 6px; border-radius:10px; background:#eef3f4; color:var(--muted); font-size:11px; }
 .directory-tabs button.active { border-bottom-color:var(--accent); color:var(--accent); }
 .directory-tabs button.active span { background:#e2f1ed; color:var(--accent); }
+.directory-tabs button .directory-new-mark,.directory-tabs button.active .directory-new-mark { position:absolute; top:2px; right:0; margin:0; padding:0 3px; border-radius:3px; background:#b6432d; color:#fff; font-size:8px; font-weight:750; line-height:12px; letter-spacing:.02em; }
 .directory-panel { min-width:0; background:var(--surface); }
 .directory-toolbar { padding:11px 16px; border-bottom:1px solid var(--line-soft); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .directory-toolbar>span { margin-left:auto; color:var(--muted); font-size:12px; white-space:nowrap; }

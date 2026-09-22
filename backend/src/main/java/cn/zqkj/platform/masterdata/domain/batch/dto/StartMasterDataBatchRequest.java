@@ -13,7 +13,7 @@ import java.time.OffsetDateTime;
 /**
  * 接收一次指定同步模式的基础数据同步请求。
  *
- * <p>按时间查询使用调用人指定的范围；全量查询的实际范围只能从服务端已确认规则取得。</p>
+ * <p>按时间查询使用调用人指定的范围；全量模式由服务端固定为批次创建时刻向前20年。</p>
  *
  * <p>写入目标：{@code dbo.md_sync_batch}。业务说明：记录同步条件和幂等标识；类别决定交易，来源配置决定机构标识，运行状态由服务维护，此输入不是完整表行。</p>
  *
@@ -21,7 +21,7 @@ import java.time.OffsetDateTime;
  * @param organizationCode 要同步的平台机构代码
  * @param environment 调用机构接口时使用的明确运行环境
  * @param category 基础数据类别
- * @param mode 医疗目录的全量或指定范围模式；医院综合目录不适用
+ * @param mode 医疗目录的近20年全量或指定范围模式；医院综合目录不适用
  * @param rangeStart 医疗目录来源查询开始时间；非医疗目录为空
  * @param rangeEnd 医疗目录来源查询结束时间；非医疗目录为空
  */

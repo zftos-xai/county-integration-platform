@@ -9,7 +9,7 @@
 .directory-code { font-variant-numeric:tabular-nums; }
 .batch-link { color:var(--accent); text-decoration:none; }
 .batch-link:hover { text-decoration:underline; }
-.directory-table .directory-actions { text-align:right; }
+.directory-table th:last-child,.directory-table .directory-actions { text-align:right; }
 .directory-table th:last-child,.directory-table td.directory-actions { position:sticky; right:0; z-index:1; background:#f6f8f9; box-shadow:-1px 0 var(--line-soft); }
 .directory-table td.directory-actions { background:var(--surface); }
 .directory-table tr.expanded td.directory-actions { background:#f1f8f6; }

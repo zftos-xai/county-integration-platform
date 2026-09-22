@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class MedicalDirectoryFetchServiceImpl implements MedicalDirectoryFetchService {
 
+    // HIS单次只请求有界行数；接口资料未公布最大值，调整该值前必须与来源方核实。
     private static final int PAGE_SIZE = 100;
     private final PhisService phisService;
     private final MedicalDirectoryValidationService validationService;
@@ -168,7 +169,8 @@ public class MedicalDirectoryFetchServiceImpl implements MedicalDirectoryFetchSe
                     receivedAt, LocalDateTime.now(ZoneOffset.UTC)));
             throw new PhisProtocolException(trade.code() + "缺少有效响应；交易号" + requestId);
         }
-        String summary = response.success() ? "HIS查询成功" : safeBusinessFailure(response.errorMessage());
+        String summary = response.success() ? successfulResultSummary(response.data())
+                : safeBusinessFailure(response.errorMessage());
         exchangeRecords.record(new ExchangeRuntimeRecord(requestId, trade.code(), "PLATFORM", "PRIMARY_HIS",
                 batch.organizationCode(), batch.batchNo(), response.success() ? ExchangeResult.SUCCESS : ExchangeResult.FAILURE,
                 response.resultCode(), summary, (System.nanoTime() - startedAt) / 1_000_000,
@@ -178,6 +180,13 @@ public class MedicalDirectoryFetchServiceImpl implements MedicalDirectoryFetchSe
                     + "）：" + summary + "；交易号" + requestId);
         }
         return response;
+    }
+
+    /** 交换记录只保存数量事实，不复制医疗目录正文。 */
+    private String successfulResultSummary(Object data) {
+        if (data instanceof List<?> rows) return "HIS查询成功，返回" + rows.size() + "条";
+        if (data instanceof Long count) return "HIS声明" + count + "条";
+        return "HIS查询成功";
     }
 
     private String safeBusinessFailure(String message) {

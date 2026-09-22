@@ -23,9 +23,6 @@ import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointRuntim
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointScope;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointVerificationStatus;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
-import cn.zqkj.platform.system.configuration.domain.model.ParameterValue;
-import cn.zqkj.platform.system.configuration.domain.model.ParameterValueType;
-import cn.zqkj.platform.system.configuration.mapper.ConfigurationMapper;
 import cn.zqkj.platform.system.configuration.service.ExternalEndpointResolutionService;
 import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import java.util.List;
@@ -51,12 +48,11 @@ import static org.mockito.Mockito.when;
  */
 class MasterDataBatchServiceTest {
 
-    /** 缺少来源方确认规则时，即使直接调用Service也不能伪造全量批次。 */
+    /** 全量批次不接受浏览器自选起止时间。 */
     @Test
-    void rejectsFullBatchWithoutConfirmedRule() {
+    void rejectsFullBatchWithCallerSuppliedRange() {
         var mapper = mock(MasterDataBatchMapper.class);
-        var config = mock(ConfigurationMapper.class);
-        var service = new MasterDataBatchServiceImpl(mapper, config,
+        var service = new MasterDataBatchServiceImpl(mapper,
                 mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(),
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
@@ -65,42 +61,38 @@ class MasterDataBatchServiceTest {
 
         assertThrows(InvalidRequestException.class, () -> service.start(new StartMasterDataBatchRequest(
                 "FULL-REQUEST-20260922", "ORG001", ParameterEnvironment.PRODUCTION,
-                MasterDataCategory.MEDICAL_DIRECTORY, MasterDataSyncMode.FULL, null, null), actor()));
+                MasterDataCategory.MEDICAL_DIRECTORY, MasterDataSyncMode.FULL,
+                java.time.OffsetDateTime.parse("2026-09-01T09:00:00+08:00"), null), actor()));
 
         org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never())
                 .create(any(), any(), any(), anyLong(), any(), any());
     }
 
-    /** 已确认规则在服务端生成固定UTC范围，浏览器不能指定下界或截止时间。 */
+    /** 全量入口在服务端冻结创建时刻及向前20年的UTC窗口。 */
     @Test
-    void freezesConfirmedFullRangeAtCreation() {
+    void freezesDefaultFullRangeAtCreation() {
         var mapper = mock(MasterDataBatchMapper.class);
-        var config = mock(ConfigurationMapper.class);
-        var service = new MasterDataBatchServiceImpl(mapper, config,
+        var service = new MasterDataBatchServiceImpl(mapper,
                 mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(),
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
                 mock(TransactionTemplate.class));
         when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
-        String evidence = "来源方确认四类目录的时间字段、空值、最早记录和完整覆盖规则";
-        String rule = "{\"endpointId\":9,\"rangeStart\":\"2000-01-01T00:00:00+08:00\",\"evidence\":\""
-                + evidence + "\"}";
-        when(config.findParameterValue("medical-directory.full-sync-rule", ParameterEnvironment.PRODUCTION, 10L))
-                .thenReturn(Optional.of(new ParameterValue(1L, "medical-directory.full-sync-rule",
-                        ParameterValueType.STRING, ParameterEnvironment.PRODUCTION, 10L, "ORG001",
-                        rule, true, null, null, new byte[8])));
         when(mapper.create(any(), any(), any(), anyLong(), any(), any())).thenReturn(25L);
         when(mapper.findById(25L)).thenReturn(snapshot());
+        var beforeCreation = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusSeconds(1);
 
         service.start(new StartMasterDataBatchRequest("FULL-REQUEST-20260922", "ORG001",
                 ParameterEnvironment.PRODUCTION, MasterDataCategory.MEDICAL_DIRECTORY,
                 MasterDataSyncMode.FULL, null, null), actor());
+        var afterCreation = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).plusSeconds(1);
 
         org.mockito.Mockito.verify(mapper).create(any(), any(), org.mockito.ArgumentMatchers.argThat(creation ->
                         creation.mode() == MasterDataSyncMode.FULL
-                                && creation.rangeStart().equals(java.time.LocalDateTime.of(1999, 12, 31, 16, 0))
-                                && creation.rangeEnd().isAfter(creation.rangeStart())
-                                && creation.fullRuleEvidence().equals(evidence)
+                                && creation.rangeStart().equals(creation.rangeEnd().minusYears(20))
+                                && creation.rangeEnd().isAfter(beforeCreation)
+                                && creation.rangeEnd().isBefore(afterCreation)
+                                && creation.fullRuleEvidence().contains("不证明HIS更早或无时间记录已覆盖")
                                 && creation.sourceEndpointId() == 9L),
                 org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq("ORG001"),
                 org.mockito.ArgumentMatchers.eq("admin"));
@@ -110,7 +102,7 @@ class MasterDataBatchServiceTest {
     @Test
     void createsMedicalBatchWithPlatformOrganizationCode() {
         var mapper = mock(MasterDataBatchMapper.class);
-        var service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class),
+        var service = new MasterDataBatchServiceImpl(mapper,
                 mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(),
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class), mock(TransactionTemplate.class));
@@ -134,7 +126,7 @@ class MasterDataBatchServiceTest {
         var mapper = mock(MasterDataBatchMapper.class);
         var hospital = mock(HospitalDirectorySyncService.class);
         var medical = mock(MedicalDirectorySyncService.class);
-        var service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class),
+        var service = new MasterDataBatchServiceImpl(mapper,
                 mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(), hospital, medical,
                 mock(TransactionTemplate.class));
@@ -153,7 +145,7 @@ class MasterDataBatchServiceTest {
         var manager = mock(PlatformTransactionManager.class);
         var transaction = mock(TransactionStatus.class);
         when(manager.getTransaction(any())).thenReturn(transaction);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class),
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper,
                 mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(), hospital, medical,
                 new TransactionTemplate(manager));
@@ -179,7 +171,7 @@ class MasterDataBatchServiceTest {
         HospitalDirectorySyncService hospital = mock(HospitalDirectorySyncService.class);
         MedicalDirectorySyncService medical = mock(MedicalDirectorySyncService.class);
         var manager = mock(PlatformTransactionManager.class);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class),
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper,
                 mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(), hospital, medical,
                 new TransactionTemplate(manager));
@@ -202,7 +194,7 @@ class MasterDataBatchServiceTest {
         when(endpointService.findAvailableScopes("PRIMARY_HIS", List.of("ORG001")))
                 .thenReturn(List.of(new ExternalEndpointScope(
                         10L, "ORG001", "测试机构", ParameterEnvironment.PRODUCTION)));
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), endpointService,
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
                 mock(TransactionTemplate.class));
@@ -210,6 +202,7 @@ class MasterDataBatchServiceTest {
         var result = service.findSyncOptions(List.of("ORG001"));
 
         assertEquals("ORG001", result.sources().get(0).organizationCode());
+        assertEquals(List.of(ParameterEnvironment.PRODUCTION), result.sources().get(0).environments());
         assertEquals(MasterDataCategory.HOSPITAL_DIRECTORY, result.businesses().get(0).category());
         assertEquals("100-003", result.businesses().get(0).tradeCode());
     }
@@ -219,7 +212,7 @@ class MasterDataBatchServiceTest {
     void createsHospitalDirectoryBatchWithoutSourceType() {
         MasterDataBatchMapper mapper = mock(MasterDataBatchMapper.class);
         ExternalEndpointResolutionService endpointService = availableEndpointService();
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), endpointService,
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
                 mock(TransactionTemplate.class));
@@ -247,7 +240,7 @@ class MasterDataBatchServiceTest {
                                 true, true, null, null, new byte[8], "测试机构", null, null,
                                 ExternalEndpointVerificationStatus.VERIFIED, null, null),
                         new ExternalEndpointAuthentication("V01", null, null, "AUTH"))));
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), endpointService,
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
                 mock(TransactionTemplate.class));
@@ -266,7 +259,7 @@ class MasterDataBatchServiceTest {
     @Test
     void cancelsCreatedBatchWithOptimisticVersion() {
         MasterDataBatchMapper mapper = mock(MasterDataBatchMapper.class);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(),
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
                 mock(TransactionTemplate.class));
@@ -294,7 +287,7 @@ class MasterDataBatchServiceTest {
     void readsHospitalDirectoryResultsThroughHospitalDirectoryMapper() {
         MasterDataBatchMapper batchMapper = mock(MasterDataBatchMapper.class);
         HospitalDirectorySyncMapper directoryMapper = mock(HospitalDirectorySyncMapper.class);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, mock(ConfigurationMapper.class), directoryMapper, mock(MedicalDirectorySyncMapper.class),
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, directoryMapper, mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(),
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
                 mock(TransactionTemplate.class));
@@ -311,7 +304,7 @@ class MasterDataBatchServiceTest {
     void readsMedicalDirectoryResultsThroughMedicalDirectoryMapper() {
         MasterDataBatchMapper batchMapper = mock(MasterDataBatchMapper.class);
         MedicalDirectorySyncMapper directoryMapper = mock(MedicalDirectorySyncMapper.class);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), directoryMapper,
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, mock(HospitalDirectorySyncMapper.class), directoryMapper,
                 mock(ManagementAuditService.class), availableEndpointService(),
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
                 mock(TransactionTemplate.class));
@@ -335,7 +328,7 @@ class MasterDataBatchServiceTest {
     void hidesBatchOutsideCallerOrganizationScope() {
         MasterDataBatchMapper batchMapper = mock(MasterDataBatchMapper.class);
         HospitalDirectorySyncMapper directoryMapper = mock(HospitalDirectorySyncMapper.class);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, mock(ConfigurationMapper.class), directoryMapper, mock(MedicalDirectorySyncMapper.class),
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, directoryMapper, mock(MedicalDirectorySyncMapper.class),
                 mock(ManagementAuditService.class), availableEndpointService(),
                 mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
                 mock(TransactionTemplate.class));

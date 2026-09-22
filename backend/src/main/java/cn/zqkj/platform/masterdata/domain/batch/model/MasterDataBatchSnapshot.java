@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
  * @param sourceOrganizationId 发起批次时固化的已验证来源机构标识
  * @param sourceEndpointId 发起批次时绑定的服务端点主键
  * @param sourceEndpointVersion 发起批次时绑定的服务端点行版本
- * @param fullRuleEvidence 全量规则的非敏感确认依据；非全量为空
+ * @param fullRuleEvidence 全量模式的查询范围说明；非全量为空，字段名沿用既有表结构
  * @param rangeStart 查询范围开始UTC时间
  * @param rangeEnd 查询范围结束UTC时间
  * @param status 批次状态

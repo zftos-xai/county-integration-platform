@@ -35,6 +35,20 @@ export function emptyMasterDataBatchForm(
   }
 }
 
+/** 预览全量模式的北京时间范围；正式范围由服务端在创建批次时冻结。 */
+export function previewFullSyncRange(now: Date) {
+  const end = new Date(now.getTime())
+  const start = new Date(end.getTime())
+  const startYear = start.getUTCFullYear() - 20
+  const startMonth = start.getUTCMonth()
+  const lastDay = new Date(Date.UTC(startYear, startMonth + 1, 0)).getUTCDate()
+  start.setUTCFullYear(startYear, startMonth, Math.min(start.getUTCDate(), lastDay))
+  return {
+    start: new Date(start.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16),
+    end: new Date(end.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16),
+  }
+}
+
 /** 校验发起同步前必须由用户明确的业务范围。 */
 export function validateMasterDataBatchForm(form: MasterDataBatchForm) {
   if (!form.organizationCode) return '请选择同步机构'

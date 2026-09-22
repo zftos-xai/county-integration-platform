@@ -10,13 +10,11 @@ import java.util.List;
  * @param organizationCode 机构代码
  * @param organizationName 机构名称
  * @param environments 已启用且认证信息可解析的运行环境
- * @param fullSyncEnvironments 已确认100-004/100-005全量规则的运行环境
  */
 public record MasterDataSyncSourceVO(
         String organizationCode,
         String organizationName,
-        List<ParameterEnvironment> environments,
-        List<ParameterEnvironment> fullSyncEnvironments
+        List<ParameterEnvironment> environments
 ) {
     /**
      * 防止调用方持有可变环境集合。
@@ -24,10 +22,8 @@ public record MasterDataSyncSourceVO(
      * @param organizationCode 机构代码
      * @param organizationName 机构名称
      * @param environments 已启用且认证信息可解析的运行环境
-     * @param fullSyncEnvironments 已确认100-004/100-005全量规则的运行环境
      */
     public MasterDataSyncSourceVO {
         environments = List.copyOf(environments);
-        fullSyncEnvironments = List.copyOf(fullSyncEnvironments);
     }
 }

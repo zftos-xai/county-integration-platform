@@ -123,14 +123,15 @@ test('类型页签已说明目录种类，不再重复标题说明；刷新仍�
   assert.equal(events.at(-1), 'refresh')
 })
 
-test('URL中已授权机构优先于默认机构，两个页签链接携带同一机构', async t => {
+test('URL中已授权机构优先于默认机构，机构目录页签携带同一机构', async t => {
   const { root, props, events } = await mountLayout(t, { query: { organizationCode: 'ORG-B' } })
   assert.equal(props.organizationCode, 'ORG-B')
   assert.deepEqual(events, ['ORG-B'])
   const links = descendants(root).filter(item => item.type === 'a')
-  assert.equal(links.length, 2)
-  assert.deepEqual(links.map(text), ['综合目录', '三大目录'])
-  assert.ok(links.every(item => item.props.to.query.organizationCode === 'ORG-B'))
+  assert.equal(links.length, 3)
+  assert.deepEqual(links.map(text), ['综合目录', '三大目录', 'ICD-10'])
+  assert.ok(links.slice(0, 2).every(item => item.props.to.query.organizationCode === 'ORG-B'))
+  assert.equal(links[2].props.to, '/master-data/directory/icd10')
   assert.match(text(root), /机构编码：ORG-B/)
 })
 

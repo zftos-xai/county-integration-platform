@@ -55,6 +55,8 @@
             <arg column="latest_batch_no" javaType="java.lang.String"/>
             <!-- 最近调用100-004实际使用的HIS机构参数 -->
             <arg column="source_organization_id" javaType="java.lang.String"/>
+            <!-- 首次写入平台的UTC时间，供今日新增和记录时间展示 -->
+            <arg column="first_seen_at" javaType="java.time.LocalDateTime"/>
             <!-- 最近一次在成功响应中观察到本记录的UTC时间 -->
             <arg column="last_seen_at" javaType="java.time.LocalDateTime"/>
         </constructor>
@@ -66,6 +68,8 @@
             <arg column="directory_type" javaType="cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType"/>
             <!-- 当前机构范围内该类型的有效记录总数 -->
             <arg column="total" javaType="_long"/>
+            <!-- 北京时间今日首次写入且当前有效的记录数 -->
+            <arg column="today_new_count" javaType="_long"/>
         </constructor>
     </resultMap>
 
@@ -127,6 +131,7 @@
         directory.latest_batch_id,               <!-- 最近成功同步批次主键 -->
         batches.batch_no AS latest_batch_no,     <!-- 最近成功同步批次编号 -->
         batches.source_organization_id,          <!-- 最近调用实际使用的HIS来源机构参数 -->
+        directory.first_seen_at,                 <!-- 首次写入平台的UTC时间 -->
         directory.last_seen_at                   <!-- 最近成功同步观察时间 -->
     </sql>
 
@@ -150,14 +155,17 @@
     </select>
 
     <select id="countByType" resultMap="medicalDirectoryTypeCount">
-        <!-- 数量卡片仅统计当前有效目录，不受关键词和当前类型筛选影响。 -->
+        <!-- 类型数量不受关键词筛选；今日新增以北京时间日界对应的UTC范围统计首次写入。 -->
         SELECT CASE directory.directory_type
                    WHEN '0' THEN 'TRADITIONAL_MEDICINE'
                    WHEN '1' THEN 'WESTERN_MEDICINE'
                    WHEN '2' THEN 'TREATMENT'
                    WHEN '3' THEN 'CONSUMABLE'
                END AS directory_type,
-               COUNT(1) AS total
+               COUNT(1) AS total,               <!-- 当前有效记录数 -->
+               SUM(CASE WHEN directory.first_seen_at &gt;= #{todayStartUtc}
+                             AND directory.first_seen_at &lt; #{tomorrowStartUtc}
+                        THEN 1 ELSE 0 END) AS today_new_count <!-- 今日新增且当前有效记录数 -->
         FROM md_medical_directory directory
         INNER JOIN org_organization organizations ON organizations.id = directory.organization_id
         WHERE 1 = 0

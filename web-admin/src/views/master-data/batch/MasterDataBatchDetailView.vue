@@ -1,7 +1,7 @@
 <!-- 同步记录详情：展示已落库事实，并允许有同步权限的人员受控结束中断批次；不提供人工发布。 -->
 <script setup lang="ts">
 import { AlertCircle, CheckCircle2, RefreshCw } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { getHospitalDirectorySyncResults, getMasterDataBatch, getMedicalDirectorySyncResults, recoverMasterDataBatch } from '@/api/master-data/batch'
 import type { HospitalDirectorySyncResult, MasterDataBatchSummary, MedicalDirectorySyncResult } from '@/api/master-data/batch'
@@ -9,6 +9,7 @@ import { ApiClientError } from '@/utils/request'
 import { hasPermission } from '@/store/modules/auth'
 import DirectorySyncResultPanel from './components/DirectorySyncResultPanel.vue'
 import MedicalDirectorySyncResultPanel from './components/MedicalDirectorySyncResultPanel.vue'
+import { formatBatchDuration, formatBatchTime } from './batchTime'
 
 const route = useRoute()
 const batchId = Number(route.params.id)
@@ -20,6 +21,8 @@ const error = ref('')
 const recovering = ref(false)
 const confirmedRecovery = ref(false)
 const recoveryMessage = ref('')
+const currentTime = ref(Date.now())
+let durationTimer: ReturnType<typeof setInterval> | null = null
 const canRecover = computed(() => hasPermission('master-data:sync') &&
   (batch.value?.status === 'FETCHING' || batch.value?.status === 'RESULT_UNKNOWN'))
 
@@ -85,11 +88,6 @@ function statusLabel(current: MasterDataBatchSummary) {
     FAILED: '同步失败', RESULT_UNKNOWN: '结果待确认' } satisfies Record<MasterDataBatchSummary['status'], string>)[current.status]
 }
 
-/** @param value ISO时间 @return 本地化显示时间 */
-function formatTime(value: string | null) {
-  return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value)) : '—'
-}
-
 /** @param current 同步记录 @return 页面可展示的失败归类 */
 function failureTitle(current: MasterDataBatchSummary) {
   if (current.failureCode === 'HIS_BUSINESS_FAILURE') {
@@ -117,14 +115,30 @@ function nextStep(current: MasterDataBatchSummary) {
   return '请先处理失败原因；不要重跑当前记录，处理完成后再新建同步。'
 }
 
-onMounted(load)
+onMounted(() => {
+  durationTimer = setInterval(() => { currentTime.value = Date.now() }, 1000)
+  void load()
+})
+onBeforeUnmount(() => {
+  if (durationTimer) clearInterval(durationTimer)
+})
 </script>
 
 <template>
   <section class="sync-record-page">
     <header class="record-heading">
-      <div><small>{{ batch?.category === 'MEDICAL_DIRECTORY' ? '医疗目录' : '医院综合目录' }} / 同步记录</small><h2>同步结果</h2><p v-if="batch">{{ batch.organizationName ?? batch.organizationCode }} · {{ batch.environment === 'PRODUCTION' ? '生产环境' : batch.environment === 'TEST' ? '测试环境' : '开发环境' }} · 批次号 {{ batch.batchNo }}</p><p v-else>读取已落库的同步运行事实；查看不会再次调用 HIS。</p></div>
-      <button class="work-quiet-button" type="button" :disabled="loading || recovering" @click="load"><RefreshCw :size="16" />刷新</button>
+      <div class="record-identity">
+        <small>{{ batch?.category === 'MEDICAL_DIRECTORY' ? '医疗目录' : '医院综合目录' }}</small>
+        <p v-if="batch">{{ batch.organizationName ?? batch.organizationCode }} · {{ batch.environment === 'PRODUCTION' ? '生产环境' : batch.environment === 'TEST' ? '测试环境' : '开发环境' }} · 批次号 {{ batch.batchNo }}</p>
+        <p v-else>读取已落库的同步运行事实；查看不会再次调用 HIS。</p>
+      </div>
+      <div class="record-heading-actions">
+        <div v-if="batch?.status === 'COMPLETED'" class="record-complete" role="status">
+          <CheckCircle2 :size="18" />
+          <div><strong>当前目录已完成对账</strong><span>本次同步已在 {{ formatBatchTime(batch.completedAt) }} 完成自动处理；可从数据目录查看当前数据。</span></div>
+        </div>
+        <button class="work-quiet-button" type="button" :disabled="loading || recovering" @click="load"><RefreshCw :size="16" />刷新</button>
+      </div>
     </header>
     <p v-if="error" class="record-alert danger" role="alert"><AlertCircle :size="18" />{{ error }}</p>
     <p v-if="recoveryMessage" class="record-alert success" role="status">{{ recoveryMessage }}</p>
@@ -137,19 +151,29 @@ onMounted(load)
           <button class="work-quiet-button" type="button" :disabled="!confirmedRecovery || loading || recovering" @click="recover">{{ recovering ? '正在收尾…' : '结束中断批次' }}</button>
         </div>
       </section>
-      <section v-if="batch.status === 'COMPLETED'" class="record-alert success"><CheckCircle2 :size="20" /><div><strong>当前目录已完成对账</strong><span>本次同步已在 {{ formatTime(batch.completedAt) }} 完成自动处理；可从数据目录查看当前数据。</span></div></section>
-      <section v-else-if="batch.status === 'FAILED'" class="failure-card"><div class="failure-title"><AlertCircle :size="20" /><div><small>本次没有取得可用的数据</small><h3>{{ failureTitle(batch) }}</h3></div></div><p>{{ outcomeSummary(batch) }}</p><dl><div><dt>平台数据</dt><dd>未写入，当前有效数据未改变</dd></div><div><dt>下一步</dt><dd>{{ nextStep(batch) }}</dd></div></dl></section>
+      <section v-if="batch.status === 'FAILED'" class="failure-card"><div class="failure-title"><AlertCircle :size="20" /><div><small>本次没有取得可用的数据</small><h3>{{ failureTitle(batch) }}</h3></div></div><p>{{ outcomeSummary(batch) }}</p><dl><div><dt>平台数据</dt><dd>未写入，当前有效数据未改变</dd></div><div><dt>下一步</dt><dd>{{ nextStep(batch) }}</dd></div></dl></section>
       <section v-else-if="batch.status === 'RESULT_UNKNOWN'" class="record-alert warning"><AlertCircle :size="20" /><div><strong>结果待确认</strong><span>{{ outcomeSummary(batch) }}</span></div></section>
       <section class="record-card">
         <h3>本次调用</h3>
-        <p v-if="batch.category === 'MEDICAL_DIRECTORY'" class="record-mode">同步方式：{{ batch.mode === 'FULL' ? '全量同步' : '指定时间范围' }}；实际查询 {{ batch.rangeStart ?? '—' }} 至 {{ batch.rangeEnd ?? '—' }}。</p>
-        <p v-if="batch.mode === 'FULL' && batch.fullRuleEvidence" class="record-mode">来源规则依据：{{ batch.fullRuleEvidence }}</p>
-        <dl class="record-flow"><div><dt>同步机构</dt><dd>{{ batch.organizationName ?? batch.organizationCode }}</dd></div><div><dt>数据范围</dt><dd>{{ dataScope }}</dd></div><div><dt>HIS交易</dt><dd>{{ batch.dataTradeCode }}{{ batch.countTradeCode ? ` / ${batch.countTradeCode}` : '' }}</dd></div><div><dt>结果</dt><dd>{{ statusLabel(batch) }}</dd></div></dl>
+        <div class="record-overview" :class="{ 'record-overview--single': batch.category !== 'MEDICAL_DIRECTORY' }">
+          <div class="batch-detail-grid-scroll" role="region" aria-label="本次同步信息" tabindex="0">
+            <dl class="batch-detail-grid record-flow"><div><dt>同步机构</dt><dd>{{ batch.organizationName ?? batch.organizationCode }}</dd></div><div><dt>数据范围</dt><dd>{{ dataScope }}</dd></div><div><dt>HIS 交易</dt><dd>{{ batch.dataTradeCode }}{{ batch.countTradeCode ? `、${batch.countTradeCode}` : '' }}</dd></div><div><dt>结果</dt><dd>{{ statusLabel(batch) }}</dd></div><div><dt>开始时间</dt><dd>{{ batch.startedAt ? formatBatchTime(batch.startedAt) : '尚未开始' }}</dd></div><div><dt>结束时间</dt><dd>{{ batch.finishedAt ? formatBatchTime(batch.finishedAt) : batch.startedAt ? '进行中' : '—' }}</dd></div><div><dt>{{ batch.finishedAt ? '总耗时' : '已运行' }}</dt><dd>{{ formatBatchDuration(batch, currentTime) }}</dd></div></dl>
+          </div>
+          <div v-if="batch.category === 'MEDICAL_DIRECTORY'" class="batch-detail-grid-scroll" role="region" aria-label="查询范围" tabindex="0">
+            <dl class="batch-detail-grid record-window">
+              <div><dt>同步方式</dt><dd>{{ batch.mode === 'FULL' ? '全量同步' : '指定时间范围' }}</dd></div>
+              <div><dt>实际查询</dt><dd>{{ batch.rangeStart ?? '—' }} 至 {{ batch.rangeEnd ?? '—' }}</dd></div>
+              <div v-if="batch.mode === 'FULL' && batch.fullRuleEvidence"><dt>来源规则依据</dt><dd>{{ batch.fullRuleEvidence }}</dd></div>
+            </dl>
+          </div>
+        </div>
       </section>
       <section v-if="batch.counts.returned > 0 || batch.status === 'COMPLETED'" class="record-card">
         <h3>取得与对账结果</h3>
-        <dl v-if="batch.category === 'MEDICAL_DIRECTORY'" class="record-counts"><div><dt>来源声明行数</dt><dd>{{ batch.counts.declared ?? '未确认' }}</dd></div><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>自动拦截数</dt><dd>{{ batch.counts.invalid + batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
-        <dl v-else class="record-counts"><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>展开重复</dt><dd>{{ batch.counts.duplicate }} 行</dd></div><div><dt>丢弃的无效关系</dt><dd>{{ batch.counts.invalid }} 条</dd></div><div><dt>主数据冲突</dt><dd>{{ batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
+        <div class="batch-detail-grid-scroll record-counts-wrap" role="region" aria-label="取得与对账统计" tabindex="0">
+          <dl v-if="batch.category === 'MEDICAL_DIRECTORY'" class="batch-detail-grid record-counts"><div><dt>来源声明行数</dt><dd>{{ batch.counts.declared ?? '未确认' }}</dd></div><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>自动拦截数</dt><dd>{{ batch.counts.invalid + batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
+          <dl v-else class="batch-detail-grid record-counts"><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>展开重复</dt><dd>{{ batch.counts.duplicate }} 行</dd></div><div><dt>丢弃的无效关系</dt><dd>{{ batch.counts.invalid }} 条</dd></div><div><dt>主数据冲突</dt><dd>{{ batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
+        </div>
         <p v-if="batch.status === 'COMPLETED'" class="record-directory-link"><RouterLink :to="directoryPath">查看当前数据目录</RouterLink></p>
       </section>
       <MedicalDirectorySyncResultPanel v-if="batch.category === 'MEDICAL_DIRECTORY'" :results="medicalDirectoryResults" :loading="loading" />
@@ -158,7 +182,49 @@ onMounted(load)
   </section>
 </template>
 
+<style scoped src="./batch-detail-grid.css"></style>
 <style scoped>
-.record-mode{margin:12px 17px 0;color:#526770;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
-.sync-record-page{display:grid;gap:16px}.record-heading{padding:4px 0 18px;border-bottom:1px solid #e2e8ea;display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.record-heading small{color:#718189;font-size:12px}.record-heading h2{margin:8px 0;color:#1d313b;font-size:25px}.record-heading p{max-width:760px;margin:0;color:#6a7b83;font-size:13px;line-height:1.65}.record-alert{min-height:56px;margin:0;padding:13px 15px;border:1px solid;border-radius:6px;display:flex;align-items:flex-start;gap:10px;font-size:13px}.record-alert div{display:grid;gap:3px}.record-alert span{line-height:1.6}.record-alert.success{border-color:#b9dfd2;background:#eff8f5;color:#246d5f}.record-alert.warning{border-color:#ead6a8;background:#fffbef;color:#876320}.failure-card{padding:17px;border:1px solid #efc9c1;border-radius:6px;background:#fff8f6}.failure-title{display:flex;align-items:flex-start;gap:10px;color:#ae5039}.failure-title small{display:block;color:#8d6b63;font-size:11px}.failure-title h3{margin:3px 0 0;color:#813d2c;font-size:17px}.failure-card>p{margin:13px 0;color:#553f39;line-height:1.7}.failure-card dl{margin:0;padding-top:12px;border-top:1px solid #f0d7d1;display:grid;gap:8px}.failure-card dl div{display:grid;grid-template-columns:74px minmax(0,1fr);gap:10px}.failure-card dt{color:#8d6b63;font-size:12px}.failure-card dd{margin:0;color:#3e3532;font-size:13px;line-height:1.6}.record-card{border:1px solid #dce5e7;border-radius:6px;background:#fff}.record-card h3{margin:0;padding:15px 17px;border-bottom:1px solid #e9eef0;color:#2d424b;font-size:15px}.record-flow,.record-counts{margin:0;padding:15px 17px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.record-counts{grid-template-columns:repeat(3,minmax(0,1fr))}.record-flow div,.record-counts div{min-width:0}.record-flow dt,.record-counts dt{color:#7a8a91;font-size:11px}.record-flow dd,.record-counts dd{margin:6px 0 0;color:#2e444d;font-size:13px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.record-directory-link{margin:0;padding:0 17px 15px;text-align:right}.record-directory-link a{color:#087767;text-decoration:none}.record-directory-link a:hover{text-decoration:underline}@media(max-width:760px){.record-heading{display:grid}.record-flow,.record-counts{grid-template-columns:1fr 1fr}}
+.sync-record-page { display: grid; gap: 14px; }
+.record-heading { min-width: 0; padding: 10px 14px; border: 1px solid #dce5e7; border-radius: 6px; background: #fff; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.record-identity { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
+.record-identity small { flex: none; padding: 3px 7px; border-radius: 4px; background: #f0f5f5; color: #49636a; font-size: 11px; }
+.record-identity p { min-width: 0; margin: 0; color: #526770; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.record-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.record-heading-actions > button { flex: none; }
+.record-complete { max-width: 520px; padding: 6px 9px; border: 1px solid #b9dfd2; border-radius: 5px; background: #f0f9f6; display: flex; align-items: flex-start; gap: 7px; color: #246d5f; font-size: 12px; }
+.record-complete > svg { flex: none; margin-top: 1px; }
+.record-complete > div { display: grid; gap: 2px; }
+.record-complete span { line-height: 1.45; }
+.record-alert { min-height: 56px; margin: 0; padding: 13px 15px; border: 1px solid; border-radius: 6px; display: flex; align-items: flex-start; gap: 10px; font-size: 13px; }
+.record-alert div { display: grid; gap: 3px; }
+.record-alert span { line-height: 1.6; }
+.record-alert.success { border-color: #b9dfd2; background: #eff8f5; color: #246d5f; }
+.record-alert.warning { border-color: #ead6a8; background: #fffbef; color: #876320; }
+.failure-card { padding: 17px; border: 1px solid #efc9c1; border-radius: 6px; background: #fff8f6; }
+.failure-title { display: flex; align-items: flex-start; gap: 10px; color: #ae5039; }
+.failure-title small { display: block; color: #8d6b63; font-size: 11px; }
+.failure-title h3 { margin: 3px 0 0; color: #813d2c; font-size: 17px; }
+.failure-card > p { margin: 13px 0; color: #553f39; line-height: 1.7; }
+.failure-card dl { margin: 0; padding-top: 12px; border-top: 1px solid #f0d7d1; display: grid; gap: 8px; }
+.failure-card dl div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; }
+.failure-card dt { color: #8d6b63; font-size: 12px; }
+.failure-card dd { margin: 0; color: #3e3532; font-size: 13px; line-height: 1.6; }
+.record-card { min-width: 0; border: 1px solid #dce5e7; border-radius: 6px; background: #fff; }
+.record-card h3 { margin: 0; padding: 10px 16px; border-bottom: 1px solid #e9eef0; color: #2d424b; font-size: 14px; }
+.record-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px 9px; }
+.record-overview--single { grid-template-columns: minmax(0, 1fr); }
+.record-overview > .batch-detail-grid-scroll { min-width: 0; padding: 0 4px; }
+.record-overview > .batch-detail-grid-scroll + .batch-detail-grid-scroll { border-left: 1px dashed #b9cdd0; }
+.record-flow { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.record-counts { width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.record-flow > div { grid-template-columns: 100px minmax(max-content, 1fr); }
+.record-window { grid-template-columns: max-content; }
+.record-window > div { grid-template-columns: 125px minmax(max-content, 1fr); }
+.record-counts-wrap { margin: 8px 16px; }
+.record-counts > div { grid-template-columns: 110px minmax(max-content, 1fr); }
+.record-directory-link { margin: 0; padding: 0 16px 9px; text-align: right; font-size: 12px; }
+.record-directory-link a { color: #087767; text-decoration: none; }
+.record-directory-link a:hover { text-decoration: underline; }
+@media (max-width: 900px) { .record-overview { grid-template-columns: minmax(0, 1fr); } .record-overview > .batch-detail-grid-scroll + .batch-detail-grid-scroll { padding-top: 8px; border-left: 0; } }
+@media (max-width: 760px) { .record-heading { align-items: stretch; flex-direction: column; } .record-heading-actions { justify-content: space-between; } }
 </style>
