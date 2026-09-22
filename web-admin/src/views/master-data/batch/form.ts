@@ -1,6 +1,7 @@
 import type {
   MasterDataCategory,
   MasterDataEnvironment,
+  MasterDataSyncMode,
   StartMasterDataBatchInput,
 } from '@/api/master-data/batch'
 
@@ -9,6 +10,7 @@ export type MasterDataBatchForm = {
   organizationCode: string
   environment: MasterDataEnvironment
   category: MasterDataCategory
+  mode: MasterDataSyncMode
   rangeStart: string
   rangeEnd: string
 }
@@ -27,6 +29,7 @@ export function emptyMasterDataBatchForm(
     organizationCode,
     environment: 'PRODUCTION',
     category: 'HOSPITAL_DIRECTORY',
+    mode: 'NOT_APPLICABLE',
     rangeStart: '',
     rangeEnd: '',
   }
@@ -35,10 +38,17 @@ export function emptyMasterDataBatchForm(
 /** 校验发起同步前必须由用户明确的业务范围。 */
 export function validateMasterDataBatchForm(form: MasterDataBatchForm) {
   if (!form.organizationCode) return '请选择同步机构'
-  if (form.category === 'MEDICAL_DIRECTORY' && (!form.rangeStart || !form.rangeEnd)) {
+  if (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'NOT_APPLICABLE') {
+    return '请选择全量同步或指定时间范围'
+  }
+  if (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' && (!form.rangeStart || !form.rangeEnd)) {
     return '请填写 HIS 要求的来源查询开始和结束时间'
   }
-  if (form.category === 'MEDICAL_DIRECTORY' && new Date(form.rangeEnd) < new Date(form.rangeStart)) {
+  if (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' &&
+      (!Number.isFinite(Date.parse(`${form.rangeStart}+08:00`)) || !Number.isFinite(Date.parse(`${form.rangeEnd}+08:00`)))) {
+    return '请填写有效的来源查询时间'
+  }
+  if (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' && new Date(form.rangeEnd) < new Date(form.rangeStart)) {
     return '来源查询结束时间不能早于开始时间'
   }
   return null
@@ -52,14 +62,15 @@ export function generateBatchRequestKey() {
     .toUpperCase()
 }
 
-/** 将已校验表单转换为后端批次创建输入。 */
+/** 将医院时间（北京时间）转换为带偏移的请求，避免受浏览器所在时区影响。 */
 export function toStartMasterDataBatchInput(form: MasterDataBatchForm): StartMasterDataBatchInput {
   return {
     requestKey: generateBatchRequestKey(),
     organizationCode: form.organizationCode,
     environment: form.environment,
     category: form.category,
-    rangeStart: form.rangeStart ? new Date(form.rangeStart).toISOString() : null,
-    rangeEnd: form.rangeEnd ? new Date(form.rangeEnd).toISOString() : null,
+    mode: form.category === 'MEDICAL_DIRECTORY' ? form.mode : 'NOT_APPLICABLE',
+    rangeStart: form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' && form.rangeStart ? `${form.rangeStart}+08:00` : null,
+    rangeEnd: form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' && form.rangeEnd ? `${form.rangeEnd}+08:00` : null,
   }
 }

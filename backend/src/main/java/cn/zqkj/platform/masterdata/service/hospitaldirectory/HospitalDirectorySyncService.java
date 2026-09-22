@@ -1,21 +1,25 @@
 package cn.zqkj.platform.masterdata.service.hospitaldirectory;
 
-import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
+import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot;
 
-/**
- * 执行100-003医院综合目录的一次性取得、自动校验和直接对账。
- */
+/** 将已取得执行权的医院综合目录批次同步为当前数据。 */
 public interface HospitalDirectorySyncService {
 
     /**
-     * 一次取得科室、医生、病区和床位；每一种目录完整返回并通过自动校验后即更新当前目录。
-     * 失败或结果未知的类型不会更新、更不会将旧记录标为无效。
+     * 同步批次内的各目录类型，将类型数据与结果同事务保存，最后汇总并审计。
      *
-     * @param batchId 批次主键
-     * @param expectedVersion 最近读取的批次版本
-     * @param actor 发起人
-     * @return 已完成或部分异常的最新同步运行事实
+     * <p>调用方须先完成范围确认和批次抢占；失败或结果未知的类型保留原数据。</p>
+     *
+     * @param batch 已由批次用例确认来源并取得执行权的快照
+     * @param actorUserId 审计用户主键；系统任务可为空
+     * @param actorLogin 审计操作人名称或系统任务名称
      */
-    MasterDataBatchSummaryVO fetchValidateAndReconcile(long batchId, byte[] expectedVersion, AccessActor actor);
+    void synchronize(MasterDataBatchSnapshot batch, Long actorUserId, String actorLogin);
+    /**
+     * 核对执行版本后按已保存事实结束批次；不重新取数，未保存类型保持结果未知。
+     * @param batch 当前执行版本快照
+     * @param actorUserId 审计用户主键；内部任务可为空
+     * @param actorLogin 操作人或任务名称
+     */
+    void completeRecordedResults(MasterDataBatchSnapshot batch, Long actorUserId, String actorLogin);
 }

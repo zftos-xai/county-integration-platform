@@ -84,6 +84,7 @@ const isSyncSourceLoading = ref(true);
 let listController: AbortController | null = null;
 let detailController: AbortController | null = null;
 let mounted = true;
+let detailPollTimer: ReturnType<typeof setTimeout> | null = null;
 
 const canStart = computed(() => hasPermission('master-data:sync'));
 const hasSyncOption = computed(
@@ -246,7 +247,7 @@ function changePageSize(value: number) {
 }
 
 /** 打开基础数据同步窗口；只能选择已验证的HIS接口来源。 */
-function openCreator() {
+function openCreator(mode: 'TIME_RANGE' | 'FULL' = 'TIME_RANGE') {
   const currentCode = authState.user?.organizationCode ?? '';
   const defaultSource =
     syncOptions.value.sources.find(
@@ -258,6 +259,8 @@ function openCreator() {
   }
   const defaultBusiness = syncOptions.value.businesses[0];
   if (defaultBusiness) form.value.category = defaultBusiness.category;
+  if (mode === 'FULL') form.value.category = 'MEDICAL_DIRECTORY';
+  form.value.mode = form.value.category === 'MEDICAL_DIRECTORY' ? mode : 'NOT_APPLICABLE';
   formError.value = '';
   createError.value = null;
   lastStartInput.value = null;
@@ -307,6 +310,12 @@ async function submitBatch() {
     (item) => item.category === form.value.category,
   );
   if (!formError.value && !business) formError.value = '请选择可用的同步业务';
+  if (!formError.value && form.value.category === 'MEDICAL_DIRECTORY' && form.value.mode === 'FULL') {
+    const source = syncOptions.value.sources.find((item) => item.organizationCode === form.value.organizationCode);
+    if (!source?.fullSyncEnvironments?.includes(form.value.environment)) {
+      formError.value = '该机构及环境尚未确认全量来源范围';
+    }
+  }
   if (formError.value || isSaving.value) return;
   const input = toStartMasterDataBatchInput(form.value);
   lastStartInput.value = input;
@@ -320,7 +329,7 @@ async function submitBatch() {
     notice.value =
       updated.status === 'COMPLETED'
         ? `${masterDataCategoryLabels[updated.category]}已完成自动对账，当前数据已更新。`
-        : `${masterDataCategoryLabels[updated.category]}部分未完成：${resultSummary(updated)}`;
+        : `${masterDataCategoryLabels[updated.category]}：${resultSummary(updated)}`;
     auditTarget.value = {
       targetType: 'MASTER_DATA_BATCH',
       targetId: updated.batchNo,
@@ -355,7 +364,7 @@ async function submitBatch() {
  *
  * @param created 已成功创建的批次
  * @param apiError 本次运行请求的通信或服务端异常
- * @returns 已确认批次终态时为true
+ * @returns 已回读终态或确认仍在执行并开始只读轮询时为true
  */
 async function recoverCompletedBatch(
   created: MasterDataBatchSummary,
@@ -363,14 +372,20 @@ async function recoverCompletedBatch(
 ) {
   try {
     const latest = await getMasterDataBatch(created.id);
+    if (latest.status === 'FETCHING') {
+      await openDetail(latest);
+      notice.value = '同步仍在后台执行，正在自动读取进度；请勿重复发起。';
+      return true;
+    }
     if (
       latest.status !== 'COMPLETED' &&
       latest.status !== 'COMPLETED_WITH_ERRORS' &&
-      latest.status !== 'COMPLETED_WITH_UNKNOWN'
+      latest.status !== 'COMPLETED_WITH_UNKNOWN' &&
+      latest.status !== 'FAILED'
     ) {
       return false;
     }
-    selected.value = latest;
+    await openDetail(latest);
     actionError.value = null;
     notice.value =
       latest.status === 'COMPLETED'
@@ -391,10 +406,13 @@ async function recoverCompletedBatch(
 /** 打开该机构当前有效目录；目录页面是同步完成后实际使用数据的入口。 */
 async function openCurrentDirectory() {
   const organizationCode = selected.value?.organizationCode;
+  const directoryPath = selected.value?.category === 'MEDICAL_DIRECTORY'
+    ? '/master-data/directory/medical'
+    : '/master-data/directory';
   selected.value = null;
   actionError.value = null;
   await router.push({
-    path: '/master-data/directory',
+    path: directoryPath,
     query: organizationCode ? { organization: organizationCode } : undefined,
   });
 }
@@ -412,6 +430,7 @@ async function reloadCreatedBatch() {
 
 /** 读取批次最新详情，查看不会触发重新执行。 */
 async function openDetail(item: MasterDataBatchSummary) {
+  if (detailPollTimer) clearTimeout(detailPollTimer);
   selected.value = item;
   actionError.value = null;
   detailError.value = null;
@@ -432,6 +451,11 @@ async function openDetail(item: MasterDataBatchSummary) {
     } else {
       medicalDirectoryResults.value = await getMedicalDirectorySyncResults(item.id, controller.signal);
     }
+    if (item.status === 'FETCHING' && latest.status !== 'FETCHING' &&
+        !controller.signal.aborted && selected.value?.id === item.id) {
+      notice.value = `已回读确认：${resultSummary(latest)}`;
+      await loadBatches(true);
+    }
   } catch (caught) {
     const apiError = asApiError(caught, '无法读取批次详情');
     if (
@@ -444,6 +468,13 @@ async function openDetail(item: MasterDataBatchSummary) {
       isDetailLoading.value = false;
     if (detailController === controller && mounted)
       isDirectoryResultsLoading.value = false;
+    // 只回读运行事实，不自动重发run；关闭详情、卸载或到达终态后停止。
+    if (mounted && detailController === controller && !controller.signal.aborted &&
+        selected.value?.id === item.id && selected.value.status === 'FETCHING' && !detailError.value) {
+      detailPollTimer = setTimeout(() => {
+        if (mounted && selected.value?.id === item.id) void openDetail(selected.value);
+      }, 5000);
+    }
   }
 }
 
@@ -464,7 +495,7 @@ async function runSelectedBatch() {
     notice.value =
       updated.status === 'COMPLETED'
         ? `${masterDataCategoryLabels[updated.category]}已完成自动对账，当前数据已更新。`
-        : `${masterDataCategoryLabels[updated.category]}部分未完成：${resultSummary(updated)}`;
+        : `${masterDataCategoryLabels[updated.category]}：${resultSummary(updated)}`;
     auditTarget.value = {
       targetType: 'MASTER_DATA_BATCH',
       targetId: updated.batchNo,
@@ -496,7 +527,7 @@ function statusPresentation(
     return { label: '已取消', tone: 'neutral' };
   }
   if (status === 'FAILED' && failureCode === 'HIS_BUSINESS_FAILURE') {
-    return { label: '等待接口授权', tone: 'danger' };
+    return { label: 'HIS 查询失败', tone: 'danger' };
   }
   const values: Record<MasterDataBatchStatus, { label: string; tone: string }> =
     {
@@ -504,8 +535,8 @@ function statusPresentation(
       FETCHING: { label: '正在取得', tone: 'info' },
       COMPLETED: { label: '已完成对账', tone: 'success' },
       COMPLETED_WITH_ERRORS: { label: '部分未完成', tone: 'warning' },
-      COMPLETED_WITH_UNKNOWN: { label: '部分结果未知', tone: 'warning' },
-      FAILED: { label: '未完成', tone: 'danger' },
+      COMPLETED_WITH_UNKNOWN: { label: '存在未知结果', tone: 'warning' },
+      FAILED: { label: '同步失败', tone: 'danger' },
       RESULT_UNKNOWN: { label: '结果待确认', tone: 'warning' },
     };
   return values[status];
@@ -530,7 +561,7 @@ function resultSummary(item: MasterDataBatchSummary) {
     return `部分${business}类型未通过自动校验或被 HIS 拒绝；已完成类型已经更新，失败类型没有改动。`;
   }
   if (item.status === 'COMPLETED_WITH_UNKNOWN') {
-    return `部分${business}查询结果无法确认；已完成类型已经更新，结果未知类型没有改动。`;
+    return `${business}存在未确认结果；以分项事实为准，不要直接重复同步。`;
   }
   return item.status === 'COMPLETED'
     ? '系统已完成自动校验，并更新本机构当前目录。'
@@ -539,7 +570,7 @@ function resultSummary(item: MasterDataBatchSummary) {
 
 /** @param item 失败批次 @return 面向业务人员的失败归类 */
 function failureTitle(item: MasterDataBatchSummary) {
-  if (item.failureCode === 'HIS_BUSINESS_FAILURE') return 'HIS 未授予目录数据权限';
+  if (item.failureCode === 'HIS_BUSINESS_FAILURE') return 'HIS 拒绝目录查询';
   if (item.failureCode === 'HIS_DATA_INVALID') return 'HIS 返回的数据未通过校验';
   if (item.failureCode === 'HIS_CONFIGURATION_ERROR') return 'HIS 接口配置不可用';
   return '本次同步未完成';
@@ -623,6 +654,7 @@ onMounted(() => {
   ]);
 });
 onBeforeUnmount(() => {
+  if (detailPollTimer) clearTimeout(detailPollTimer);
   mounted = false;
   listController?.abort();
   detailController?.abort();
@@ -713,9 +745,18 @@ onBeforeUnmount(() => {
               ? '正在读取可用的HIS接口配置'
               : undefined
           "
-          @click="openCreator"
+          @click="openCreator()"
         >
           <Plus :size="15" />发起同步
+        </button>
+        <button
+          v-if="canStart"
+          class="work-quiet-button"
+          type="button"
+          :disabled="isSyncSourceLoading"
+          @click="openCreator('FULL')"
+        >
+          发起医疗目录全量同步
         </button>
       </div>
     </form>
@@ -773,7 +814,7 @@ onBeforeUnmount(() => {
                 ><strong>{{ scopeLabel(item) }}</strong
                 ><small
                   >{{ masterDataCategoryLabels[item.category] }} ·
-                  {{ environmentLabel(item) }}</small
+                  {{ environmentLabel(item) }} · {{ item.mode === 'FULL' ? '全量同步' : item.mode === 'TIME_RANGE' ? '指定时间范围' : '目录同步' }}</small
                 >
               </td>
               <td>
@@ -863,7 +904,7 @@ onBeforeUnmount(() => {
       >
         <header class="work-drawer-header">
           <div>
-            <small>同步记录 · {{ masterDataCategoryLabels[selected.category] }}</small>
+            <small>同步记录 · {{ masterDataCategoryLabels[selected.category] }} · {{ selected.mode === 'FULL' ? '全量同步' : selected.mode === 'TIME_RANGE' ? '指定时间范围' : '目录同步' }}</small>
             <h2 id="batch-detail-title">同步结果</h2>
           </div>
           <button

@@ -1,13 +1,13 @@
 package cn.zqkj.platform.masterdata.mapper.hospitaldirectory;
 
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySourceRecord;
+import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchCounts;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryRelationRecord;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySyncResult;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySourceRecord;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType;
+import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-
-import java.util.List;
 
 /**
  * 读写100-003医院综合目录的当前有效数据和同步运行事实。
@@ -16,17 +16,6 @@ import java.util.List;
  */
 @Mapper
 public interface HospitalDirectorySyncMapper {
-
-    /**
-     * 使用行版本将批次原子推进到取数状态，防止同一批次并发执行。
-     *
-     * @param batchId 批次主键
-     * @param expectedVersion 最近读取版本
-     * @param actor 操作人
-     * @return 成功进入取数状态时为1
-     */
-    int beginFetch(@Param("batchId") long batchId, @Param("expectedVersion") byte[] expectedVersion,
-                   @Param("actor") String actor);
 
     /**
      * 在写入前判断同一稳定来源键的当前记录状态。
@@ -74,11 +63,10 @@ public interface HospitalDirectorySyncMapper {
     /**
      * 在重建关系前删除本批次目标类型的旧关系。
      *
-     * @param batchId 同步运行主键
      * @param organizationId 平台机构主键
      * @param directoryType 已完整同步的目录类型
      */
-    void deleteRelationsForType(@Param("batchId") long batchId, @Param("organizationId") long organizationId,
+    void deleteRelationsForType(@Param("organizationId") long organizationId,
                                 @Param("directoryType") HospitalDirectoryType directoryType);
 
     /**
@@ -118,7 +106,7 @@ public interface HospitalDirectorySyncMapper {
      * @param result 单一目录类型的取得、校验和更新事实
      */
     void saveDirectoryResult(@Param("batchId") long batchId,
-                             @Param("result") HospitalDirectorySyncResult result);
+                             @Param("result") HospitalDirectorySyncResultVO result);
 
     /**
      * 读取一个100-003批次按目录类型持久化的运行事实。
@@ -126,50 +114,23 @@ public interface HospitalDirectorySyncMapper {
      * @param batchId 同步批次主键
      * @return 按HIS目录类型编码升序的分项结果；历史批次可能为空
      */
-    List<HospitalDirectorySyncResult> findResults(@Param("batchId") long batchId);
+    List<HospitalDirectorySyncResultVO> findResults(@Param("batchId") long batchId);
 
     /**
-     * 以完成或部分异常状态结束批次，并一次写入全部对账数量。
+     * 保存本批次完成状态和汇总事实；必须在持有批次执行版本锁的短事务内调用。
      *
-     * @param batchId 同步运行主键
-     * @param status 完成状态
-     * @param returnedCount 返回总数
-     * @param duplicateCount 重复数
-     * @param invalidCount 无效数
-     * @param conflictCount 冲突数
-     * @param createdCount 新增数
-     * @param updatedCount 更新数
-     * @param unchangedCount 未变化数
-     * @param sourceMissingCount 已失效数
-     * @param activeCount 当前有效数
-     * @param failureCode 可选部分异常代码
-     * @param failureSummary 可选部分异常说明
-     * @param actor 操作人
-     * @return 更新行数
+     * @param batchId 同步批次主键
+     * @param status 完成或部分失败状态
+     * @param counts 已持久化分项的汇总数量
+     * @param failureCode 可选受控失败代码
+     * @param failureSummary 可选受控摘要
+     * @param actor 审计操作人
+     * @return 状态匹配时为1，否则为0
      */
-    int finishCompleted(@Param("batchId") long batchId, @Param("status") String status, @Param("returnedCount") long returnedCount,
-                        @Param("duplicateCount") long duplicateCount, @Param("invalidCount") long invalidCount,
-                        @Param("conflictCount") long conflictCount, @Param("createdCount") long createdCount,
-                        @Param("updatedCount") long updatedCount, @Param("unchangedCount") long unchangedCount, @Param("sourceMissingCount") long sourceMissingCount,
-                        @Param("activeCount") long activeCount, @Param("failureCode") String failureCode,
+    int finishCompleted(@Param("batchId") long batchId, @Param("status") String status,
+                        @Param("counts") MasterDataBatchCounts counts,
+                        @Param("failureCode") String failureCode,
                         @Param("failureSummary") String failureSummary, @Param("actor") String actor);
 
-    /**
-     * 以失败或结果未知状态结束同步运行，同时保留已确认的校验数量。
-     *
-     * @param batchId 批次主键
-     * @param status FAILED或RESULT_UNKNOWN
-     * @param code 稳定失败代码
-     * @param summary 脱敏说明
-     * @param returnedCount 失败前已确认收到的记录数
-     * @param duplicateCount 失败前已确认的重复数
-     * @param invalidCount 失败前已确认的无效数
-     * @param conflictCount 失败前已确认的冲突数
-     * @param actor 操作人
-     * @return 当批次从运行中状态成功转入终态时为1，否则为0
-     */
-    int finishFailure(@Param("batchId") long batchId, @Param("status") String status, @Param("code") String code,
-                      @Param("summary") String summary, @Param("returnedCount") long returnedCount,
-                      @Param("duplicateCount") long duplicateCount, @Param("invalidCount") long invalidCount,
-                      @Param("conflictCount") long conflictCount, @Param("actor") String actor);
+
 }

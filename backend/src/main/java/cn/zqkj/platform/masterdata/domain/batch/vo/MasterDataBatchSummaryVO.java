@@ -3,6 +3,7 @@ package cn.zqkj.platform.masterdata.domain.batch.vo;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchCounts;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchStatus;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataCategory;
+import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataSyncMode;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataScopeType;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
 
@@ -18,10 +19,12 @@ import java.time.OffsetDateTime;
  * @param organizationName 平台机构名称；公共目录为空
  * @param environment 来源接口运行环境
  * @param category 基础数据类别
+ * @param mode 本批次实际采用的查询模式
  * @param dataTradeCode 数据查询交易码
  * @param countTradeCode 数量查询交易码；来源不提供时为空
  * @param sourceType 来源接口目录类型；接口不需要时为空
  * @param sourceOrganizationId 发起批次时固化的来源机构标识；公共目录为空
+ * @param fullRuleEvidence 全量规则的非敏感确认依据；非全量为空
  * @param rangeStart 来源查询范围起点
  * @param rangeEnd 来源查询范围终点
  * @param status 批次状态
@@ -41,10 +44,12 @@ public record MasterDataBatchSummaryVO(
         String organizationName,
         ParameterEnvironment environment,
         MasterDataCategory category,
+        MasterDataSyncMode mode,
         String dataTradeCode,
         String countTradeCode,
         String sourceType,
         String sourceOrganizationId,
+        String fullRuleEvidence,
         OffsetDateTime rangeStart,
         OffsetDateTime rangeEnd,
         MasterDataBatchStatus status,

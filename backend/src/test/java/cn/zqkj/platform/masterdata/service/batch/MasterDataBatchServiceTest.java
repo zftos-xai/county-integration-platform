@@ -1,30 +1,41 @@
 package cn.zqkj.platform.masterdata.service.batch;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
+import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.common.exception.ResourceNotFoundException;
 import cn.zqkj.platform.masterdata.domain.batch.dto.StartMasterDataBatchRequest;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchStatus;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataCategory;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataScopeType;
+import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataSyncMode;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
 import cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper;
 import cn.zqkj.platform.masterdata.mapper.hospitaldirectory.HospitalDirectorySyncMapper;
 import cn.zqkj.platform.masterdata.mapper.medicaldirectory.MedicalDirectorySyncMapper;
 import cn.zqkj.platform.masterdata.service.batch.impl.MasterDataBatchServiceImpl;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
-import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
-import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointRuntimeConfiguration;
-import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointScope;
+import cn.zqkj.platform.masterdata.service.hospitaldirectory.HospitalDirectorySyncService;
+import cn.zqkj.platform.masterdata.service.medicaldirectory.MedicalDirectorySyncService;
+import cn.zqkj.platform.system.audit.service.ManagementAuditService;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpoint;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointAuthentication;
+import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointRuntimeConfiguration;
+import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointScope;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointVerificationStatus;
+import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
+import cn.zqkj.platform.system.configuration.domain.model.ParameterValue;
+import cn.zqkj.platform.system.configuration.domain.model.ParameterValueType;
+import cn.zqkj.platform.system.configuration.mapper.ConfigurationMapper;
 import cn.zqkj.platform.system.configuration.service.ExternalEndpointResolutionService;
-import cn.zqkj.platform.system.audit.service.ManagementAuditService;
-import org.junit.jupiter.api.Test;
-
-import java.util.Set;
-import java.util.Optional;
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -32,12 +43,156 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
  * 验证同步批次创建时的业务范围和来源条件。
  */
 class MasterDataBatchServiceTest {
+
+    /** 缺少来源方确认规则时，即使直接调用Service也不能伪造全量批次。 */
+    @Test
+    void rejectsFullBatchWithoutConfirmedRule() {
+        var mapper = mock(MasterDataBatchMapper.class);
+        var config = mock(ConfigurationMapper.class);
+        var service = new MasterDataBatchServiceImpl(mapper, config,
+                mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(),
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
+        when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
+
+        assertThrows(InvalidRequestException.class, () -> service.start(new StartMasterDataBatchRequest(
+                "FULL-REQUEST-20260922", "ORG001", ParameterEnvironment.PRODUCTION,
+                MasterDataCategory.MEDICAL_DIRECTORY, MasterDataSyncMode.FULL, null, null), actor()));
+
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never())
+                .create(any(), any(), any(), anyLong(), any(), any());
+    }
+
+    /** 已确认规则在服务端生成固定UTC范围，浏览器不能指定下界或截止时间。 */
+    @Test
+    void freezesConfirmedFullRangeAtCreation() {
+        var mapper = mock(MasterDataBatchMapper.class);
+        var config = mock(ConfigurationMapper.class);
+        var service = new MasterDataBatchServiceImpl(mapper, config,
+                mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(),
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
+        when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
+        String evidence = "来源方确认四类目录的时间字段、空值、最早记录和完整覆盖规则";
+        String rule = "{\"endpointId\":9,\"rangeStart\":\"2000-01-01T00:00:00+08:00\",\"evidence\":\""
+                + evidence + "\"}";
+        when(config.findParameterValue("medical-directory.full-sync-rule", ParameterEnvironment.PRODUCTION, 10L))
+                .thenReturn(Optional.of(new ParameterValue(1L, "medical-directory.full-sync-rule",
+                        ParameterValueType.STRING, ParameterEnvironment.PRODUCTION, 10L, "ORG001",
+                        rule, true, null, null, new byte[8])));
+        when(mapper.create(any(), any(), any(), anyLong(), any(), any())).thenReturn(25L);
+        when(mapper.findById(25L)).thenReturn(snapshot());
+
+        service.start(new StartMasterDataBatchRequest("FULL-REQUEST-20260922", "ORG001",
+                ParameterEnvironment.PRODUCTION, MasterDataCategory.MEDICAL_DIRECTORY,
+                MasterDataSyncMode.FULL, null, null), actor());
+
+        org.mockito.Mockito.verify(mapper).create(any(), any(), org.mockito.ArgumentMatchers.argThat(creation ->
+                        creation.mode() == MasterDataSyncMode.FULL
+                                && creation.rangeStart().equals(java.time.LocalDateTime.of(1999, 12, 31, 16, 0))
+                                && creation.rangeEnd().isAfter(creation.rangeStart())
+                                && creation.fullRuleEvidence().equals(evidence)
+                                && creation.sourceEndpointId() == 9L),
+                org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq("ORG001"),
+                org.mockito.ArgumentMatchers.eq("admin"));
+    }
+
+    /** 页面创建医疗批次时必须固化已验证的平台交易机构编码，不能换成100-008返回ID。 */
+    @Test
+    void createsMedicalBatchWithPlatformOrganizationCode() {
+        var mapper = mock(MasterDataBatchMapper.class);
+        var service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class),
+                mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(),
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class), mock(TransactionTemplate.class));
+        when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
+        when(mapper.create(any(), any(), any(), anyLong(), any(), any())).thenReturn(25L);
+        when(mapper.findById(25L)).thenReturn(snapshot());
+        var request = new StartMasterDataBatchRequest("TEST-REQUEST-20260922", "ORG001",
+                ParameterEnvironment.PRODUCTION, MasterDataCategory.MEDICAL_DIRECTORY, MasterDataSyncMode.TIME_RANGE,
+                java.time.OffsetDateTime.parse("2026-09-01T09:00:00+08:00"),
+                java.time.OffsetDateTime.parse("2026-09-22T09:00:00+08:00"));
+        service.start(request, actor());
+        verify(mapper).create(any(), org.mockito.ArgumentMatchers.eq("PRIMARY_HIS"),
+                org.mockito.ArgumentMatchers.argThat(creation -> creation.mode() == MasterDataSyncMode.TIME_RANGE
+                        && creation.organizationCode().equals(request.organizationCode())), org.mockito.ArgumentMatchers.eq(10L),
+                org.mockito.ArgumentMatchers.eq("ORG001"), org.mockito.ArgumentMatchers.eq("admin"));
+    }
+
+    /** 不存在、越权或尚未执行的批次不能进入恢复收尾。 */
+    @Test
+    void rejectsInvisibleOrUnstartedBatchRecovery() {
+        var mapper = mock(MasterDataBatchMapper.class);
+        var hospital = mock(HospitalDirectorySyncService.class);
+        var medical = mock(MedicalDirectorySyncService.class);
+        var service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class),
+                mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(), hospital, medical,
+                mock(TransactionTemplate.class));
+        assertThrows(ResourceNotFoundException.class, () -> service.recover(25L, new byte[8], actor()));
+        when(mapper.findVisibleById(25L, List.of("ORG001"))).thenReturn(snapshot());
+        assertThrows(ResourceConflictException.class, () -> service.recover(25L, new byte[8], actor()));
+        verifyNoInteractions(hospital, medical);
+    }
+
+    /** 只有范围内且抢占成功的批次才能调用HIS，抢占事务必须先结束。 */
+    @Test
+    void claimsBatchBeforeStartingExternalSynchronization() {
+        MasterDataBatchMapper mapper = mock(MasterDataBatchMapper.class);
+        HospitalDirectorySyncService hospital = mock(HospitalDirectorySyncService.class);
+        MedicalDirectorySyncService medical = mock(MedicalDirectorySyncService.class);
+        var manager = mock(PlatformTransactionManager.class);
+        var transaction = mock(TransactionStatus.class);
+        when(manager.getTransaction(any())).thenReturn(transaction);
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class),
+                mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(), hospital, medical,
+                new TransactionTemplate(manager));
+        MasterDataBatchSnapshot batch = snapshot();
+        when(mapper.findVisibleById(25L, List.of("ORG001"))).thenReturn(batch);
+        when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
+        when(mapper.beginFetch(25L, new byte[8], "admin")).thenReturn(1);
+        when(mapper.findById(25L)).thenReturn(batch);
+
+        service.run(25L, new byte[8], actor());
+
+        var order = Mockito.inOrder(mapper, manager, hospital);
+        order.verify(mapper).beginFetch(25L, new byte[8], "admin");
+        order.verify(manager).commit(transaction);
+        order.verify(hospital).synchronize(batch, 1L, "admin");
+        verifyNoInteractions(medical);
+    }
+
+    /** 范围外或并发抢占失败时，不得继续触发同步。 */
+    @Test
+    void rejectsInvisibleOrAlreadyClaimedBatchBeforeCallingHis() {
+        MasterDataBatchMapper mapper = mock(MasterDataBatchMapper.class);
+        HospitalDirectorySyncService hospital = mock(HospitalDirectorySyncService.class);
+        MedicalDirectorySyncService medical = mock(MedicalDirectorySyncService.class);
+        var manager = mock(PlatformTransactionManager.class);
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class),
+                mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(), hospital, medical,
+                new TransactionTemplate(manager));
+
+        assertThrows(ResourceNotFoundException.class, () -> service.run(25L, new byte[8], actor()));
+        verifyNoInteractions(manager, hospital, medical);
+
+        when(mapper.findVisibleById(25L, List.of("ORG001"))).thenReturn(snapshot());
+        when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
+        assertThrows(ResourceConflictException.class,
+                () -> service.run(25L, new byte[8], actor()));
+        verifyNoInteractions(hospital, medical);
+    }
 
     /** 验证发起选项由真实HIS范围和后端已实现业务共同生成。 */
     @Test
@@ -47,11 +202,12 @@ class MasterDataBatchServiceTest {
         when(endpointService.findAvailableScopes("PRIMARY_HIS", List.of("ORG001")))
                 .thenReturn(List.of(new ExternalEndpointScope(
                         10L, "ORG001", "测试机构", ParameterEnvironment.PRODUCTION)));
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(
-                mapper, mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
-                mock(ManagementAuditService.class), endpointService);
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), endpointService,
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
 
-        var result = service.findSyncOptions(actor());
+        var result = service.findSyncOptions(List.of("ORG001"));
 
         assertEquals("ORG001", result.sources().get(0).organizationCode());
         assertEquals(MasterDataCategory.HOSPITAL_DIRECTORY, result.businesses().get(0).category());
@@ -63,17 +219,17 @@ class MasterDataBatchServiceTest {
     void createsHospitalDirectoryBatchWithoutSourceType() {
         MasterDataBatchMapper mapper = mock(MasterDataBatchMapper.class);
         ExternalEndpointResolutionService endpointService = availableEndpointService();
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(
-                mapper, mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
-                mock(ManagementAuditService.class), endpointService);
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), endpointService,
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
         when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
-        when(mapper.create(any(), any(), any(), anyLong(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any())).thenReturn(25L);
+        when(mapper.create(any(), any(), any(), anyLong(), any(), any())).thenReturn(25L);
         when(mapper.findById(25L)).thenReturn(snapshot());
 
         service.start(new StartMasterDataBatchRequest(
                 "8BCDCA4E11A44A9D888D7E70", "ORG001", ParameterEnvironment.PRODUCTION,
-                MasterDataCategory.HOSPITAL_DIRECTORY
+                MasterDataCategory.HOSPITAL_DIRECTORY, MasterDataSyncMode.NOT_APPLICABLE, null, null
         ), actor());
 
         verify(mapper).findEnabledOrganizationId("ORG001");
@@ -91,15 +247,16 @@ class MasterDataBatchServiceTest {
                                 true, true, null, null, new byte[8], "测试机构", null, null,
                                 ExternalEndpointVerificationStatus.VERIFIED, null, null),
                         new ExternalEndpointAuthentication("V01", null, null, "AUTH"))));
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(
-                mapper, mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
-                mock(ManagementAuditService.class), endpointService);
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), endpointService,
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
         when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
 
         InvalidRequestException exception = assertThrows(InvalidRequestException.class,
                 () -> service.start(new StartMasterDataBatchRequest(
                         "8BCDCA4E11A44A9D888D7E70", "ORG001", ParameterEnvironment.PRODUCTION,
-                        MasterDataCategory.HOSPITAL_DIRECTORY
+                        MasterDataCategory.HOSPITAL_DIRECTORY, MasterDataSyncMode.NOT_APPLICABLE, null, null
                 ), actor()));
 
         assertEquals("该机构的基层HIS配置未保存100-008来源机构结果，不能发起同步", exception.getMessage());
@@ -109,24 +266,27 @@ class MasterDataBatchServiceTest {
     @Test
     void cancelsCreatedBatchWithOptimisticVersion() {
         MasterDataBatchMapper mapper = mock(MasterDataBatchMapper.class);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(
-                mapper, mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
-                mock(ManagementAuditService.class), availableEndpointService());
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(),
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
         MasterDataBatchSnapshot created = snapshot();
         MasterDataBatchSnapshot cancelled = new MasterDataBatchSnapshot(
-                25L, "BD-TEST", MasterDataScopeType.ORGANIZATION, "ORG001", "测试机构",
+                25L, "BD-TEST", MasterDataScopeType.ORGANIZATION, 10L, "ORG001", "测试机构",
                 ParameterEnvironment.PRODUCTION,
-                MasterDataCategory.HOSPITAL_DIRECTORY, "100-003", null, null, "HIS-ORG-001", null, null,
+                MasterDataCategory.HOSPITAL_DIRECTORY, MasterDataSyncMode.NOT_APPLICABLE,
+                "100-003", null, null, "HIS-ORG-001", null, null, null, null, null,
                 MasterDataBatchStatus.FAILED, null, 0, 0, 0, 0, 0, 0, 0, 0, null,
                 null, null, null, "CANCELLED_BY_USER", "本批次已由业务人员取消，未调用来源HIS。", new byte[]{2}
         );
-        when(mapper.findById(25L)).thenReturn(created, cancelled);
-        when(mapper.cancel(25L, new byte[8], "admin")).thenReturn(1);
+        when(mapper.findVisibleById(25L, List.of("ORG001"))).thenReturn(created);
+        when(mapper.findById(25L)).thenReturn(cancelled);
+        when(mapper.cancel(25L, new byte[8], "admin", List.of("ORG001"))).thenReturn(1);
 
         MasterDataBatchSummaryVO result = service.cancel(25L, new byte[8], actor());
 
         assertEquals("CANCELLED_BY_USER", result.failureCode());
-        verify(mapper).cancel(25L, new byte[8], "admin");
+        verify(mapper).cancel(25L, new byte[8], "admin", List.of("ORG001"));
     }
 
     /** 验证批次服务只负责可见性和类别边界，100-003结果由医院目录持久化边界读取。 */
@@ -134,13 +294,14 @@ class MasterDataBatchServiceTest {
     void readsHospitalDirectoryResultsThroughHospitalDirectoryMapper() {
         MasterDataBatchMapper batchMapper = mock(MasterDataBatchMapper.class);
         HospitalDirectorySyncMapper directoryMapper = mock(HospitalDirectorySyncMapper.class);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(
-                batchMapper, directoryMapper, mock(MedicalDirectorySyncMapper.class),
-                mock(ManagementAuditService.class), availableEndpointService());
-        when(batchMapper.findById(25L)).thenReturn(snapshot());
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, mock(ConfigurationMapper.class), directoryMapper, mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(),
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
+        when(batchMapper.findVisibleById(25L, List.of("ORG001"))).thenReturn(snapshot());
         when(directoryMapper.findResults(25L)).thenReturn(List.of());
 
-        service.findHospitalDirectoryResults(25L, actor());
+        service.findHospitalDirectoryResults(25L, List.of("ORG001"));
 
         verify(directoryMapper).findResults(25L);
     }
@@ -150,21 +311,41 @@ class MasterDataBatchServiceTest {
     void readsMedicalDirectoryResultsThroughMedicalDirectoryMapper() {
         MasterDataBatchMapper batchMapper = mock(MasterDataBatchMapper.class);
         MedicalDirectorySyncMapper directoryMapper = mock(MedicalDirectorySyncMapper.class);
-        MasterDataBatchService service = new MasterDataBatchServiceImpl(
-                batchMapper, mock(HospitalDirectorySyncMapper.class), directoryMapper,
-                mock(ManagementAuditService.class), availableEndpointService());
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, mock(ConfigurationMapper.class), mock(HospitalDirectorySyncMapper.class), directoryMapper,
+                mock(ManagementAuditService.class), availableEndpointService(),
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
         MasterDataBatchSnapshot medicalSnapshot = new MasterDataBatchSnapshot(
-                25L, "BD-TEST", MasterDataScopeType.ORGANIZATION, "ORG001", "测试机构",
+                25L, "BD-TEST", MasterDataScopeType.ORGANIZATION, 10L, "ORG001", "测试机构",
                 ParameterEnvironment.PRODUCTION,
-                MasterDataCategory.MEDICAL_DIRECTORY, "100-004", "100-005", null, "HIS-ORG-001", null, null,
+                MasterDataCategory.MEDICAL_DIRECTORY, MasterDataSyncMode.TIME_RANGE,
+                "100-004", "100-005", null, "HIS-ORG-001", null, null, null, null, null,
                 MasterDataBatchStatus.COMPLETED, null, 0, 0, 0, 0, 0, 0, 0, 0, 0L,
                 null, null, null, null, null, new byte[8]);
-        when(batchMapper.findById(25L)).thenReturn(medicalSnapshot);
+        when(batchMapper.findVisibleById(25L, List.of("ORG001"))).thenReturn(medicalSnapshot);
         when(directoryMapper.findResults(25L)).thenReturn(List.of());
 
-        service.findMedicalDirectoryResults(25L, actor());
+        service.findMedicalDirectoryResults(25L, List.of("ORG001"));
 
         verify(directoryMapper).findResults(25L);
+    }
+
+    /** 范围外批次不得读取摘要或继续读取其分项事实。 */
+    @Test
+    void hidesBatchOutsideCallerOrganizationScope() {
+        MasterDataBatchMapper batchMapper = mock(MasterDataBatchMapper.class);
+        HospitalDirectorySyncMapper directoryMapper = mock(HospitalDirectorySyncMapper.class);
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(batchMapper, mock(ConfigurationMapper.class), directoryMapper, mock(MedicalDirectorySyncMapper.class),
+                mock(ManagementAuditService.class), availableEndpointService(),
+                mock(HospitalDirectorySyncService.class), mock(MedicalDirectorySyncService.class),
+                mock(TransactionTemplate.class));
+
+        assertThrows(ResourceNotFoundException.class, () -> service.get(25L, List.of()));
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.findHospitalDirectoryResults(25L, List.of()));
+
+        verify(batchMapper, Mockito.times(2)).findVisibleById(25L, List.of());
+        verifyNoInteractions(directoryMapper);
     }
 
     /**
@@ -201,9 +382,10 @@ class MasterDataBatchServiceTest {
      */
     private MasterDataBatchSnapshot snapshot() {
         return new MasterDataBatchSnapshot(
-                25L, "BD-TEST", MasterDataScopeType.ORGANIZATION, "ORG001", "测试机构",
+                25L, "BD-TEST", MasterDataScopeType.ORGANIZATION, 10L, "ORG001", "测试机构",
                 ParameterEnvironment.PRODUCTION,
-                MasterDataCategory.HOSPITAL_DIRECTORY, "100-003", null, null, "HIS-ORG-001", null, null,
+                MasterDataCategory.HOSPITAL_DIRECTORY, MasterDataSyncMode.NOT_APPLICABLE,
+                "100-003", null, null, "HIS-ORG-001", null, null, null, null, null,
                 MasterDataBatchStatus.CREATED, null, 0, 0, 0, 0, 0, 0, 0, 0, null,
                 null, null, null, null, null, new byte[8]
         );

@@ -1,7 +1,7 @@
 package cn.zqkj.platform.masterdata.domain.batch.model;
 
-import java.time.LocalDateTime;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
+import java.time.LocalDateTime;
 
 /**
  * 基础数据同步批次的只读事实快照。
@@ -14,14 +14,19 @@ import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
  * @param id 批次主键
  * @param batchNo 批次号
  * @param scopeType 业务归属范围
+ * @param organizationId 机构范围批次的内部机构主键；平台批次为空
  * @param organizationCode 平台机构代码
  * @param organizationName 平台机构名称
  * @param environment 来源接口运行环境
  * @param category 数据类别
+ * @param syncMode 本批次实际采用的查询模式
  * @param dataTradeCode 数据交易码
  * @param countTradeCode 数量交易码
  * @param sourceType 来源目录类型
  * @param sourceOrganizationId 发起批次时固化的已验证来源机构标识
+ * @param sourceEndpointId 发起批次时绑定的服务端点主键
+ * @param sourceEndpointVersion 发起批次时绑定的服务端点行版本
+ * @param fullRuleEvidence 全量规则的非敏感确认依据；非全量为空
  * @param rangeStart 查询范围开始UTC时间
  * @param rangeEnd 查询范围结束UTC时间
  * @param status 批次状态
@@ -46,14 +51,19 @@ public record MasterDataBatchSnapshot(
         long id,
         String batchNo,
         MasterDataScopeType scopeType,
+        Long organizationId,
         String organizationCode,
         String organizationName,
         ParameterEnvironment environment,
         MasterDataCategory category,
+        MasterDataSyncMode syncMode,
         String dataTradeCode,
         String countTradeCode,
         String sourceType,
         String sourceOrganizationId,
+        Long sourceEndpointId,
+        byte[] sourceEndpointVersion,
+        String fullRuleEvidence,
         LocalDateTime rangeStart,
         LocalDateTime rangeEnd,
         MasterDataBatchStatus status,

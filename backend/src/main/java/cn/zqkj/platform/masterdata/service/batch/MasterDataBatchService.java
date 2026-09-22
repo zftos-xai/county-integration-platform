@@ -4,13 +4,11 @@ import cn.zqkj.platform.masterdata.domain.batch.dto.MasterDataBatchQuery;
 import cn.zqkj.platform.masterdata.domain.batch.dto.StartMasterDataBatchRequest;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchPageVO;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
+import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataSyncOptionsVO;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectorySyncResultVO;
-import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataSyncOptionsVO;
 import cn.zqkj.platform.system.identity.domain.model.AccessActor;
-
 import java.util.List;
-
 
 /**
  * 定义基础数据同步批次的创建、受控取消和查询用例。
@@ -18,48 +16,67 @@ import java.util.List;
 public interface MasterDataBatchService {
 
     /**
-     * 按当前操作人的机构范围分页查询同步批次。
-     *
-     * @param query 查询条件
-     * @param actor 当前操作人
-     * @return 有权限查看的批次分页结果
+     * 以现有分项事实结束中断批次并撤销旧执行权，不重新调用HIS。
+     * @param id 批次主键，仍按操作人机构范围读取
+     * @param expectedVersion 当前批次行版本
+     * @param actor 通过入口功能授权的操作人
+     * @return 已结束批次；缺少分项时为部分结果未知
      */
-    MasterDataBatchPageVO findPage(MasterDataBatchQuery query, AccessActor actor);
+    MasterDataBatchSummaryVO recover(long id, byte[] expectedVersion, AccessActor actor);
+
+    /**
+     * 占用机构范围内的批次并执行对应目录同步，返回本轮已保存的处理结果。
+     *
+     * @param id 批次主键
+     * @param expectedVersion 入口解码的八字节行版本；仅用于原子抢占
+     * @param actor 入口确认的机构范围及审计身份
+     * @return 完成、部分失败或部分结果未知的批次摘要
+     */
+    MasterDataBatchSummaryVO run(long id, byte[] expectedVersion, AccessActor actor);
+
+    /**
+     * 按调用入口确认的机构范围分页查询同步批次。
+     *
+     * @param query 入口已校验的查询条件；时间由持久化访问器转换为 UTC
+     * @param allowedOrganizationCodes 已在调用入口确认的机构范围；空集合仍可查询平台级批次
+     * @return 平台级及给定机构范围内的批次分页结果
+     */
+    MasterDataBatchPageVO findPage(MasterDataBatchQuery query, List<String> allowedOrganizationCodes);
 
     /**
      * 按主键读取基础数据同步批次；不存在时由调用边界按约定处理。
      *
      * @param id 批次主键
-     * @param actor 当前操作人
-     * @return 有权限查看的批次摘要
+     * @param allowedOrganizationCodes 调用入口确认的机构范围；空集合仅可读取平台级批次
+     * @return 范围内的批次摘要；不存在或超出范围时抛出资源不存在异常
      */
-    MasterDataBatchSummaryVO get(long id, AccessActor actor);
+    MasterDataBatchSummaryVO get(long id, List<String> allowedOrganizationCodes);
 
     /**
      * 读取100-003批次按科室、医生、病区和床位保存的分项处理事实。
      *
      * @param id 同步批次主键
-     * @param actor 当前操作人
+     * @param allowedOrganizationCodes 调用入口确认的机构范围
      * @return 分项结果；历史批次未保存分项事实时返回空列表
      */
-    List<HospitalDirectorySyncResultVO> findHospitalDirectoryResults(long id, AccessActor actor);
+    List<HospitalDirectorySyncResultVO> findHospitalDirectoryResults(long id, List<String> allowedOrganizationCodes);
 
     /**
      * 读取100-004/100-005批次按中药、西药、诊疗和耗材保存的分项处理事实。
      *
      * @param id 同步批次主键
-     * @param actor 当前操作人
+     * @param allowedOrganizationCodes 调用入口确认的机构范围
      * @return 分项结果；未执行批次返回空列表
      */
-    List<MedicalDirectorySyncResultVO> findMedicalDirectoryResults(long id, AccessActor actor);
+    List<MedicalDirectorySyncResultVO> findMedicalDirectoryResults(long id, List<String> allowedOrganizationCodes);
 
     /**
-     * 查询当前操作人实际可用的HIS来源和同步业务。
+     * 查询给定机构范围内实际可用的 HIS 来源和同步业务。
      *
-     * @param actor 当前操作人
+     * @param allowedOrganizationCodes 调用入口确认的机构范围
      * @return 真实来源和已实现闭环的同步业务
      */
-    MasterDataSyncOptionsVO findSyncOptions(AccessActor actor);
+    MasterDataSyncOptionsVO findSyncOptions(List<String> allowedOrganizationCodes);
 
     /**
      * 创建尚未执行的基础数据同步批次。
@@ -71,7 +88,7 @@ public interface MasterDataBatchService {
     MasterDataBatchSummaryVO start(StartMasterDataBatchRequest request, AccessActor actor);
 
     /**
-     * 在执行开始前取消维护方案。
+     * 在执行开始前取消同步批次。
      *
      * @param id 批次主键
      * @param expectedVersion 最近读取的并发版本

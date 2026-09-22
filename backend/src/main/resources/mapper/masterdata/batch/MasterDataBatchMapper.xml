@@ -9,6 +9,8 @@
             <arg column="batch_no" javaType="java.lang.String"/>
             <!-- 平台级或机构级的数据范围 -->
             <arg column="scope_type" javaType="cn.zqkj.platform.masterdata.domain.batch.model.MasterDataScopeType"/>
+            <!-- 机构范围批次的内部机构主键，平台范围为空 -->
+            <arg column="organization_id" javaType="java.lang.Long"/>
             <!-- 机构级批次所属的稳定机构编码，平台级批次为空 -->
             <arg column="organization_code" javaType="java.lang.String"/>
             <!-- 机构级批次所属的机构展示名称，平台级批次为空 -->
@@ -17,6 +19,8 @@
             <arg column="environment_code" javaType="cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment"/>
             <!-- 本批次同步的主数据类别 -->
             <arg column="data_category" javaType="cn.zqkj.platform.masterdata.domain.batch.model.MasterDataCategory"/>
+            <!-- 本批次实际采用的来源查询模式 -->
+            <arg column="sync_mode" javaType="cn.zqkj.platform.masterdata.domain.batch.model.MasterDataSyncMode"/>
             <!-- 从获批接口配置解析出的数据查询交易码 -->
             <arg column="data_trade_code" javaType="java.lang.String"/>
             <!-- 可选的数据总数查询交易码，空值表示接口不支持预查总数 -->
@@ -25,6 +29,12 @@
             <arg column="source_type" javaType="java.lang.String"/>
             <!-- 发起批次时从已验证100-008映射固化的来源机构标识 -->
             <arg column="source_organization_id" javaType="java.lang.String"/>
+            <!-- 创建批次时绑定的HIS端点主键 -->
+            <arg column="source_endpoint_id" javaType="java.lang.Long"/>
+            <!-- 创建批次时绑定的HIS端点行版本 -->
+            <arg column="source_endpoint_version" javaType="_byte[]"/>
+            <!-- 全量规则的非敏感确认依据，其他模式为空 -->
+            <arg column="full_rule_evidence" javaType="java.lang.String"/>
             <!-- 本批次查询数据范围的起始UTC时间，空值表示不限制起点 -->
             <arg column="query_started_at" javaType="java.time.LocalDateTime"/>
             <!-- 本批次查询数据范围的结束UTC时间，空值表示不限制终点 -->
@@ -70,14 +80,19 @@
         batches.id,                            <!-- 主数据同步批次内部主键 -->
         batches.batch_no,                      <!-- 供业务人员识别和追踪的批次编号 -->
         batches.scope_type,                    <!-- 平台级或机构级的数据范围 -->
+        batches.organization_id,               <!-- 批次所属机构内部主键，平台级批次为空 -->
         organizations.organization_code,      <!-- 机构级批次所属机构编码，平台级批次为空 -->
         organizations.organization_name,      <!-- 机构级批次所属机构名称，平台级批次为空 -->
         batches.environment_code,              <!-- 发起同步时选择的外部系统环境 -->
         batches.data_category,                 <!-- 本批次同步的主数据类别 -->
+        batches.sync_mode,                     <!-- 本批次实际采用的来源查询模式 -->
         batches.data_trade_code,               <!-- 数据查询交易码 -->
         batches.count_trade_code,              <!-- 可选总数查询交易码，不支持预查时为空 -->
         batches.source_type,                   <!-- 医院目录接口要求的可选来源类型 -->
         batches.source_organization_id,        <!-- 已验证来源机构标识的批次快照 -->
+        batches.source_endpoint_id,            <!-- 创建批次时绑定的HIS端点主键 -->
+        batches.source_endpoint_version,       <!-- 创建批次时绑定的HIS端点行版本 -->
+        batches.full_rule_evidence,            <!-- 全量规则的非敏感确认依据 -->
         batches.query_started_at,              <!-- 查询范围起始UTC时间，不限起点时为空 -->
         batches.query_ended_at,                <!-- 查询范围结束UTC时间，不限终点时为空 -->
         batches.batch_status,                  <!-- 批次当前生命周期状态 -->
@@ -100,7 +115,7 @@
     </sql>
 
     <sql id="visibleBatchConditions">
-        <!-- 平台批次全部可见；机构批次必须落在当前用户获批机构范围内 -->
+        <!-- 平台批次对具备读取功能权限的入口可见；机构批次必须落在调用方给定范围内 -->
         WHERE (
             batches.scope_type = 'PLATFORM'
             <if test="organizationCodes != null and !organizationCodes.isEmpty()">
@@ -128,11 +143,11 @@
         </if>
         <if test="query.startedFrom != null">
             <!-- 起始边界使用批次开始访问上游的UTC时间，包含边界 -->
-            AND batches.started_at &gt;= #{query.startedFrom}
+            AND batches.started_at &gt;= #{query.startedFromUtc}
         </if>
         <if test="query.startedTo != null">
             <!-- 结束边界使用批次开始访问上游的UTC时间，包含边界 -->
-            AND batches.started_at &lt;= #{query.startedTo}
+            AND batches.started_at &lt;= #{query.startedToUtc}
         </if>
     </sql>
 
@@ -144,7 +159,22 @@
           AND is_enabled = 1
     </select>
 
+    <select id="hasMedicalCatalogFromOtherEnvironment" resultType="boolean">
+        <!-- 当前目录没有环境维度；最近来源环境不同即拒绝交叉写入 -->
+        SELECT CASE WHEN EXISTS (
+            SELECT 1
+            FROM md_medical_directory directory
+            INNER JOIN md_sync_batch latest ON latest.id = directory.latest_batch_id
+            WHERE directory.organization_id = #{organizationId}
+              AND latest.environment_code &lt;&gt; #{environment}
+        ) THEN 1 ELSE 0 END
+    </select>
+
     <select id="create" resultType="long" affectData="true">
+        <!-- 交易和范围由已实现类别决定，调用方不能自行指定 -->
+        <bind name="scopeType" value="creation.category().scopeType()"/>
+        <bind name="dataTradeCode" value="creation.category().dataTradeCode()"/>
+        <bind name="countTradeCode" value="creation.category().countTradeCode()"/>
         INSERT INTO md_sync_batch (
             batch_no,              <!-- 供业务人员识别和追踪的批次编号 -->
             request_key,           <!-- 调用方幂等请求标识 -->
@@ -153,8 +183,12 @@
             organization_id,       <!-- 机构级批次所属机构主键，平台级批次为空 -->
             environment_code,      <!-- 发起同步时选择的外部系统环境 -->
             data_category,         <!-- 本批次同步的主数据类别 -->
+            sync_mode,             <!-- 全量、指定范围或不适用 -->
             source_type,           <!-- 医院目录接口要求的可选来源类型 -->
             source_organization_id,<!-- 已验证来源机构标识的批次快照 -->
+            source_endpoint_id,    <!-- 创建时绑定的HIS服务端点主键 -->
+            source_endpoint_version, <!-- 创建时绑定的HIS端点行版本 -->
+            full_rule_evidence,    <!-- 全量规则的非敏感确认依据 -->
             query_started_at,      <!-- 查询范围起始UTC时间，不限起点时为空 -->
             query_ended_at,        <!-- 查询范围结束UTC时间，不限终点时为空 -->
             diagnosis_category,    <!-- 诊断目录分类，非诊断批次为空 -->
@@ -166,11 +200,13 @@
             created_by,            <!-- 创建人稳定用户标识快照 -->
             updated_by             <!-- 最后修改人稳定用户标识快照 -->
         ) VALUES (
-            #{batchNo}, #{requestKey}, #{sourceSystemCode}, #{scopeType}, #{organizationId,jdbcType=BIGINT}, #{environment},
-            #{category}, #{sourceType,jdbcType=NVARCHAR}, #{sourceOrganizationId,jdbcType=NVARCHAR},
-            #{rangeStart,jdbcType=TIMESTAMP},
-            #{rangeEnd,jdbcType=TIMESTAMP}, #{diagnosisCategory,jdbcType=NVARCHAR},
-            #{diagnosisVersion,jdbcType=NVARCHAR}, #{dataTradeCode}, #{countTradeCode,jdbcType=NVARCHAR},
+            #{batchNo}, #{creation.requestKey}, #{sourceSystemCode}, #{scopeType}, #{organizationId,jdbcType=BIGINT}, #{creation.environment},
+            #{creation.category}, #{creation.mode}, NULL, #{sourceOrganizationId,jdbcType=NVARCHAR},
+            #{creation.sourceEndpointId}, #{creation.sourceEndpointVersion,jdbcType=VARBINARY},
+            #{creation.fullRuleEvidence,jdbcType=NVARCHAR},
+            #{creation.rangeStart,jdbcType=TIMESTAMP},
+            #{creation.rangeEnd,jdbcType=TIMESTAMP}, NULL,
+            NULL, #{dataTradeCode}, #{countTradeCode,jdbcType=NVARCHAR},
             'CREATED', 1, #{actor}, #{actor}
         );
         SELECT CONVERT(BIGINT, SCOPE_IDENTITY());
@@ -182,6 +218,55 @@
         FROM md_sync_batch batches
         LEFT JOIN org_organization organizations ON organizations.id = batches.organization_id
         WHERE batches.id = #{id}
+    </select>
+
+    <select id="findVisibleById" resultMap="batchSnapshot">
+        <!-- 按主键和调用方机构范围一次性读取；无权访问与不存在都不返回批次内容 -->
+        SELECT <include refid="batchColumns"/>
+        FROM md_sync_batch batches
+        LEFT JOIN org_organization organizations ON organizations.id = batches.organization_id
+        WHERE batches.id = #{id}
+          AND (
+            batches.scope_type = 'PLATFORM'
+            <if test="organizationCodes != null and !organizationCodes.isEmpty()">
+                OR organizations.organization_code IN
+                <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </if>
+          )
+    </select>
+
+    <update id="beginFetch">
+        <!-- 批次状态和行版本共同防止重复执行；外部取数只能在本次更新提交后开始 -->
+        UPDATE md_sync_batch
+        SET batch_status = 'FETCHING', started_at = SYSUTCDATETIME(), finished_at = NULL,
+            failure_code = NULL, failure_summary = NULL, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{batchId} AND batch_status = 'CREATED' AND row_version = #{expectedVersion}
+    </update>
+
+    <select id="lockExecution" resultType="boolean">
+        <!-- 行版本是执行栅栏；短事务持锁期间恢复及其他执行者不能改变批次状态。 -->
+        SELECT CASE WHEN EXISTS (
+            SELECT 1 FROM md_sync_batch WITH (UPDLOCK, HOLDLOCK)
+            WHERE id = #{batchId} AND row_version = #{expectedVersion}
+              AND batch_status IN ('FETCHING', 'RESULT_UNKNOWN')
+        ) THEN 1 ELSE 0 END
+    </select>
+
+    <select id="hasBoundSourceChanged" resultType="boolean">
+        <!-- 与目录发布处于同一短事务；持有端点更新锁直至提交，禁止检查后切换HIS配置 -->
+        SELECT CASE WHEN EXISTS (
+            SELECT 1
+            FROM md_sync_batch batches
+            LEFT JOIN sys_external_endpoint endpoint WITH (UPDLOCK, HOLDLOCK)
+                ON endpoint.id = batches.source_endpoint_id
+            WHERE batches.id = #{batchId}
+              AND batches.source_endpoint_id IS NOT NULL
+              AND (endpoint.id IS NULL OR endpoint.is_enabled = 0
+                   OR endpoint.verification_status &lt;&gt; 'VERIFIED'
+                   OR endpoint.row_version &lt;&gt; batches.source_endpoint_version)
+        ) THEN 1 ELSE 0 END
     </select>
 
     <update id="cancel">
@@ -197,10 +282,22 @@
         WHERE id = #{id}
           AND row_version = #{expectedVersion}
           AND batch_status = 'CREATED'
+          AND (
+            scope_type = 'PLATFORM'
+            <if test="organizationCodes != null and !organizationCodes.isEmpty()">
+                OR organization_id IN (
+                    SELECT id FROM org_organization
+                    WHERE organization_code IN
+                    <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">
+                        #{code}
+                    </foreach>
+                )
+            </if>
+          )
     </update>
 
     <select id="countPage" resultType="long">
-        <!-- 使用与分页列表一致的权限范围和业务筛选条件统计总数 -->
+        <!-- 使用与分页列表一致的机构范围和业务筛选条件统计总数 -->
         SELECT COUNT(1)
         FROM md_sync_batch batches
         LEFT JOIN org_organization organizations ON organizations.id = batches.organization_id

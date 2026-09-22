@@ -1,24 +1,35 @@
 package cn.zqkj.platform.masterdata.service.medicaldirectory.impl;
 
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryValidationResult;
+
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
-import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySourceEntry;
-import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType;
 import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
 import cn.zqkj.platform.his.exception.PhisBusinessException;
+import cn.zqkj.platform.his.exception.PhisCommunicationException;
+import cn.zqkj.platform.his.exception.PhisProtocolException;
+import cn.zqkj.platform.common.utils.Func;
+import cn.zqkj.platform.exchange.domain.model.ExchangeResult;
+import cn.zqkj.platform.exchange.domain.model.ExchangeRuntimeRecord;
+import cn.zqkj.platform.exchange.service.ExchangeRuntimeRecordService;
+import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot;
+import cn.zqkj.platform.his.domain.protocol.model.PhisTrade;
 import cn.zqkj.platform.his.service.PhisService;
-import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryFetchResult;
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySourceEntry;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySourceRecord;
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.SourcePagination;
 import cn.zqkj.platform.masterdata.service.medicaldirectory.MedicalDirectoryFetchService;
 import cn.zqkj.platform.masterdata.service.medicaldirectory.MedicalDirectoryValidationService;
-import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
-import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
 /** 实现100-005声明数与100-004全页取得的一致性边界。 */
 @Service
@@ -27,53 +38,63 @@ public class MedicalDirectoryFetchServiceImpl implements MedicalDirectoryFetchSe
     private static final int PAGE_SIZE = 100;
     private final PhisService phisService;
     private final MedicalDirectoryValidationService validationService;
+    private final ExchangeRuntimeRecordService exchangeRecords;
+    private final ZoneId queryZone;
 
     /**
      * 创建医疗目录完整取数服务。
      *
      * @param phisService 强类型HIS调用服务
      * @param validationService 目录自动校验服务
+     * @param exchangeRecords 保存每次数量或分页调用的脱敏事实
+     * @param queryZone HIS无时区查询字段使用的医院时区
      */
     public MedicalDirectoryFetchServiceImpl(
             PhisService phisService,
-            MedicalDirectoryValidationService validationService
+            MedicalDirectoryValidationService validationService,
+            ExchangeRuntimeRecordService exchangeRecords,
+            @Value("${platform.his.query-zone:Asia/Shanghai}") String queryZone
     ) {
         this.phisService = phisService;
         this.validationService = validationService;
+        this.exchangeRecords = exchangeRecords;
+        this.queryZone = ZoneId.of(queryZone);
     }
 
     /**
-     * {@inheritDoc}
+     * 取得指定机构、目录类型和时间范围内的完整医疗目录。
      *
      * <p>先用100-005确认总数，再用完全相同的范围调用100-004逐页取得数据；任一页失败即停止，
      * 不返回可能被误当成完整结果的部分数据。</p>
      */
     @Override
-    public MedicalDirectoryFetchResult fetchAll(
-            long organizationId,
-            ParameterEnvironment environment,
-            MedicalDirectoryType directoryType,
-            LocalDateTime rangeStart,
-            LocalDateTime rangeEnd,
-            String sourceOrganizationCode
+    public MedicalDirectoryValidationResult fetchAll(
+            MasterDataBatchSnapshot batch, MedicalDirectoryType directoryType
     ) {
-        requireArguments(organizationId, environment, directoryType, rangeStart, rangeEnd, sourceOrganizationCode);
-        long declaredCount = requireCount(phisService.countMedicalDirectory(organizationId, environment,
-                new MedicalDirectoryCountQuery(hisType(directoryType), null, rangeStart, rangeEnd, sourceOrganizationCode)));
+        // 批次表保存UTC；HIS协议不带偏移，不能把UTC钟面直接当医院本地时间发送。
+        LocalDateTime rangeStart = batch.rangeStart().atOffset(ZoneOffset.UTC)
+                .atZoneSameInstant(queryZone).toLocalDateTime();
+        LocalDateTime rangeEnd = batch.rangeEnd().atOffset(ZoneOffset.UTC)
+                .atZoneSameInstant(queryZone).toLocalDateTime();
+        MedicalDirectoryCountQuery countQuery = new MedicalDirectoryCountQuery(
+                hisType(directoryType), null, rangeStart, rangeEnd, batch.sourceOrganizationId());
+        long declaredCount = requireCount(invokeRecorded(batch, directoryType, PhisTrade.MEDICAL_DIRECTORY_COUNT,
+                "数量查询", () -> phisService.countMedicalDirectory(batch.organizationId(), batch.environment(), countQuery)));
         List<MedicalDirectorySourceRecord> records = new ArrayList<>();
         for (var page : SourcePagination.plan(declaredCount, PAGE_SIZE)) {
-            PhisResponse<List<MedicalDirectoryEntry>> response = phisService.queryMedicalDirectory(
-                    organizationId, environment, new MedicalDirectoryQuery(hisType(directoryType), null,
-                    page.startRow(), page.endRow(), rangeStart, rangeEnd, sourceOrganizationCode));
-            if (!response.success()) {
-                throw new PhisBusinessException(safeError(response.errorMessage()));
+            MedicalDirectoryQuery pageQuery = new MedicalDirectoryQuery(hisType(directoryType), null,
+                    page.startRow(), page.endRow(), rangeStart, rangeEnd, batch.sourceOrganizationId());
+            PhisResponse<List<MedicalDirectoryEntry>> response = invokeRecorded(batch, directoryType,
+                    PhisTrade.MEDICAL_DIRECTORY_QUERY, "行范围" + page.startRow() + "—" + page.endRow(),
+                    () -> phisService.queryMedicalDirectory(batch.organizationId(), batch.environment(), pageQuery));
+            if (response.data().size() != page.endRow() - page.startRow() + 1) {
+                throw new PhisBusinessException("100-004分页条数与请求范围不符；已停止该类型，未更新当前目录");
             }
-            if (response.data() == null) {
-                throw new PhisBusinessException("基层HIS未返回" + directoryType.displayName() + "目录数据");
+            for (MedicalDirectoryEntry entry : response.data()) {
+                records.add(new MedicalDirectorySourceRecord(directoryType, toSourceEntry(entry)));
             }
-            response.data().forEach(entry -> records.add(new MedicalDirectorySourceRecord(directoryType, toSourceEntry(entry))));
         }
-        return new MedicalDirectoryFetchResult(directoryType, validationService.validate(declaredCount, records));
+        return validationService.validate(declaredCount, records);
     }
 
     /**
@@ -83,11 +104,8 @@ public class MedicalDirectoryFetchServiceImpl implements MedicalDirectoryFetchSe
      * @return 非负声明数
      */
     private long requireCount(PhisResponse<Long> response) {
-        if (response == null || !response.success()) {
-            throw new PhisBusinessException(safeError(response == null ? null : response.errorMessage()));
-        }
         if (response.data() == null || response.data() < 0) {
-            throw new PhisBusinessException("基层HIS未返回有效目录行数");
+            throw new PhisProtocolException("基层HIS未返回有效目录行数");
         }
         return response.data();
     }
@@ -118,33 +136,59 @@ public class MedicalDirectoryFetchServiceImpl implements MedicalDirectoryFetchSe
                 entry.region(), entry.category(), entry.enabledFlag());
     }
 
-    /** 校验不依赖页面的必要业务范围。 */
-    private void requireArguments(
-            long organizationId,
-            ParameterEnvironment environment,
-            MedicalDirectoryType directoryType,
-            LocalDateTime rangeStart,
-            LocalDateTime rangeEnd,
-            String sourceOrganizationCode
-    ) {
-        if (organizationId < 1 || environment == null || directoryType == null
-                || rangeStart == null || rangeEnd == null || sourceOrganizationCode == null
-                || sourceOrganizationCode.isBlank()) {
-            throw new IllegalArgumentException("医院目录取得范围不完整");
+    /** 每次真实调用单独留存交换事实；失败只保存受控分类，不保存HIS任意错误正文或凭证。 */
+    private <T> PhisResponse<T> invokeRecorded(MasterDataBatchSnapshot batch, MedicalDirectoryType type,
+            PhisTrade trade, String range, Supplier<PhisResponse<T>> invocation) {
+        String requestId = Func.simpleUuid();
+        LocalDateTime receivedAt = LocalDateTime.now(ZoneOffset.UTC);
+        long startedAt = System.nanoTime();
+        PhisResponse<T> response;
+        try {
+            response = invocation.get();
+        } catch (PhisCommunicationException exception) {
+            exchangeRecords.record(new ExchangeRuntimeRecord(requestId, trade.code(), "PLATFORM", "PRIMARY_HIS",
+                    batch.organizationCode(), batch.batchNo(), ExchangeResult.NO_RESPONSE, null,
+                    "HIS查询结果未知", (System.nanoTime() - startedAt) / 1_000_000,
+                    type.displayName() + "；" + range, "通信失败，未取得可确认的HIS响应",
+                    receivedAt, LocalDateTime.now(ZoneOffset.UTC)));
+            throw new PhisProtocolException(trade.code() + "结果未知；交易号" + requestId, exception);
+        } catch (PhisProtocolException exception) {
+            exchangeRecords.record(new ExchangeRuntimeRecord(requestId, trade.code(), "PLATFORM", "PRIMARY_HIS",
+                    batch.organizationCode(), batch.batchNo(), ExchangeResult.INVALID_RESPONSE, null,
+                    "已收到HIS响应，但报文无法确认业务结果", (System.nanoTime() - startedAt) / 1_000_000,
+                    type.displayName() + "；" + range, null,
+                    receivedAt, LocalDateTime.now(ZoneOffset.UTC)));
+            throw new PhisProtocolException(trade.code() + "响应不符合协议；交易号" + requestId, exception);
         }
-        if (rangeEnd.isBefore(rangeStart)) {
-            throw new IllegalArgumentException("医院目录查询结束时间不能早于开始时间");
+        if (response == null) {
+            exchangeRecords.record(new ExchangeRuntimeRecord(requestId, trade.code(), "PLATFORM", "PRIMARY_HIS",
+                    batch.organizationCode(), batch.batchNo(), ExchangeResult.INVALID_RESPONSE, null,
+                    "HIS调用未提供可确认的响应对象", (System.nanoTime() - startedAt) / 1_000_000,
+                    type.displayName() + "；" + range, null,
+                    receivedAt, LocalDateTime.now(ZoneOffset.UTC)));
+            throw new PhisProtocolException(trade.code() + "缺少有效响应；交易号" + requestId);
         }
+        String summary = response.success() ? "HIS查询成功" : safeBusinessFailure(response.errorMessage());
+        exchangeRecords.record(new ExchangeRuntimeRecord(requestId, trade.code(), "PLATFORM", "PRIMARY_HIS",
+                batch.organizationCode(), batch.batchNo(), response.success() ? ExchangeResult.SUCCESS : ExchangeResult.FAILURE,
+                response.resultCode(), summary, (System.nanoTime() - startedAt) / 1_000_000,
+                type.displayName() + "；" + range, null, receivedAt, LocalDateTime.now(ZoneOffset.UTC)));
+        if (!response.success()) {
+            throw new PhisBusinessException(trade.code() + "失败（结果码" + response.resultCode()
+                    + "）：" + summary + "；交易号" + requestId);
+        }
+        return response;
     }
 
-    /**
-     * 生成不含地址、凭证和报文正文的HIS错误摘要。
-     *
-     * @param error HIS受控错误
-     * @return 可安全记录的简短说明
-     */
-    private String safeError(String error) {
-        if (error == null || error.isBlank()) return "基层HIS未返回可理解的失败原因";
-        return error.length() <= 500 ? error : error.substring(0, 500);
+    private String safeBusinessFailure(String message) {
+        if (message != null && (message.contains("无权访问") || message.contains("授权已过期")
+                || message.contains("申请机构授权"))) {
+            return "HIS机构授权未通过，请核对交易机构编码与授权配置";
+        }
+        if (message != null && (message.contains("未将对象引用设置") || message.contains("Object reference"))) {
+            return "HIS处理请求时发生空引用错误，请核对交易字段与来源服务";
+        }
+        return "HIS明确拒绝查询，未返回可公开展示的错误分类；请凭交易号核查来源记录";
     }
+
 }

@@ -155,7 +155,7 @@ const pageContext = computed(() => {
     },
     '/master-data/directory': {
       section: '基础数据',
-      description: '查看平台当前有效的科室、医生、病区和床位',
+      description: '按机构查看当前有效的医院综合目录、药品、诊疗和耗材目录',
     },
     '/interfaces': {
       section: '业务接口处理',
@@ -205,6 +205,8 @@ const pageContext = computed(() => {
   };
   if (route.path.startsWith('/master-data/batches/'))
     return context['/master-data/batches/:id']!;
+  if (route.path === '/master-data/directory/medical')
+    return context['/master-data/directory']!;
   return context[route.path] ?? { section: '平台管理', description: '' };
 });
 
@@ -244,6 +246,7 @@ async function logout() {
             v-for="item in group.items"
             :key="item.to"
             :to="item.to"
+            :class="{ 'router-link-active': item.to === '/master-data/directory' && route.path === '/master-data/directory/medical' }"
             active-class="prototype-route-parent"
             exact-active-class="router-link-active"
             @click="isMobileOpen = false"

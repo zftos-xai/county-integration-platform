@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.zqkj.platform.masterdata.mapper.medicaldirectory.MedicalDirectorySyncMapper">
-    <resultMap id="medicalDirectorySyncResult" type="cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySyncResult">
+    <resultMap id="medicalDirectorySyncResult" type="cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectorySyncResultVO">
         <constructor>
             <!-- 100-004医疗目录类型 -->
             <arg column="directory_type" javaType="cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType"/>
@@ -31,14 +31,6 @@
             <arg column="failure_summary" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
-
-    <update id="beginFetch">
-        <!-- 仅将新建或结果未知批次推进到取数状态，并以rowversion阻止重复执行。 -->
-        UPDATE md_sync_batch
-        SET batch_status = 'FETCHING', started_at = SYSUTCDATETIME(), finished_at = NULL,
-            failure_code = NULL, failure_summary = NULL, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
-        WHERE id = #{batchId} AND batch_status IN ('CREATED', 'RESULT_UNKNOWN') AND row_version = #{expectedVersion}
-    </update>
 
     <select id="classifyDirectory" resultType="int">
         <!-- 以完整来源事实比较：0新增、1更新或恢复有效、2未变化。 -->
@@ -131,16 +123,6 @@
               AND directory_type = #{record.type.code} AND source_record_code = #{record.entry.directoryCode})
     </insert>
 
-    <update id="markMissingDirectoryInvalid">
-        <!-- 只有这一类型同一时间范围完整取回并通过校验后，才确认旧记录已不在来源范围中。 -->
-        UPDATE directory
-        SET is_valid = 0, invalidated_at = SYSUTCDATETIME(), invalid_reason = 'HIS_NOT_RETURNED', updated_at = SYSUTCDATETIME()
-        FROM md_medical_directory directory
-        WHERE directory.organization_id = #{organizationId} AND directory.source_system_code = 'PRIMARY_HIS'
-          AND directory.directory_type = #{directoryType.code} AND directory.is_valid = 1
-          AND directory.latest_batch_id &lt;&gt; #{batchId}
-    </update>
-
     <select id="countActive" resultType="long">
         <!-- 统计本机构所有类型的当前有效医疗目录。 -->
         SELECT COUNT(1) FROM md_medical_directory
@@ -209,13 +191,15 @@
     <update id="finishCompleted">
         <!-- 部分异常不回滚已完整成功的目录类型；来源缺失只来自成功类型。 -->
         UPDATE md_sync_batch
-        SET batch_status = #{status}, is_active = 0, declared_count = #{declaredCount,jdbcType=BIGINT},
-            returned_count = #{returnedCount}, duplicate_count = #{duplicateCount}, invalid_count = #{invalidCount},
-            conflict_count = #{conflictCount}, created_count = #{createdCount}, updated_count = #{updatedCount},
-            unchanged_count = #{unchangedCount}, source_missing_count = #{sourceMissingCount}, active_count = #{activeCount},
-            completed_at = SYSUTCDATETIME(), failure_code = #{failureCode,jdbcType=NVARCHAR},
+        SET batch_status = #{status}, is_active = 0, declared_count = #{counts.declared,jdbcType=BIGINT},
+            returned_count = #{counts.returned}, duplicate_count = #{counts.duplicate}, invalid_count = #{counts.invalid},
+            conflict_count = #{counts.conflict}, created_count = #{counts.created}, updated_count = #{counts.updated},
+            unchanged_count = #{counts.unchanged}, source_missing_count = #{counts.sourceMissing}, active_count = #{counts.active,jdbcType=BIGINT},
+            /* 全部失败不伪造完成时间或当前有效数量。 */
+            completed_at = CASE WHEN #{status} = 'FAILED' THEN NULL ELSE SYSUTCDATETIME() END,
+            failure_code = #{failureCode,jdbcType=NVARCHAR},
             failure_summary = #{failureSummary,jdbcType=NVARCHAR}, finished_at = SYSUTCDATETIME(),
             updated_by = #{actor}, updated_at = SYSUTCDATETIME()
-        WHERE id = #{batchId} AND batch_status = 'FETCHING'
+        WHERE id = #{batchId} AND batch_status IN ('FETCHING', 'RESULT_UNKNOWN')
     </update>
 </mapper>

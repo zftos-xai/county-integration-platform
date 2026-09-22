@@ -24,6 +24,12 @@ class MasterDataBatchStatusTest {
         assertFalse(MasterDataBatchStatus.COMPLETED_WITH_UNKNOWN.canTransitionTo(MasterDataBatchStatus.COMPLETED));
     }
 
+    /** 验证核查结果确认全部失败时，可以结束原结果未知批次。 */
+    @Test
+    void allowsConfirmedFailureAfterUnknownResult() {
+        assertTrue(MasterDataBatchStatus.RESULT_UNKNOWN.canTransitionTo(MasterDataBatchStatus.FAILED));
+    }
+
     /** 验证只有四类目录均完成的运行标记为完整完成。 */
     @Test
     void identifiesCompletedState() {

@@ -1,6 +1,5 @@
 package cn.zqkj.platform.masterdata.service.hospitaldirectory.impl;
 
-import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryRecord;
@@ -9,18 +8,15 @@ import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectory
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectoryPageVO;
 import cn.zqkj.platform.masterdata.mapper.hospitaldirectory.HospitalDirectoryCatalogMapper;
 import cn.zqkj.platform.masterdata.service.hospitaldirectory.HospitalDirectoryCatalogService;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
-import org.springframework.security.access.AccessDeniedException;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-
-/** 实现正式医院综合目录的分页、机构范围控制和来源链路组装。 */
+/** 实现正式医院综合目录的分页、SQL机构范围过滤和来源链路组装。 */
 @Service
 public class HospitalDirectoryCatalogServiceImpl implements HospitalDirectoryCatalogService {
 
-    private static final int MAXIMUM_PAGE_SIZE = 100;
     private final HospitalDirectoryCatalogMapper mapper;
 
     /**
@@ -33,44 +29,21 @@ public class HospitalDirectoryCatalogServiceImpl implements HospitalDirectoryCat
     }
 
     /**
-     * {@inheritDoc}
+     * 查询指定机构范围内的当前有效医院综合目录及分类数量。
      *
-     * <p>查询前规范化分页条件并校验机构数据范围，返回结果不会越过当前操作人的机构授权。</p>
+     * <p>仅读取已同步数据；入口负责查询参数与机构授权，SQL 始终限制机构范围。</p>
      */
     @Override
     @Transactional(readOnly = true)
-    public HospitalDirectoryPageVO findPage(HospitalDirectoryQuery rawQuery, AccessActor actor) {
-        HospitalDirectoryQuery query = normalize(rawQuery);
-        if (query.organizationCode() != null && !actor.canAccess(query.organizationCode())) {
-            throw new AccessDeniedException("当前账号无权访问该机构");
-        }
-        var organizationCodes = new ArrayList<>(actor.organizationCodes());
+    public HospitalDirectoryPageVO findPage(HospitalDirectoryQuery query, List<String> allowedOrganizationCodes) {
+        List<String> organizationCodes = List.copyOf(allowedOrganizationCodes);
         long total = mapper.countPage(query, organizationCodes);
-        var items = mapper.findPage(query, organizationCodes).stream().map(this::toView).toList();
-        var counts = mapper.countByType(query.organizationCode(), organizationCodes).stream()
-                .map(item -> new HospitalDirectoryCountVO(item.directoryType(), item.total()))
-                .toList();
-        return new HospitalDirectoryPageVO(items, counts, total, query.page(), query.pageSize());
-    }
-
-    /**
-     * 裁剪可选文本并把空白统一为无值。
-     *
-     * @param rawQuery 原始查询
-     * @return 已规范化查询
-     */
-    private HospitalDirectoryQuery normalize(HospitalDirectoryQuery rawQuery) {
-        if (rawQuery == null || rawQuery.page() < 1 || rawQuery.pageSize() < 1
-                || rawQuery.pageSize() > MAXIMUM_PAGE_SIZE) {
-            throw new InvalidRequestException("分页参数不符合要求");
+        List<HospitalDirectoryItemVO> items = new ArrayList<>();
+        for (HospitalDirectoryRecord record : mapper.findPage(query, organizationCodes)) {
+            items.add(toView(record));
         }
-        return new HospitalDirectoryQuery(
-                Func.trimToNull(rawQuery.organizationCode()),
-                rawQuery.directoryType(),
-                Func.trimToNull(rawQuery.keyword()),
-                rawQuery.page(),
-                rawQuery.pageSize()
-        );
+        List<HospitalDirectoryCountVO> counts = mapper.countByType(query.organizationCode(), organizationCodes);
+        return new HospitalDirectoryPageVO(items, counts, total, query.page(), query.pageSize());
     }
 
     /**

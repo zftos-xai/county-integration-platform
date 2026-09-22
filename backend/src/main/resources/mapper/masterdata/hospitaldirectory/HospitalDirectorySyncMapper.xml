@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.zqkj.platform.masterdata.mapper.hospitaldirectory.HospitalDirectorySyncMapper">
-    <resultMap id="directorySyncResult" type="cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySyncResult">
+    <resultMap id="directorySyncResult" type="cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO">
         <constructor>
             <!-- 100-003目录类型 -->
             <arg column="directory_type" javaType="cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType"/>
@@ -29,14 +29,6 @@
             <arg column="failure_summary" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
-
-    <update id="beginFetch">
-        <!-- 仅将新建或结果未知批次推进到HIS取数状态，并以rowversion阻止重复执行 -->
-        UPDATE md_sync_batch
-        SET batch_status = 'FETCHING', started_at = SYSUTCDATETIME(), finished_at = NULL,
-            failure_code = NULL, failure_summary = NULL, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
-        WHERE id = #{batchId} AND batch_status IN ('CREATED', 'RESULT_UNKNOWN') AND row_version = #{expectedVersion}
-    </update>
 
     <select id="classifyDirectory" resultType="int">
         <!-- 在写入前分类：0新增、1更新或恢复有效、2与当前有效记录一致。 -->
@@ -207,23 +199,13 @@
     <update id="finishCompleted">
         <!-- 保存本次直接对账事实；部分异常不回滚已经完整成功的目录类型。 -->
         UPDATE md_sync_batch
-        SET batch_status = #{status}, is_active = 0, returned_count = #{returnedCount},
-            duplicate_count = #{duplicateCount}, invalid_count = #{invalidCount}, conflict_count = #{conflictCount},
-            created_count = #{createdCount}, updated_count = #{updatedCount}, unchanged_count = #{unchangedCount},
-            source_missing_count = #{sourceMissingCount}, active_count = #{activeCount}, completed_at = SYSUTCDATETIME(),
+        SET batch_status = #{status}, is_active = 0, returned_count = #{counts.returned},
+            duplicate_count = #{counts.duplicate}, invalid_count = #{counts.invalid}, conflict_count = #{counts.conflict},
+            created_count = #{counts.created}, updated_count = #{counts.updated}, unchanged_count = #{counts.unchanged},
+            source_missing_count = #{counts.sourceMissing}, active_count = #{counts.active}, completed_at = SYSUTCDATETIME(),
             failure_code = #{failureCode,jdbcType=NVARCHAR}, failure_summary = #{failureSummary,jdbcType=NVARCHAR},
             finished_at = SYSUTCDATETIME(), updated_by = #{actor}, updated_at = SYSUTCDATETIME()
-        WHERE id = #{batchId} AND batch_status = 'FETCHING'
+        WHERE id = #{batchId} AND batch_status IN ('FETCHING', 'RESULT_UNKNOWN')
     </update>
 
-    <update id="finishFailure">
-        <!-- 明确失败释放范围；结果未知保持占用以防止未经确认的重复请求 -->
-        UPDATE md_sync_batch
-        SET batch_status = #{status}, is_active = CASE WHEN #{status} = 'FAILED' THEN 0 ELSE 1 END,
-            returned_count = #{returnedCount}, duplicate_count = #{duplicateCount},
-            invalid_count = #{invalidCount}, conflict_count = #{conflictCount},
-            failure_code = #{code}, failure_summary = #{summary}, finished_at = SYSUTCDATETIME(),
-            updated_by = #{actor}, updated_at = SYSUTCDATETIME()
-        WHERE id = #{batchId} AND batch_status = 'FETCHING'
-    </update>
 </mapper>

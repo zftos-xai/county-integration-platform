@@ -1,10 +1,9 @@
 package cn.zqkj.platform.masterdata.service.medicaldirectory;
 
-import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType;
-import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryFetchResult;
-import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryValidationResult;
 
-import java.time.LocalDateTime;
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType;
+import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot;
 
 /** 取得一类100-004医院目录的全部来源页，并在写库前执行自动校验。 */
 public interface MedicalDirectoryFetchService {
@@ -14,20 +13,11 @@ public interface MedicalDirectoryFetchService {
      *
      * <p>任一页返回失败或通信结果未知时立即停止，不自动重试，也不输出部分数据。</p>
      *
-     * @param organizationId 平台机构主键
-     * @param environment 调用的已配置环境
+     * @param batch 已授权并取得执行权的批次，包含固化范围及交换记录关联信息
      * @param directoryType 医院目录类型
-     * @param rangeStart 与来源约定一致的开始时间
-     * @param rangeEnd 与来源约定一致的结束时间
-     * @param sourceOrganizationCode 本次HIS调用使用的机构编码
      * @return 不可变的完整取得与校验结果
      */
-    MedicalDirectoryFetchResult fetchAll(
-            long organizationId,
-            ParameterEnvironment environment,
-            MedicalDirectoryType directoryType,
-            LocalDateTime rangeStart,
-            LocalDateTime rangeEnd,
-            String sourceOrganizationCode
+    MedicalDirectoryValidationResult fetchAll(
+            MasterDataBatchSnapshot batch, MedicalDirectoryType directoryType
     );
 }

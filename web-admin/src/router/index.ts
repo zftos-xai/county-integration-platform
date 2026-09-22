@@ -25,6 +25,8 @@ const ExternalSystemsView = () =>
 const AuditView = () => import('@/views/audit/management/AuditView.vue');
 const HospitalDirectoryView = () =>
   import('@/views/master-data/directory/HospitalDirectoryView.vue');
+const MedicalDirectoryView = () =>
+  import('@/views/master-data/directory/MedicalDirectoryView.vue');
 const MasterDataBatchView = () =>
   import('@/views/master-data/batch/MasterDataBatchView.vue');
 const MasterDataBatchDetailView = () =>
@@ -135,6 +137,15 @@ const router = createRouter({
         {
           path: 'master-data/directory',
           component: HospitalDirectoryView,
+          meta: {
+            title: '数据目录',
+            public: false,
+            requiredPermission: 'master-data:read',
+          },
+        },
+        {
+          path: 'master-data/directory/medical',
+          component: MedicalDirectoryView,
           meta: {
             title: '数据目录',
             public: false,

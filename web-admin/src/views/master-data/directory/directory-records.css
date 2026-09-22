@@ -1,0 +1,28 @@
+/* 两类目录共用表格、来源详情和滚动规则；列宽由各业务页面按实际字段定义。 */
+.directory-table-wrap { position:relative; max-width:100%; overflow:auto; }
+.directory-table { width:100%; min-width:980px; border-collapse:collapse; table-layout:fixed; }
+.directory-table th,.directory-table td { height:47px; padding:0 12px; border-bottom:1px solid var(--line-soft); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#415860; font-size:12px; }
+.directory-table th { height:40px; background:#f6f8f9; color:var(--muted); font-weight:650; }
+.directory-table tr.expanded>td { background:#f1f8f6; }
+.directory-table strong { display:block; color:var(--ink); overflow:hidden; text-overflow:ellipsis; }
+.directory-table td small { display:block; margin-top:2px; color:var(--muted); font-size:11px; }
+.directory-code { font-variant-numeric:tabular-nums; }
+.batch-link { color:var(--accent); text-decoration:none; }
+.batch-link:hover { text-decoration:underline; }
+.directory-table .directory-actions { text-align:right; }
+.directory-actions button { height:32px; padding:0 9px; border:1px solid #70ae9f; border-radius:5px; background:var(--surface); display:inline-flex; align-items:center; gap:3px; color:var(--accent); font-size:12px; cursor:pointer; }
+.directory-table .directory-detail-row>td { height:auto; padding:0 12px 12px; background:#f1f8f6; white-space:normal; overflow:visible; }
+.directory-detail { border:1px solid #d7e8e3; border-radius:6px; background:var(--surface); display:grid; grid-template-columns:1fr 1fr; }
+.directory-detail section { min-width:0; padding:12px 14px; }
+.directory-detail section+section { border-left:1px solid var(--line); }
+.directory-detail h3,.directory-detail h4 { margin:0 0 9px; color:var(--ink); font-size:13px; }
+.directory-detail dl { margin:0; display:grid; grid-template-columns:1fr 1fr; gap:7px 18px; }
+.directory-detail dl div { min-width:0; display:grid; grid-template-columns:92px minmax(0,1fr); gap:7px; }
+.directory-detail dt { color:var(--muted); font-size:12px; }
+.directory-detail dd { margin:0; color:#3a515a; font-size:12px; overflow-wrap:anywhere; }
+.directory-actions button:focus-visible,.batch-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media(max-width:1100px) {
+  .directory-detail { grid-template-columns:1fr; }
+  .directory-detail section+section { border-left:0; border-top:1px solid var(--line); }
+}
+@media(max-width:780px) { .directory-detail dl { grid-template-columns:1fr; } }

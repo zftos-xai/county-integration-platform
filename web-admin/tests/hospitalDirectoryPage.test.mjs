@@ -34,16 +34,17 @@ test('当前有效数据目录只读展示来源、当前数量和来源批次',
   const source = await readFile(pagePath, 'utf8')
 
   assert.match(source, /listHospitalDirectory/)
-  assert.match(source, /当前医院综合目录/)
-  assert.match(source, /当前有效数据/)
+  assert.match(source, /title="医院综合目录"/)
+  assert.match(source, /<DirectoryLayout/)
   assert.match(source, /latestBatchNo/)
   assert.match(source, /relationCount/)
   assert.match(source, /<AdminPagination/)
-  assert.match(source, /text-overflow:ellipsis/)
+  const styles = await readFile(new URL('../src/views/master-data/directory/directory-records.css', import.meta.url), 'utf8')
+  assert.match(styles, /text-overflow:ellipsis/)
   assert.doesNotMatch(source, /localStorage|模拟数据|编辑目录|删除目录/)
 })
 
-test('批次详情区分HIS返回行、展开重复、无效关系和主数据冲突', async () => {
+test('医院综合目录批次详情区分HIS返回行、展开重复、无效关系和主数据冲突', async () => {
   const source = await readFile(detailPath, 'utf8')
 
   assert.match(source, /HIS 返回行/)
@@ -51,5 +52,6 @@ test('批次详情区分HIS返回行、展开重复、无效关系和主数据�
   assert.match(source, /丢弃的无效关系/)
   assert.match(source, /主数据冲突/)
   assert.match(source, /\/master-data\/directory/)
-  assert.doesNotMatch(source, /校验问题/)
+  assert.match(source, /batch\.category === 'MEDICAL_DIRECTORY'/)
+  assert.match(source, /MedicalDirectorySyncResultPanel/)
 })

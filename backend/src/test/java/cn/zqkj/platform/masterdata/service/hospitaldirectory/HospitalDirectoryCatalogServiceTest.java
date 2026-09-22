@@ -1,21 +1,19 @@
 package cn.zqkj.platform.masterdata.service.hospitaldirectory;
 
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryRecord;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryTypeCount;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectoryCountVO;
 import cn.zqkj.platform.masterdata.mapper.hospitaldirectory.HospitalDirectoryCatalogMapper;
 import cn.zqkj.platform.masterdata.service.hospitaldirectory.impl.HospitalDirectoryCatalogServiceImpl;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
-import org.junit.jupiter.api.Test;
-import org.springframework.security.access.AccessDeniedException;
-
+import jakarta.validation.Validation;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -24,6 +22,29 @@ import static org.mockito.Mockito.when;
 
 /** 验证正式医院综合目录的机构范围、分页和来源批次输出。 */
 class HospitalDirectoryCatalogServiceTest {
+
+    /** 直接调用业务服务时，查询对象仍须具有与HTTP入口一致的有效边界。 */
+    @Test
+    void queryIsCanonicalAtCreation() {
+        HospitalDirectoryQuery query = new HospitalDirectoryQuery(" ORG001 ", null, "  ", 1, 20);
+
+        assertEquals("ORG001", query.organizationCode());
+        assertNull(query.keyword());
+    }
+
+    /** 查询对象承载分页默认值，入口使用同一对象的声明式约束拒绝非法参数。 */
+    @Test
+    void defaultsAndValidatesQueryAtEntry() {
+        HospitalDirectoryQuery query = new HospitalDirectoryQuery(null, null, null, null, null);
+        assertEquals(1, query.page());
+        assertEquals(20, query.pageSize());
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var validator = factory.getValidator();
+            assertFalse(validator.validate(new HospitalDirectoryQuery(null, null, null, 0, 20)).isEmpty());
+            assertFalse(validator.validate(new HospitalDirectoryQuery(null, null, null, 1, 101)).isEmpty());
+            assertFalse(validator.validate(new HospitalDirectoryQuery(null, null, "x".repeat(51), 1, 20)).isEmpty());
+        }
+    }
 
     /** 验证只返回当前账号机构范围内的真实有效目录和类型数量。 */
     @Test
@@ -39,9 +60,9 @@ class HospitalDirectoryCatalogServiceTest {
                         9L, "ORG001", "测试机构", HospitalDirectoryType.DOCTOR, "D001", "张医生",
                         "ZYS", null, null, "ORG001", 2L, 25L, "BD-TEST", synchronizedAt)));
         when(mapper.countByType("ORG001", List.of("ORG001"))).thenReturn(List.of(
-                new HospitalDirectoryTypeCount(HospitalDirectoryType.DOCTOR, 1L)));
+                new HospitalDirectoryCountVO(HospitalDirectoryType.DOCTOR, 1L)));
 
-        var result = service.findPage(query, actor());
+        var result = service.findPage(query, List.of("ORG001"));
 
         assertEquals(1L, result.total());
         assertEquals("BD-TEST", result.items().get(0).latestBatchNo());
@@ -50,22 +71,16 @@ class HospitalDirectoryCatalogServiceTest {
         verify(mapper).countByType("ORG001", List.of("ORG001"));
     }
 
-    /** 验证不能通过筛选参数读取账号范围外机构。 */
+    /** 验证空机构范围始终传给查询边界，不能退化成全机构查询。 */
     @Test
-    void rejectsOrganizationOutsideActorScope() {
-        HospitalDirectoryCatalogService service = new HospitalDirectoryCatalogServiceImpl(
-                mock(HospitalDirectoryCatalogMapper.class));
+    void preservesEmptyOrganizationScope() {
+        HospitalDirectoryCatalogMapper mapper = mock(HospitalDirectoryCatalogMapper.class);
+        when(mapper.findPage(any(), eq(List.of()))).thenReturn(List.of());
+        HospitalDirectoryCatalogService service = new HospitalDirectoryCatalogServiceImpl(mapper);
 
-        assertThrows(AccessDeniedException.class, () -> service.findPage(
-                new HospitalDirectoryQuery("ORG002", null, null, 1, 20), actor()));
-    }
+        service.findPage(new HospitalDirectoryQuery(null, null, null, 1, 20), List.of());
 
-    /**
-     * 创建具有测试机构范围的服务层操作人。
-     *
-     * @return 只有测试机构范围的操作人
-     */
-    private AccessActor actor() {
-        return new AccessActor(1L, "admin", Set.of("ORG001"));
+        verify(mapper).countPage(any(), eq(List.of()));
+        verify(mapper).findPage(any(), eq(List.of()));
     }
 }

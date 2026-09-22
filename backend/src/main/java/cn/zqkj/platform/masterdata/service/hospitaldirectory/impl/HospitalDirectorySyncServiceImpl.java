@@ -1,44 +1,38 @@
 package cn.zqkj.platform.masterdata.service.hospitaldirectory.impl;
 
-import cn.zqkj.platform.common.exception.InvalidRequestException;
+import cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper;
+import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchCounts;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType;
 import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
-import cn.zqkj.platform.his.exception.PhisCommunicationException;
 import cn.zqkj.platform.his.exception.PhisBusinessException;
+import cn.zqkj.platform.his.exception.PhisCommunicationException;
 import cn.zqkj.platform.his.exception.PhisConfigurationException;
 import cn.zqkj.platform.his.exception.PhisProtocolException;
 import cn.zqkj.platform.his.service.PhisService;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySourceRecord;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySyncResult;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySyncResultStatus;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryRelationRecord;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot;
-import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchStatus;
-import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataCategory;
-import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryRelationRecord;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySourceRecord;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySyncResultStatus;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType;
 import cn.zqkj.platform.masterdata.mapper.hospitaldirectory.HospitalDirectorySyncMapper;
-import cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper;
 import cn.zqkj.platform.masterdata.service.hospitaldirectory.HospitalDirectorySyncService;
-import cn.zqkj.platform.masterdata.service.batch.MasterDataBatchService;
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import cn.zqkj.platform.system.audit.service.ManagementAuditService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
-
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringJoiner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 将100-003的四类目录按来源目录类型独立对账。
@@ -53,7 +47,6 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
     private static final String SOURCE_SYSTEM_CODE = "PRIMARY_HIS";
     private final HospitalDirectorySyncMapper mapper;
     private final MasterDataBatchMapper batchMapper;
-    private final MasterDataBatchService batchService;
     private final PhisService phisService;
     private final ManagementAuditService auditService;
     private final TransactionTemplate transactionTemplate;
@@ -61,52 +54,43 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
     /**
      * 创建医院综合目录同步服务并注入批次、HIS和持久化依赖。
      *
+     * @param batchMapper 批次执行版本锁
      * @param mapper 综合目录持久化边界
-     * @param batchMapper 批次读取边界
-     * @param batchService 批次权限内读取服务
      * @param phisService HIS强类型调用服务
      * @param auditService 管理审计服务
      * @param transactionTemplate 短事务模板
      */
-    public HospitalDirectorySyncServiceImpl(HospitalDirectorySyncMapper mapper, MasterDataBatchMapper batchMapper,
-                                            MasterDataBatchService batchService, PhisService phisService,
-                                            ManagementAuditService auditService, TransactionTemplate transactionTemplate) {
+    public HospitalDirectorySyncServiceImpl(HospitalDirectorySyncMapper mapper, PhisService phisService,
+                                            ManagementAuditService auditService, TransactionTemplate transactionTemplate,
+                                            MasterDataBatchMapper batchMapper) {
         this.mapper = mapper;
         this.batchMapper = batchMapper;
-        this.batchService = batchService;
         this.phisService = phisService;
         this.auditService = auditService;
         this.transactionTemplate = transactionTemplate;
     }
 
     /**
-     * {@inheritDoc}
+     * 同步科室、病区、床位和医生目录，并保留每种类型的真实处理结果。
      *
-     * <p>先以乐观锁占用批次，再按固定依赖顺序在事务外调用HIS；每个完整通过校验的目录类型
+     * <p>处理已由批次用例抢占的批次，按依赖顺序在事务外调用HIS；每个完整通过校验的目录类型
      * 独立短事务落库。失败或结果未知的类型保留原有效数据，避免把不完整返回误判为删除。</p>
      */
     @Override
-    public MasterDataBatchSummaryVO fetchValidateAndReconcile(long batchId, byte[] expectedVersion, AccessActor actor) {
-        MasterDataBatchSnapshot batch = requireHospitalDirectoryBatch(batchId, actor);
-        if (expectedVersion == null || expectedVersion.length == 0) {
-            throw new InvalidRequestException("必须提供最近读取的批次版本");
-        }
-        long organizationId = requireOrganizationId(batch.organizationCode());
-        transactionTemplate.executeWithoutResult(ignored -> {
-            if (mapper.beginFetch(batchId, expectedVersion, actor.loginName()) != 1) {
-                throw new ResourceConflictException("批次状态已经变化，请重新读取后再操作");
-            }
-        });
-
-        List<TypeSyncOutcome> outcomes = new ArrayList<>();
+    public void synchronize(MasterDataBatchSnapshot batch, Long actorUserId, String actorLogin) {
         Set<HospitalDirectoryType> synchronizedTypes = new HashSet<>();
         for (HospitalDirectoryType type : syncOrder()) {
-            TypeSyncOutcome outcome = fetchValidateAndSynchronize(batchId, organizationId, batch, type, synchronizedTypes);
-            outcomes.add(outcome);
-            if (outcome.completed()) synchronizedTypes.add(type);
+            TypeSyncOutcome outcome = fetchValidateAndSynchronize(batch, type, synchronizedTypes);
+            if (outcome.completed()) {
+                synchronizedTypes.add(type);
+            } else {
+                transactionTemplate.executeWithoutResult(ignored -> {
+                    requireExecution(batch);
+                    mapper.saveDirectoryResult(batch.id(), toDirectoryResult(batch.organizationId(), outcome));
+                });
+            }
         }
-        finishRun(batchId, organizationId, batch, outcomes, actor);
-        return batchService.get(batchId, actor);
+        completeRecordedResults(batch, actorUserId, actorLogin);
     }
 
     /**
@@ -132,18 +116,18 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
     }
 
     /**
-     * 取得、校验并对账一个目录类型。任何外部调用和本地写入错误都被限制在该类型，不影响其他类型。
+     * 取得、校验并对账一个目录类型。来源或对账失败只影响该类型；执行权失效则立即终止整个运行。
      *
-     * @param batchId 同步运行主键
-     * @param organizationId 平台机构主键
      * @param batch 运行范围快照
      * @param type 当前目录类型
      * @param synchronizedTypes 本次已经完整成功的目录类型
      * @return 当前类型的可追溯处理结果
      */
-    private TypeSyncOutcome fetchValidateAndSynchronize(long batchId, long organizationId, MasterDataBatchSnapshot batch,
+    private TypeSyncOutcome fetchValidateAndSynchronize(MasterDataBatchSnapshot batch,
                                                          HospitalDirectoryType type,
                                                          Set<HospitalDirectoryType> synchronizedTypes) {
+        long batchId = batch.id();
+        long organizationId = batch.organizationId();
         ValidationResult validation;
         try {
             PhisResponse<List<HospitalDirectoryEntry>> response = phisService.queryHospitalDirectory(organizationId,
@@ -163,11 +147,17 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
             return TypeSyncOutcome.failed(type, false, validation.returned(), validation.failureSummary(), validation);
         }
         try {
-            DirectoryMutationCounts counts = transactionTemplate.execute(ignored -> synchronizeType(
-                    batchId, organizationId, type, validation));
-            return TypeSyncOutcome.completed(type, validation, counts);
+            return transactionTemplate.execute(ignored -> {
+                requireExecution(batch);
+                DirectoryMutationCounts counts = synchronizeType(batchId, organizationId, type, validation);
+                TypeSyncOutcome outcome = TypeSyncOutcome.completed(type, validation, counts);
+                mapper.saveDirectoryResult(batchId, toDirectoryResult(organizationId, outcome));
+                return outcome;
+            });
+        } catch (ResourceConflictException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
-            LOGGER.error("100-003目录对账失败｜批次{}｜类型{}｜{}", batchId, type.code(), technicalFailure(exception));
+            LOGGER.error("100-003目录对账失败｜批次{}｜类型{}｜{}", batchId, type.code(), Func.rootCause(exception).getClass().getSimpleName());
             return TypeSyncOutcome.failed(type, false, validation.returned(), "平台保存" + typeLabel(type) + "失败，未确认的旧数据未标记无效", validation);
         }
     }
@@ -183,7 +173,6 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
     private ValidationResult validate(HospitalDirectoryType type, List<HospitalDirectoryEntry> entries,
                                       Set<HospitalDirectoryType> synchronizedTypes) {
         Map<String, HospitalDirectorySourceRecord> accepted = new LinkedHashMap<>();
-        List<String> failures = new ArrayList<>();
         long returned = 0;
         long duplicates = 0;
         long invalid = 0;
@@ -192,7 +181,7 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
         Set<String> rejected = new HashSet<>();
         for (HospitalDirectoryEntry entry : entries) {
             returned++;
-            HospitalDirectorySourceRecord record = toRecord(type, entry, failures);
+            HospitalDirectorySourceRecord record = toRecord(type, entry);
             if (record == null) {
                 invalid++;
                 continue;
@@ -211,12 +200,17 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
                 conflicts++;
                 accepted.remove(record.sourceCode());
                 rejected.add(record.sourceCode());
-                failures.add(typeLabel(type) + "编码" + record.sourceCode() + "返回了互相冲突的内容");
             }
         }
-        String summary = failures.isEmpty() ? null : safeFailure(String.join("；", failures));
+        boolean valid = invalid == 0 && conflicts == 0;
+        String summary = valid ? null : "来源记录无效" + invalid + "条，编码冲突" + conflicts + "组";
+        boolean relationsComplete = switch (type) {
+            case DEPARTMENT -> true;
+            case WARD -> synchronizedTypes.contains(HospitalDirectoryType.DEPARTMENT);
+            case DOCTOR, BED -> synchronizedTypes.contains(HospitalDirectoryType.WARD);
+        };
         return new ValidationResult(returned, duplicates, invalid, conflicts, List.copyOf(accepted.values()), List.copyOf(relations),
-                failures.isEmpty(), summary);
+                valid, relationsComplete, summary);
     }
 
     /**
@@ -266,28 +260,29 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
      *
      * @param type 目录类型
      * @param entry 原始HIS记录
-     * @param failures 业务错误集合
      * @return 可持久化的非敏感记录；字段无效时为空
      */
-    private HospitalDirectorySourceRecord toRecord(HospitalDirectoryType type, HospitalDirectoryEntry entry,
-                                                  List<String> failures) {
+    private HospitalDirectorySourceRecord toRecord(HospitalDirectoryType type, HospitalDirectoryEntry entry) {
         if (entry == null) {
-            failures.add(typeLabel(type) + "返回空记录");
             return null;
         }
-        String code = normalize(entry.directoryCode());
-        String name = normalize(entry.directoryName());
-        if (code == null || name == null || exceeds(code, 50) || exceeds(name, 50)
-                || exceeds(entry.mnemonicCode(), 20) || exceeds(entry.categoryName(), 20)
-                || exceeds(entry.remark(), 100) || exceeds(entry.departmentCode(), 50)
-                || exceeds(entry.departmentName(), 50) || exceeds(entry.ward(), 50)
-                || exceeds(entry.organizationCode(), 50)) {
-            failures.add(typeLabel(type) + "存在缺失或超长的关键字段");
+        String code = Func.trimToNull(entry.directoryCode());
+        String name = Func.trimToNull(entry.directoryName());
+        if (code == null || name == null || Func.exceedsTrimmedLength(code, 50)
+                || Func.exceedsTrimmedLength(name, 50)
+                || Func.exceedsTrimmedLength(entry.mnemonicCode(), 20)
+                || Func.exceedsTrimmedLength(entry.categoryName(), 20)
+                || Func.exceedsTrimmedLength(entry.remark(), 100)
+                || Func.exceedsTrimmedLength(entry.departmentCode(), 50)
+                || Func.exceedsTrimmedLength(entry.departmentName(), 50)
+                || Func.exceedsTrimmedLength(entry.ward(), 50)
+                || Func.exceedsTrimmedLength(entry.organizationCode(), 50)) {
             return null;
         }
-        return new HospitalDirectorySourceRecord(type, code, name, normalize(entry.mnemonicCode()),
-                normalize(entry.categoryName()), normalize(entry.remark()), normalize(entry.departmentCode()),
-                normalize(entry.departmentName()), normalize(entry.ward()), normalize(entry.organizationCode()));
+        return new HospitalDirectorySourceRecord(type, code, name, Func.trimToNull(entry.mnemonicCode()),
+                Func.trimToNull(entry.categoryName()), Func.trimToNull(entry.remark()),
+                Func.trimToNull(entry.departmentCode()), Func.trimToNull(entry.departmentName()),
+                Func.trimToNull(entry.ward()), Func.trimToNull(entry.organizationCode()));
     }
 
     /**
@@ -334,50 +329,69 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
             }
         }
         long sourceMissing = mapper.markMissingDirectoryInvalid(batchId, organizationId, type);
-        mapper.deleteRelationsForType(batchId, organizationId, type);
-        result.relations().forEach(relation -> mapper.insertRelationDirect(batchId, organizationId, relation));
+        if (result.relationsComplete()) {
+            mapper.deleteRelationsForType(organizationId, type);
+            for (HospitalDirectoryRelationRecord relation : result.relations()) {
+                mapper.insertRelationDirect(batchId, organizationId, relation);
+            }
+        }
         return new DirectoryMutationCounts(created, updated, unchanged, sourceMissing);
     }
 
     /**
-     * 汇总四类目录结果，在同一短事务中结束同步运行并追加成功审计。
+     * 只依据已落库分项结束批次，不调用HIS；中断后未保存的类型明确记为结果未知。
      *
-     * @param batchId 同步运行主键
-     * @param organizationId 平台机构主键
-     * @param batch 批次范围快照
-     * @param outcomes 每个目录类型的处理结果
-     * @param actor 发起人
+     * <p>持有执行版本锁直至状态与审计提交，旧执行者随后不能继续落库。恢复结束后如需重取，
+     * 必须由操作人核查后创建新批次，不能复用旧批次号覆盖原运行事实。</p>
+     * @param batch 当前执行版本快照
+     * @param actorUserId 审计用户主键；内部任务可为空
+     * @param actorLogin 操作人或任务名称
      */
-    private void finishRun(long batchId, long organizationId, MasterDataBatchSnapshot batch,
-                           List<TypeSyncOutcome> outcomes, AccessActor actor) {
-        long returned = outcomes.stream().mapToLong(TypeSyncOutcome::returned).sum();
-        long duplicates = outcomes.stream().mapToLong(outcome -> outcome.validation() == null ? 0 : outcome.validation().duplicates()).sum();
-        long invalid = outcomes.stream().mapToLong(outcome -> outcome.validation() == null ? 0 : outcome.validation().invalid()).sum();
-        long conflicts = outcomes.stream().mapToLong(outcome -> outcome.validation() == null ? 0 : outcome.validation().conflicts()).sum();
-        long created = outcomes.stream().mapToLong(outcome -> outcome.counts() == null ? 0 : outcome.counts().created()).sum();
-        long updated = outcomes.stream().mapToLong(outcome -> outcome.counts() == null ? 0 : outcome.counts().updated()).sum();
-        long unchanged = outcomes.stream().mapToLong(outcome -> outcome.counts() == null ? 0 : outcome.counts().unchanged()).sum();
-        long sourceMissing = outcomes.stream().mapToLong(outcome -> outcome.counts() == null ? 0 : outcome.counts().sourceMissing()).sum();
-        boolean unknown = outcomes.stream().anyMatch(TypeSyncOutcome::unknown);
-        boolean allCompleted = outcomes.stream().allMatch(TypeSyncOutcome::completed);
-        String status = allCompleted ? "COMPLETED" : unknown ? "COMPLETED_WITH_UNKNOWN" : "COMPLETED_WITH_ERRORS";
-        String failureCode = allCompleted ? null : unknown ? "HIS_PARTIAL_RESULT_UNKNOWN" : "HIS_PARTIAL_FAILURE";
-        String summary = allCompleted ? null : summarizeFailures(outcomes);
-        ManagementAuditCommand auditCommand = new ManagementAuditCommand(
-                actor, null, organizationId, batch.organizationCode(), "MASTER_DATA_HOSPITAL_DIRECTORY_SYNCED",
-                "MASTER_DATA_BATCH", batch.batchNo(), allCompleted ? "SUCCESS" : "PARTIAL",
-                "100-003目录直接对账：" + created + "新增，" + updated + "更新，" + sourceMissing + "条标记无效", null
-        );
+    @Override
+    public void completeRecordedResults(MasterDataBatchSnapshot batch, Long actorUserId, String actorLogin) {
         transactionTemplate.executeWithoutResult(ignored -> {
-            long active = mapper.countActive(organizationId);
-            outcomes.forEach(outcome -> mapper.saveDirectoryResult(batchId,
-                    toDirectoryResult(organizationId, outcome)));
-            if (mapper.finishCompleted(batchId, status, returned, duplicates, invalid, conflicts, created, updated,
-                    unchanged, sourceMissing, active, failureCode, summary, actor.loginName()) != 1) {
+            requireExecution(batch);
+            List<HospitalDirectorySyncResultVO> results = mapper.findResults(batch.id());
+            long returned = 0, duplicates = 0, invalid = 0, conflicts = 0;
+            long created = 0, updated = 0, unchanged = 0, sourceMissing = 0;
+
+            boolean unknown = results.size() != HospitalDirectoryType.values().length;
+            boolean allCompleted = !unknown;
+            for (HospitalDirectorySyncResultVO result : results) {
+                returned += result.returnedCount();
+                duplicates += result.duplicateCount();
+                invalid += result.invalidCount();
+                conflicts += result.conflictCount();
+                created += result.createdCount();
+                updated += result.updatedCount();
+                unchanged += result.unchangedCount();
+                sourceMissing += result.sourceMissingCount();
+
+                unknown |= result.status() == HospitalDirectorySyncResultStatus.RESULT_UNKNOWN;
+                allCompleted &= result.status() == HospitalDirectorySyncResultStatus.COMPLETED;
+            }
+            String status = allCompleted ? "COMPLETED" : unknown ? "COMPLETED_WITH_UNKNOWN" : "COMPLETED_WITH_ERRORS";
+            String failureCode = allCompleted ? null : unknown ? "HIS_PARTIAL_RESULT_UNKNOWN" : "HIS_PARTIAL_FAILURE";
+            String summary = allCompleted ? null : summarizeFailures(results);
+            MasterDataBatchCounts counts = new MasterDataBatchCounts(null,
+                    returned, duplicates, invalid, conflicts, created, updated, unchanged, sourceMissing,
+                    mapper.countActive(batch.organizationId()));
+            if (mapper.finishCompleted(batch.id(), status, counts, failureCode, summary, actorLogin) != 1) {
                 throw new ResourceConflictException("同步运行状态已经变化，请重新读取后再操作");
             }
-            auditService.recordSuccess(auditCommand);
+            auditService.append(new ManagementAuditCommand(actorUserId, actorLogin, batch.organizationId(),
+                    batch.organizationCode(), "MASTER_DATA_HOSPITAL_DIRECTORY_SYNCED", "MASTER_DATA_BATCH",
+                    batch.batchNo(), allCompleted ? "SUCCESS" : "FAILURE",
+                    "医院综合目录批次结束；已保存分项" + results.size() + "类，新增" + created + "条，更新" + updated + "条",
+                    null));
         });
+    }
+
+    /** 在每个写事务开始时确认执行权；恢复或结束批次后拒绝旧执行者继续写入。 */
+    private void requireExecution(MasterDataBatchSnapshot batch) {
+        if (!batchMapper.lockExecution(batch.id(), batch.version())) {
+            throw new ResourceConflictException("批次执行权已失效，请重新读取批次");
+        }
     }
 
     /**
@@ -390,14 +404,14 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
      * @param outcome 单一目录类型运行结果
      * @return 可供结果页和后续核对读取的分项事实
      */
-    private HospitalDirectorySyncResult toDirectoryResult(long organizationId, TypeSyncOutcome outcome) {
+    private HospitalDirectorySyncResultVO toDirectoryResult(long organizationId, TypeSyncOutcome outcome) {
         ValidationResult validation = outcome.validation();
         DirectoryMutationCounts counts = outcome.counts();
         HospitalDirectorySyncResultStatus status = outcome.completed()
                 ? HospitalDirectorySyncResultStatus.COMPLETED
                 : outcome.unknown() ? HospitalDirectorySyncResultStatus.RESULT_UNKNOWN
                 : HospitalDirectorySyncResultStatus.FAILED;
-        return new HospitalDirectorySyncResult(
+        return new HospitalDirectorySyncResultVO(
                 outcome.type(),
                 status,
                 outcome.returned(),
@@ -419,43 +433,17 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
      * @param outcomes 目录类型处理结果
      * @return 可面向业务人员展示的受控摘要
      */
-    private String summarizeFailures(List<TypeSyncOutcome> outcomes) {
-        String summary = outcomes.stream().filter(outcome -> !outcome.completed())
-                .map(outcome -> typeLabel(outcome.type()) + "：" + outcome.failureSummary())
-                .reduce((left, right) -> left + "；" + right).orElse("部分目录未完成同步");
-        return safeFailure(summary);
+    private String summarizeFailures(List<HospitalDirectorySyncResultVO> outcomes) {
+        StringJoiner failures = new StringJoiner("；");
+        for (HospitalDirectorySyncResultVO outcome : outcomes) {
+            if (outcome.status() != HospitalDirectorySyncResultStatus.COMPLETED) {
+                failures.add(typeLabel(outcome.directoryType()) + "：" + outcome.failureSummary());
+            }
+        }
+        if (outcomes.size() != HospitalDirectoryType.values().length) failures.add("运行中断，未保存类型结果未知");
+        return failures.length() == 0 ? "部分目录未完成同步" : Func.substring(failures.toString(), 0, 500);
     }
 
-    /**
-     * 读取并校验可执行的医院综合目录同步批次。
-     *
-     * @param batchId 批次主键
-     * @param actor 发起人
-     * @return 有权限的医院综合目录批次
-     */
-    private MasterDataBatchSnapshot requireHospitalDirectoryBatch(long batchId, AccessActor actor) {
-        MasterDataBatchSnapshot batch = batchMapper.findById(batchId);
-        if (batch == null) throw new InvalidRequestException("同步批次不存在");
-        if (batch.organizationCode() == null || !actor.canAccess(batch.organizationCode())) {
-            throw new AccessDeniedException("当前账号无权访问该机构批次");
-        }
-        if (batch.category() != MasterDataCategory.HOSPITAL_DIRECTORY) {
-            throw new InvalidRequestException("当前批次不是100-003医院综合目录业务");
-        }
-        return batch;
-    }
-
-    /**
-     * 读取机构范围批次的机构主键。
-     *
-     * @param organizationCode 平台机构代码
-     * @return 启用机构主键
-     */
-    private long requireOrganizationId(String organizationCode) {
-        Long organizationId = batchMapper.findEnabledOrganizationId(organizationCode);
-        if (organizationId == null) throw new InvalidRequestException("批次机构不存在或已停用");
-        return organizationId;
-    }
 
     /**
      * 返回医院综合目录类型的中文名称。
@@ -473,65 +461,25 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
     }
 
     /**
-     * 裁剪HIS可选文本并把空白统一为无值。
-     *
-     * @param value 原始可选文本
-     * @return 去除空白后的值
-     */
-    private String normalize(String value) {
-        if (value == null) return null;
-        String normalized = value.trim();
-        return normalized.isEmpty() ? null : normalized;
-    }
-
-    /**
-     * 判断可选文本是否超过数据库字段长度。
-     *
-     * @param value 可选文本
-     * @param maximum 最大长度
-     * @return 是否超长
-     */
-    private boolean exceeds(String value, int maximum) {
-        String normalized = normalize(value);
-        return normalized != null && normalized.length() > maximum;
-    }
-
-    /**
      * 生成不含地址、凭证和报文正文的外部失败摘要。
      *
      * @param message 外部失败文本
      * @return 不超过数据库限制的可理解文本
      */
     private String safeFailure(String message) {
-        String value = normalize(message);
+        String value = Func.trimToNull(message);
         if (value == null) return "基层HIS未返回可理解的失败原因";
         if (value.contains("无权访问") || value.contains("授权已过期") || value.contains("申请机构授权")) {
             return "基层HIS未授予该机构100-003医院综合目录查询权限";
         }
-        return value.length() <= 500 ? value : value.substring(0, 500);
-    }
-
-    /**
-     * 生成单行且长度受控的本地异常摘要。
-     *
-     * @param exception 本地对账异常
-     * @return 不含换行且长度受控的单行技术原因
-     */
-    private String technicalFailure(RuntimeException exception) {
-        Throwable cause = exception;
-        while (cause.getCause() != null) cause = cause.getCause();
-        String message = normalize(cause.getMessage());
-        if (message == null) return cause.getClass().getSimpleName();
-        String singleLine = message.replace('\r', ' ').replace('\n', ' ');
-        if (singleLine.length() > 300) singleLine = singleLine.substring(0, 300);
-        return cause.getClass().getSimpleName() + "：" + singleLine;
+        return "基层HIS拒绝目录查询，请核查来源系统配置与交易记录";
     }
 
     /** 100-003四类结果的自动校验事实。 */
     private record ValidationResult(long returned, long duplicates, long invalid, long conflicts,
                                     List<HospitalDirectorySourceRecord> records,
                                     List<HospitalDirectoryRelationRecord> relations, boolean valid,
-                                    String failureSummary) {
+                                    boolean relationsComplete, String failureSummary) {
     }
 
     /** 单一目录类型直接对账后的本地变更数量。 */

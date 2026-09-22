@@ -2,7 +2,7 @@ package cn.zqkj.platform.masterdata.mapper.hospitaldirectory;
 
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryRecord;
-import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryTypeCount;
+import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectoryCountVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -43,7 +43,7 @@ public interface HospitalDirectoryCatalogMapper {
      * @param organizationCodes 当前账号机构范围
      * @return 四类目录数量
      */
-    List<HospitalDirectoryTypeCount> countByType(
+    List<HospitalDirectoryCountVO> countByType(
             @Param("organizationCode") String organizationCode,
             @Param("organizationCodes") List<String> organizationCodes
     );

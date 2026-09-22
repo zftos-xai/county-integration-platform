@@ -6,6 +6,10 @@ import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirector
 /**
  * 输出100-004/100-005按医疗目录类型保存的同步处理事实。
  *
+ * <p>数据来源及持久化目标：{@code dbo.md_medical_directory_sync_result}。
+ * 业务说明：保存各医疗目录类型的数量核对和写入结果；本投影不含批次外键与技术时间列，
+ * 不是完整表行，由写入和查询入口复用。</p>
+ *
  * @param directoryType 中药、西药、诊疗或耗材目录类型
  * @param status 当前类型处理结论
  * @param declaredCount 100-005声明数量；结果未知时为空

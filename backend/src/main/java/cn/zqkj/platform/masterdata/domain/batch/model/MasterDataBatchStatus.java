@@ -19,7 +19,7 @@ public enum MasterDataBatchStatus {
     COMPLETED,
     /** 部分目录已完成对账，其他目录收到了可确认的失败结果。 */
     COMPLETED_WITH_ERRORS,
-    /** 部分目录已完成对账，其他目录因通信或协议异常无法确认结果。 */
+    /** 本次运行已收尾但存在未知结果；是否有成功类型以已保存分项为准。 */
     COMPLETED_WITH_UNKNOWN,
     /** 本次运行已明确失败，不得直接当作来源数据缺失。 */
     FAILED,
@@ -29,7 +29,7 @@ public enum MasterDataBatchStatus {
     private static final Map<MasterDataBatchStatus, Set<MasterDataBatchStatus>> TRANSITIONS = Map.of(
             CREATED, EnumSet.of(FETCHING, FAILED),
             FETCHING, EnumSet.of(COMPLETED, COMPLETED_WITH_ERRORS, COMPLETED_WITH_UNKNOWN, FAILED, RESULT_UNKNOWN),
-            RESULT_UNKNOWN, EnumSet.of(FETCHING, FAILED),
+            RESULT_UNKNOWN, EnumSet.of(COMPLETED, COMPLETED_WITH_ERRORS, COMPLETED_WITH_UNKNOWN, FAILED),
             COMPLETED, EnumSet.noneOf(MasterDataBatchStatus.class),
             COMPLETED_WITH_ERRORS, EnumSet.noneOf(MasterDataBatchStatus.class),
             COMPLETED_WITH_UNKNOWN, EnumSet.noneOf(MasterDataBatchStatus.class),

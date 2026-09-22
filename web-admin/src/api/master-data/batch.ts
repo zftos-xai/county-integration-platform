@@ -11,6 +11,7 @@ import {
   masterDataBatchDirectoryResultsPath,
   masterDataBatchMedicalDirectoryResultsPath,
   masterDataBatchRunPath,
+  masterDataBatchRecoverPath,
   masterDataBatchListPath,
   masterDataSyncOptionsPath,
   type MasterDataBatchQueryParameters,
@@ -31,6 +32,9 @@ export type MasterDataScopeType = 'ORGANIZATION' | 'PLATFORM'
 
 /** 外部接口配置的运行环境。 */
 export type MasterDataEnvironment = 'DEVELOPMENT' | 'TEST' | 'PRODUCTION'
+
+/** 医疗目录明确选择全量或时间范围；医院综合目录不使用时间筛选。 */
+export type MasterDataSyncMode = 'NOT_APPLICABLE' | 'TIME_RANGE' | 'FULL'
 
 /** 后端批次状态；页面必须转换为业务文案后再展示。 */
 export const masterDataBatchStatuses = [
@@ -91,10 +95,12 @@ export type MasterDataBatchSummary = {
   organizationName: string | null
   environment: MasterDataEnvironment
   category: MasterDataCategory
+  mode?: MasterDataSyncMode
   dataTradeCode: string
   countTradeCode: string | null
   sourceType: string | null
   sourceOrganizationId: string | null
+  fullRuleEvidence?: string | null
   rangeStart: string | null
   rangeEnd: string | null
   status: MasterDataBatchStatus
@@ -121,6 +127,7 @@ export type StartMasterDataBatchInput = {
   organizationCode: string | null
   environment: MasterDataEnvironment
   category: MasterDataCategory
+  mode: MasterDataSyncMode
   rangeStart: string | null
   rangeEnd: string | null
 }
@@ -130,6 +137,7 @@ export type MasterDataSyncSource = {
   organizationCode: string
   organizationName: string
   environments: MasterDataEnvironment[]
+  fullSyncEnvironments?: MasterDataEnvironment[]
 }
 
 /** 平台当前已经具备完整执行闭环的基础数据业务。 */
@@ -152,6 +160,7 @@ export function isMasterDataSyncSource(
   value: unknown,
 ): value is MasterDataSyncSource {
   if (!isRecord(value) || !Array.isArray(value.environments)) return false
+  const environments: unknown[] = value.environments
   return (
     typeof value.organizationCode === 'string' &&
     typeof value.organizationName === 'string' &&
@@ -159,7 +168,10 @@ export function isMasterDataSyncSource(
     value.environments.every(
       (item) =>
         item === 'DEVELOPMENT' || item === 'TEST' || item === 'PRODUCTION',
-    )
+    ) &&
+    (value.fullSyncEnvironments === undefined ||
+      (Array.isArray(value.fullSyncEnvironments) &&
+        value.fullSyncEnvironments.every((item) => environments.includes(item))))
   )
 }
 
@@ -281,6 +293,7 @@ export function isMasterDataBatchSummary(
     (typeof value.countTradeCode === 'string' ||
       value.countTradeCode === null) &&
     (typeof value.sourceOrganizationId === 'string' || value.sourceOrganizationId === null) &&
+    (value.fullRuleEvidence === undefined || typeof value.fullRuleEvidence === 'string' || value.fullRuleEvidence === null) &&
     (typeof value.rangeStart === 'string' || value.rangeStart === null) &&
     (typeof value.rangeEnd === 'string' || value.rangeEnd === null) &&
     isMasterDataBatchStatus(value.status) &&
@@ -397,11 +410,25 @@ export async function cancelMasterDataBatch(batchId: number, version: string) {
   }
 }
 
-/** 使用最近读取版本完成100-003医院综合目录的取得、自动校验和直接对账。 */
+/** 使用最近读取版本执行所选目录业务；长批次超时只回读结果，不自动再次运行。 */
 export async function runMasterDataBatch(batchId: number, version: string) {
   try {
     return await apiRequest<MasterDataBatchSummary>(
       masterDataBatchRunPath(batchId),
+      { method: 'POST', body: JSON.stringify({ version }) },
+      isMasterDataBatchSummary,
+    )
+  } catch (error) {
+    if (error instanceof ApiClientError) throw asUncertainWriteError(error)
+    throw error
+  }
+}
+
+/** 汇总中断批次的已提交结果并禁止旧执行者继续写入；不重新调用 HIS。 */
+export async function recoverMasterDataBatch(batchId: number, version: string) {
+  try {
+    return await apiRequest<MasterDataBatchSummary>(
+      masterDataBatchRecoverPath(batchId),
       { method: 'POST', body: JSON.stringify({ version }) },
       isMasterDataBatchSummary,
     )

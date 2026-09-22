@@ -33,6 +33,11 @@ export function masterDataBatchRunPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/run`
 }
 
+/** @param batchId 平台批次主键 @return 中断批次的受控收尾地址 */
+export function masterDataBatchRecoverPath(batchId: number) {
+  return `${masterDataBatchDetailPath(batchId)}/recover`
+}
+
 /** 可用于查询同步批次列表的筛选条件。 */
 export type MasterDataBatchQueryParameters = {
   organizationCode?: string

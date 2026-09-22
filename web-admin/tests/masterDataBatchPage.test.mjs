@@ -19,6 +19,16 @@ const resultPanelPath = new URL(
   import.meta.url,
 );
 
+test('中断批次收尾要求权限、明确确认与当前版本，失败不自动重试', async () => {
+  const source = await readFile(detailPath, 'utf8');
+  assert.match(source, /hasPermission\('master-data:sync'\)/);
+  assert.match(source, /confirmedRecovery/);
+  assert.match(source, /recoverMasterDataBatch\(current.id, current.version\)/);
+  assert.match(source, /loading.value \|\| recovering.value/);
+  assert.match(source, /不要直接重复提交/);
+  assert.doesNotMatch(source, /runMasterDataBatch\(/);
+});
+
 test('同步批次正式页面只使用真实API并提供结果未知回读', async () => {
   const source = await readFile(pagePath, 'utf8');
 
@@ -93,14 +103,27 @@ test('批次管理提供受控取消但不允许从失败记录直接重复提�
   assert.doesNotMatch(source, /deleteMasterDataBatch|删除批次/);
 });
 
-test('同步记录详情呈现失败闭环，不暴露HIS原始错误或提供人工复核', async () => {
+test('同步记录详情按数据集呈现失败闭环，不暴露HIS原始错误或提供人工复核', async () => {
   const source = await readFile(detailPath, 'utf8');
 
-  assert.match(source, /HIS 未授予目录数据权限/);
-  assert.match(source, /一次自动取得科室、医生、病区和床位/);
+  assert.match(source, /HIS 拒绝目录查询/);
+  assert.doesNotMatch(source, /HIS 未授予|等待接口授权/);
+  assert.match(source, /中药、西药、诊疗、耗材/);
+  assert.match(source, /getMedicalDirectorySyncResults/);
+  assert.match(source, /query: batch.value\?\.organizationCode \? \{ organizationCode: batch.value.organizationCode \}/);
   assert.match(source, /当前有效数据未改变/);
   assert.doesNotMatch(source, /batch\.failureSummary/);
   assert.doesNotMatch(source, /人工复核|人工核对|已核查确认|登记结论|发布为正式/);
+});
+
+test('全失败不显示部分成功，长同步超时只读进度不重发运行', async () => {
+  const source = await readFile(pagePath, 'utf8');
+  assert.doesNotMatch(source, /\[updated.category\]\}部分未完成/);
+  assert.match(source, /latest.status !== 'FAILED'/);
+  assert.match(source, /latest.status === 'FETCHING'/);
+  assert.match(source, /detailPollTimer = setTimeout/);
+  assert.match(source, /clearTimeout\(detailPollTimer\)/);
+  assert.match(source, /item.status === 'FETCHING' && latest.status !== 'FETCHING'/);
 });
 
 test('同步结果按四类目录读取已落库事实，不以整批汇总推算明细', async () => {

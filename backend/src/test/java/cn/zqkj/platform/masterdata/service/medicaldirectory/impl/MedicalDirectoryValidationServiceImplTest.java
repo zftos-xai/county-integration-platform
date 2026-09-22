@@ -1,11 +1,10 @@
 package cn.zqkj.platform.masterdata.service.medicaldirectory.impl;
 
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySourceEntry;
-import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySourceRecord;
-import org.junit.jupiter.api.Test;
-
+import cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryType;
 import java.util.List;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -14,9 +13,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** 验证医院三大目录自动校验不会放过漏页、冲突或必填缺失。 */
 class MedicalDirectoryValidationServiceImplTest {
 
-    /** 验证同一稳定编码的相同行会归并，但不同内容会阻断发布。 */
+    /** 大量冲突只产生定长统计摘要，不包含来源编码或超过数据库字段上限。 */
     @Test
-    void rejectsConflictAndAcceptsExactDuplicate() {
+    void boundsConflictSummaryWithoutEchoingSourceData() {
+        var records = new java.util.ArrayList<MedicalDirectorySourceRecord>();
+        for (int index = 0; index < 200; index++) {
+            records.add(record("SENSITIVE-" + index, "A", "true"));
+            records.add(record("SENSITIVE-" + index, "B", "true"));
+        }
+        var result = new MedicalDirectoryValidationServiceImpl().validate(400, records);
+        assertEquals(200, result.conflictCount());
+        assertFalse(result.failureSummary().contains("SENSITIVE"));
+        assertTrue(result.failureSummary().length() <= 500);
+    }
+
+    /** 同编码重复与冲突分别计数，均不能掩盖缺失记录而通过完整性校验。 */
+    @Test
+    void countsDuplicateAndConflictingRowsSeparately() {
         var service = new MedicalDirectoryValidationServiceImpl();
         var valid = record("M001", "阿莫西林", "true");
         var duplicate = record("M001", "阿莫西林", "true");
@@ -28,6 +41,20 @@ class MedicalDirectoryValidationServiceImplTest {
         assertEquals(1, result.duplicateCount());
         assertEquals(1, result.conflictCount());
         assertEquals(0, result.acceptedRecords().size());
+    }
+
+    /** 首尾空白不改变来源业务事实，比较双方必须使用同样规范化后的记录。 */
+    @Test
+    void rejectsDuplicatesThatCouldHideMissingRows() {
+        var service = new MedicalDirectoryValidationServiceImpl();
+        var result = service.validate(2, List.of(
+                record(" M001 ", " 阿莫西林 ", "true"),
+                record("M001", "阿莫西林", "true")));
+
+        assertFalse(result.valid());
+        assertEquals(1, result.duplicateCount());
+        assertEquals(0, result.conflictCount());
+        assertEquals(1, result.acceptedRecords().size());
     }
 
     /** 验证声明数量不一致和来源启用值缺失都会阻止后续发布。 */

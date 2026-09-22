@@ -6,6 +6,10 @@ import cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirect
 /**
  * 返回给管理端的100-003单目录类型运行事实。
  *
+ * <p>数据来源及持久化目标：{@code dbo.md_hospital_directory_sync_result}。
+ * 业务说明：记录批次内各目录类型的处理结论和数量；本投影不含批次外键与技术时间列，
+ * 不是完整表行，由写入和查询入口复用，不再逐字段复制结果对象。</p>
+ *
  * @param directoryType 科室、医生、病区或床位目录类型
  * @param status 当前类型的可确认处理结论
  * @param returnedCount HIS实际返回记录数

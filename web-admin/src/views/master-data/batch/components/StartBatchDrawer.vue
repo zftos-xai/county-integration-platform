@@ -52,6 +52,12 @@ const selectedBusiness = computed(() =>
   ),
 )
 
+/** 全量范围必须由当前机构和接口环境的已确认规则提供。 */
+const fullSyncAvailable = computed(() =>
+  props.options.sources.find((item) => item.organizationCode === form.value.organizationCode)
+    ?.fullSyncEnvironments?.includes(form.value.environment) ?? false,
+)
+
 /** 将接口环境代码转换为业务人员可读名称。 */
 function environmentLabel(environment: MasterDataEnvironment) {
   if (environment === 'PRODUCTION') return '生产环境'
@@ -68,6 +74,15 @@ watch(
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => form.value.category,
+  (category) => {
+    form.value.mode = category === 'MEDICAL_DIRECTORY' ? 'TIME_RANGE' : 'NOT_APPLICABLE'
+    form.value.rangeStart = ''
+    form.value.rangeEnd = ''
+  },
 )
 
 </script>
@@ -190,7 +205,15 @@ watch(
               </div>
             </dl>
             <div v-if="selectedBusiness?.requiresTimeRange" class="batch-range-field">
-              <strong>来源数据时间范围</strong>
+              <strong>本次同步方式</strong>
+              <label><input v-model="form.mode" type="radio" value="FULL" />全量同步</label>
+              <label><input v-model="form.mode" type="radio" value="TIME_RANGE" />指定时间范围</label>
+              <small v-if="form.mode === 'FULL' && !fullSyncAvailable" role="status">
+                当前机构和接口环境尚未登记经来源方确认的全量规则，不能执行全量同步。
+              </small>
+            </div>
+            <div v-if="selectedBusiness?.requiresTimeRange && form.mode === 'TIME_RANGE'" class="batch-range-field">
+              <strong>来源数据时间范围（北京时间 UTC+08:00）</strong>
               <small>100-005 与 100-004 会使用完全相同的时间范围；请按接口提供方确认的口径填写。</small>
               <div>
                 <label><span>开始时间</span><input v-model="form.rangeStart" type="datetime-local" required /></label>
@@ -212,7 +235,7 @@ watch(
           v-if="options.sources.length > 0"
           class="prototype-button"
           type="button"
-          :disabled="isSaving"
+          :disabled="isSaving || (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'FULL' && !fullSyncAvailable)"
           @click="emit('submit')"
         >
           <LoaderCircle v-if="isSaving" class="spinning" :size="15" />{{

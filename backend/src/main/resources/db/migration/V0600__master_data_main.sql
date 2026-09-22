@@ -39,8 +39,12 @@ CREATE TABLE md_sync_batch (
     organization_id BIGINT NULL, -- 平台机构主键：机构范围必填；平台公共范围为空
     environment_code NVARCHAR(16) NOT NULL, -- 运行环境：本批调用外部接口时使用的明确配置环境
     data_category NVARCHAR(32) NOT NULL, -- 数据类别：首批已确认的机构、目录或诊断类别代码
+    sync_mode NVARCHAR(20) NOT NULL CONSTRAINT df_md_sync_batch_mode DEFAULT N'NOT_APPLICABLE', -- 同步模式：医院目录不适用；医疗目录明确为全量或指定时间范围
     source_type NVARCHAR(16) NULL, -- 来源目录类型：100-003或100-004的目录类型；接口不需要时为空
     source_organization_id NVARCHAR(128) NULL, -- 来源机构标识：从已验证100-008映射取得并固化到批次，公共目录为空
+    source_endpoint_id BIGINT NULL, -- 来源端点主键：创建时绑定的已验证服务端点；迁入旧批次可为空
+    source_endpoint_version VARBINARY(8) NULL, -- 来源端点版本：创建时的八字节行版本；迁入旧批次可为空
+    full_rule_evidence NVARCHAR(500) NULL, -- 全量依据：来源方确认时间字段和完整覆盖口径的非敏感摘要；非全量为空
     query_started_at DATETIME2(3) NULL, -- 查询范围开始时间：来源查询条件的UTC时间；接口不需要时为空
     query_ended_at DATETIME2(3) NULL, -- 查询范围结束时间：来源查询条件的UTC时间；接口不需要时为空
     diagnosis_category NVARCHAR(32) NULL, -- 诊断疾病类别：ICD10查询条件；其他数据类别为空
@@ -72,9 +76,12 @@ CREATE TABLE md_sync_batch (
     CONSTRAINT uq_md_sync_batch_no UNIQUE (batch_no), -- 保证面向业务追踪的批次号唯一
     CONSTRAINT uq_md_sync_batch_request UNIQUE (request_key), -- 保证一次用户操作只创建一个批次
     CONSTRAINT fk_md_sync_batch_organization FOREIGN KEY (organization_id) REFERENCES org_organization(id), -- 保证机构范围引用已存在的平台机构
+    CONSTRAINT fk_md_sync_batch_endpoint FOREIGN KEY (source_endpoint_id) REFERENCES sys_external_endpoint(id), -- 保证新批次绑定的来源端点存在
     CONSTRAINT ck_md_sync_batch_scope CHECK ((scope_type = 'ORGANIZATION' AND organization_id IS NOT NULL AND source_organization_id IS NOT NULL) OR (scope_type = 'PLATFORM' AND organization_id IS NULL AND source_organization_id IS NULL)), -- 保证机构范围批次固化已验证来源机构标识，公共范围不混用机构信息
     CONSTRAINT ck_md_sync_batch_environment CHECK (environment_code IN ('DEVELOPMENT', 'TEST', 'PRODUCTION')), -- 限定平台支持的运行环境
     CONSTRAINT ck_md_sync_batch_category CHECK (data_category IN ('HOSPITAL_DIRECTORY')), -- 当前只允许已经形成完整闭环的医院综合目录
+    CONSTRAINT ck_md_sync_batch_mode CHECK (sync_mode IN (N'NOT_APPLICABLE', N'TIME_RANGE', N'FULL')), -- 只允许已定义的同步模式
+    CONSTRAINT ck_md_sync_batch_mode_scope CHECK ((data_category = N'HOSPITAL_DIRECTORY' AND sync_mode = N'NOT_APPLICABLE' AND query_started_at IS NULL AND query_ended_at IS NULL AND full_rule_evidence IS NULL) OR (data_category = N'MEDICAL_DIRECTORY' AND sync_mode = N'TIME_RANGE' AND query_started_at IS NOT NULL AND query_ended_at IS NOT NULL AND full_rule_evidence IS NULL) OR (data_category = N'MEDICAL_DIRECTORY' AND sync_mode = N'FULL' AND query_started_at IS NOT NULL AND query_ended_at IS NOT NULL AND full_rule_evidence IS NOT NULL)), -- 模式决定实际范围及规则证据
     CONSTRAINT ck_md_sync_batch_status CHECK (batch_status IN ('CREATED', 'FETCHING', 'COMPLETED', 'COMPLETED_WITH_ERRORS', 'COMPLETED_WITH_UNKNOWN', 'FAILED', 'RESULT_UNKNOWN')), -- 限定自动同步状态，不设置人工发布或核查状态
     CONSTRAINT ck_md_sync_batch_active_status CHECK ((batch_status IN ('COMPLETED', 'COMPLETED_WITH_ERRORS', 'COMPLETED_WITH_UNKNOWN', 'FAILED') AND is_active = 0) OR (batch_status IN ('CREATED', 'FETCHING', 'RESULT_UNKNOWN') AND is_active = 1)), -- 保证活动标志与终态保持一致
     CONSTRAINT ck_md_sync_batch_query_time CHECK (query_ended_at IS NULL OR query_started_at IS NULL OR query_ended_at >= query_started_at), -- 禁止查询范围结束早于开始
@@ -84,11 +91,10 @@ CREATE TABLE md_sync_batch (
     CONSTRAINT ck_md_sync_batch_text CHECK (LEN(LTRIM(RTRIM(batch_no))) > 0 AND LEN(LTRIM(RTRIM(request_key))) >= 20 AND LEN(LTRIM(RTRIM(source_system_code))) > 0 AND LEN(LTRIM(RTRIM(data_trade_code))) > 0) -- 禁止保存空白关键标识并要求请求标识具有足够随机长度
 );
 
--- 索引用途: 以活动标志过滤，阻止同一来源、业务范围和查询条件并发存在多个非终态批次
+-- 索引用途: 阻止不同查询时间或接口环境的活动批次同时写同一来源、机构和目录
 CREATE UNIQUE INDEX ux_md_sync_batch_active_scope
     ON md_sync_batch (
-        source_system_code, environment_code, scope_type, organization_id, data_category, source_type,
-        query_started_at, query_ended_at, diagnosis_category, diagnosis_version
+        source_system_code, scope_type, organization_id, data_category
     )
     WHERE is_active = 1;
 
@@ -196,8 +202,12 @@ VALUES
     (N'COLUMN', N'md_sync_batch', N'organization_id', N'平台机构主键'),
     (N'COLUMN', N'md_sync_batch', N'environment_code', N'来源接口运行环境'),
     (N'COLUMN', N'md_sync_batch', N'data_category', N'数据类别'),
+    (N'COLUMN', N'md_sync_batch', N'sync_mode', N'同步模式'),
     (N'COLUMN', N'md_sync_batch', N'source_type', N'来源目录类型'),
     (N'COLUMN', N'md_sync_batch', N'source_organization_id', N'已验证来源机构标识快照'),
+    (N'COLUMN', N'md_sync_batch', N'source_endpoint_id', N'来源端点主键'),
+    (N'COLUMN', N'md_sync_batch', N'source_endpoint_version', N'来源端点并发版本'),
+    (N'COLUMN', N'md_sync_batch', N'full_rule_evidence', N'全量查询确认依据'),
     (N'COLUMN', N'md_sync_batch', N'query_started_at', N'查询范围开始时间（世界协调时）'),
     (N'COLUMN', N'md_sync_batch', N'query_ended_at', N'查询范围结束时间（世界协调时）'),
     (N'COLUMN', N'md_sync_batch', N'diagnosis_category', N'诊断疾病类别'),
@@ -230,9 +240,12 @@ VALUES
     (N'CONSTRAINT', N'md_sync_batch', N'uq_md_sync_batch_no', N'保证面向业务追踪的批次号唯一。'),
     (N'CONSTRAINT', N'md_sync_batch', N'uq_md_sync_batch_request', N'保证一次用户操作只创建一个同步批次。'),
     (N'CONSTRAINT', N'md_sync_batch', N'fk_md_sync_batch_organization', N'保证机构范围引用已存在的平台机构。'),
+    (N'CONSTRAINT', N'md_sync_batch', N'fk_md_sync_batch_endpoint', N'保证批次绑定的来源服务端点存在。'),
     (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_scope', N'保证机构范围和平台公共范围使用正确的机构主键。'),
     (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_environment', N'限定平台支持的来源接口运行环境。'),
     (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_category', N'限定首批已确认的基础数据类别。'),
+    (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_mode', N'限定可识别的同步模式。'),
+    (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_mode_scope', N'保证模式与时间范围及全量依据一致。'),
     (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_status', N'限定已确认的同步批次状态。'),
     (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_active_status', N'保证活动标志与批次终态保持一致。'),
     (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_query_time', N'禁止查询范围结束时间早于开始时间。'),
@@ -241,6 +254,7 @@ VALUES
     (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_counts', N'禁止保存负数批次数量事实。'),
     (N'CONSTRAINT', N'md_sync_batch', N'ck_md_sync_batch_text', N'禁止保存空白关键标识并限制请求标识最小长度。'),
     (N'CONSTRAINT', N'md_sync_batch', N'df_md_sync_batch_active', N'新批次默认占用对应业务范围的活动名额。'),
+    (N'CONSTRAINT', N'md_sync_batch', N'df_md_sync_batch_mode', N'医院目录默认不使用时间范围。'),
     (N'CONSTRAINT', N'md_sync_batch', N'df_md_sync_batch_returned', N'未取得数据前实际取得数默认为零。'),
     (N'CONSTRAINT', N'md_sync_batch', N'df_md_sync_batch_duplicate', N'未发现重复前重复数默认为零。'),
     (N'CONSTRAINT', N'md_sync_batch', N'df_md_sync_batch_invalid', N'未发现无效数据前无效数默认为零。'),

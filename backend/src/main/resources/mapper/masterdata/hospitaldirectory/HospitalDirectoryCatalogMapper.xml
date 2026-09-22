@@ -34,7 +34,7 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="directoryTypeCount" type="cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryTypeCount">
+    <resultMap id="directoryTypeCount" type="cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectoryCountVO">
         <constructor>
             <!-- 由来源代码转换后的目录类型枚举 -->
             <arg column="directory_type" javaType="cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryType"/>
@@ -44,7 +44,7 @@
     </resultMap>
 
     <sql id="visibleDirectoryConditions">
-        <!-- 正式目录只允许当前账号获批机构范围；空范围不会返回机构数据 -->
+        <!-- 正式目录只允许调用方给定的机构范围；空范围不会返回机构数据 -->
         WHERE 1 = 0
         <if test="organizationCodes != null and !organizationCodes.isEmpty()">
             OR organizations.organization_code IN
