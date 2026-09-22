@@ -18,6 +18,7 @@ if [ ! -f "$security_file" ]; then
 fi
 
 bootstrap_secret_override=${PLATFORM_BOOTSTRAP_SECRET:-}
+server_port_override=${PLATFORM_SERVER_PORT:-}
 
 set -a
 # shellcheck disable=SC1090
@@ -27,6 +28,11 @@ set +a
 if [ -n "$bootstrap_secret_override" ]; then
     PLATFORM_BOOTSTRAP_SECRET=$bootstrap_secret_override
     export PLATFORM_BOOTSTRAP_SECRET
+fi
+
+if [ -n "$server_port_override" ]; then
+    PLATFORM_SERVER_PORT=$server_port_override
+    export PLATFORM_SERVER_PORT
 fi
 
 if [ "${PLATFORM_DEV_RUN_MIGRATIONS:-false}" = "true" ]; then

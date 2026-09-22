@@ -29,6 +29,26 @@
             <arg column="source_enabled_flag" javaType="java.lang.String"/>
             <!-- HIS原样返回的创建时间文本 -->
             <arg column="source_created_at" javaType="java.lang.String"/>
+            <!-- HIS返回的剂型，可为空 -->
+            <arg column="dosage_form" javaType="java.lang.String"/>
+            <!-- HIS返回的非敏感备注，可为空 -->
+            <arg column="remark" javaType="java.lang.String"/>
+            <!-- HIS返回的包装单位，可为空 -->
+            <arg column="package_unit" javaType="java.lang.String"/>
+            <!-- HIS返回的转换系数原文，可为空 -->
+            <arg column="conversion_factor" javaType="java.lang.String"/>
+            <!-- HIS返回的国药准字号，可为空 -->
+            <arg column="approval_number" javaType="java.lang.String"/>
+            <!-- HIS返回的药品本位码，可为空 -->
+            <arg column="standard_code" javaType="java.lang.String"/>
+            <!-- HIS返回的包装材质，可为空 -->
+            <arg column="package_material" javaType="java.lang.String"/>
+            <!-- HIS返回的炮制方法，可为空 -->
+            <arg column="processing_method" javaType="java.lang.String"/>
+            <!-- HIS返回的地区，可为空 -->
+            <arg column="region" javaType="java.lang.String"/>
+            <!-- HIS单独返回的类别，不与目录类别名称合并 -->
+            <arg column="category" javaType="java.lang.String"/>
             <!-- 最近一次写入当前目录的批次主键 -->
             <arg column="latest_batch_id" javaType="_long"/>
             <!-- 最近一次写入当前目录的批次编号 -->
@@ -70,6 +90,9 @@
                 OR directory.source_record_name LIKE '%' + #{query.keyword} + '%'
                 OR directory.mnemonic_code LIKE '%' + #{query.keyword} + '%')
         </if>
+        <if test="query != null and query.sourceEnabledFlag != null">
+            AND directory.source_enabled_flag = #{query.sourceEnabledFlag}
+        </if>
     </sql>
 
     <sql id="directoryColumns">
@@ -91,6 +114,16 @@
         directory.manufacturer_name,             <!-- HIS可选生产厂家 -->
         directory.source_enabled_flag,           <!-- HIS启用原始值 -->
         directory.source_created_at,             <!-- HIS创建时间原文 -->
+        directory.dosage_form,                   <!-- 来源剂型 -->
+        directory.remark,                        <!-- 来源备注 -->
+        directory.package_unit,                  <!-- 来源包装单位 -->
+        directory.conversion_factor,             <!-- 来源转换系数原文 -->
+        directory.approval_number,               <!-- 来源国药准字号 -->
+        directory.standard_code,                 <!-- 来源药品本位码 -->
+        directory.package_material,              <!-- 来源包装材质 -->
+        directory.processing_method,             <!-- 来源炮制方法 -->
+        directory.region,                        <!-- 来源地区 -->
+        directory.category,                      <!-- 来源类别 -->
         directory.latest_batch_id,               <!-- 最近成功同步批次主键 -->
         batches.batch_no AS latest_batch_no,     <!-- 最近成功同步批次编号 -->
         batches.source_organization_id,          <!-- 最近调用实际使用的HIS来源机构参数 -->

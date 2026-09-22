@@ -52,9 +52,14 @@ test('同步批次列表保持单行省略并使用服务端分页', async () =>
   assert.match(source, /text-overflow: ellipsis/);
   assert.match(source, /white-space: nowrap/);
   assert.match(source, /changePageSize/);
+  assert.match(source, /<th>批次号 \/ 开始时间<\/th>[\s\S]*?<th>同步对象<\/th>[\s\S]*?<th>取得结果<\/th>[\s\S]*?<th>处理结果<\/th>[\s\S]*?<th>操作<\/th>/);
+  assert.match(source, /item\.startedAt \? `开始 \$\{formatTime\(item\.startedAt\)\}` : '尚未开始'/);
+  assert.match(source, /<strong>\{\{ resultCountLabel\(item\) \}\}<\/strong>/);
+  assert.match(source, /<td>\s*<div class="batch-row-actions">/);
+  assert.doesNotMatch(source, /batch-table-section action-column-table|由系统自动校验；未完成类型不改变当前数据/);
 });
 
-test('统一同步入口明确当前业务对象、执行步骤和直接对账边界', async () => {
+test('统一同步入口明确当前业务对象和直接对账边界', async () => {
   const source = await readFile(drawerPath, 'utf8');
 
   assert.match(source, /发起基础数据同步/);
@@ -64,6 +69,30 @@ test('统一同步入口明确当前业务对象、执行步骤和直接对账�
   assert.doesNotMatch(source, /当前阶段|保存后的结果|确认机构无误/);
   assert.match(source, /canRecoverResult/);
   assert.match(source, /读取现有批次/);
+});
+
+test('同步方式使用成组单选布局，未确认全量规则时不能选中全量', async () => {
+  const source = await readFile(drawerPath, 'utf8');
+
+  assert.match(source, /<fieldset v-if="selectedBusiness\?\.requiresTimeRange" class="batch-mode-field">/);
+  assert.match(source, /<legend>本次同步方式<\/legend>/);
+  assert.match(source, /type="radio" value="FULL" :disabled="!fullSyncAvailable"/);
+  assert.match(source, /watch\(fullSyncAvailable,[\s\S]*?form\.value\.mode = 'TIME_RANGE'[\s\S]*?immediate: true/);
+  assert.match(source, /\.batch-start-form \.batch-mode-option \{[^}]*display: flex; align-items: center;/);
+  assert.match(source, /\.batch-start-form input\[type="datetime-local"\]/);
+  assert.doesNotMatch(source, /\.batch-range-field input \{/);
+});
+
+test('同步弹窗以简明分区组织字段，说明紧邻对应控件', async () => {
+  const source = await readFile(drawerPath, 'utf8');
+
+  assert.match(source, /class="batch-start-form"/);
+  assert.match(source, /<span>HIS 来源机构<\/span>/);
+  assert.match(source, /class="batch-setup-grid"/);
+  assert.match(source, /class="batch-range-grid"[\s\S]*?<small>数量核对与目录查询使用同一范围/);
+  assert.doesNotMatch(source, /work-form batch-start-form|batch-source-heading|batch-settings-heading/);
+  assert.doesNotMatch(source, /class="batch-section-heading"|<span>1<\/span>|<span>2<\/span>/);
+  assert.doesNotMatch(source, /class="batch-confirmation"/);
 });
 
 test('接口尚未就绪时不隐藏同步入口，并提供唯一配置入口', async () => {

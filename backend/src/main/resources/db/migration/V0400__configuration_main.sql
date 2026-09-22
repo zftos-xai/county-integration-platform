@@ -119,8 +119,7 @@ INSERT INTO sys_dictionary_item (
 VALUES
     (@exchange_result_type_id, N'SUCCESS', N'成功', 10, 1, N'SYSTEM', N'SYSTEM'),
     (@exchange_result_type_id, N'FAILURE', N'失败', 20, 1, N'SYSTEM', N'SYSTEM'),
-    (@exchange_result_type_id, N'NO_RESPONSE', N'无响应', 30, 1, N'SYSTEM', N'SYSTEM'),
-    (@exchange_result_type_id, N'INVALID_RESPONSE', N'响应不可解析', 40, 1, N'SYSTEM', N'SYSTEM');
+    (@exchange_result_type_id, N'NO_RESPONSE', N'无响应', 30, 1, N'SYSTEM', N'SYSTEM');
 
 INSERT INTO sys_dictionary_type (type_code, type_name, description, is_enabled, created_by, updated_by)
 VALUES (N'ALERT_LEVEL', N'告警级别', N'用于告警工作队列的优先级展示和排序', 1, N'SYSTEM', N'SYSTEM');

@@ -38,6 +38,10 @@ public class MigrationSchemaContractParser {
             "(?im)^ALTER\\s+TABLE\\s+(?:(?:\\[?[a-zA-Z_][\\w]*]?)\\.)?"
                     + "\\[?[a-zA-Z_][\\w]*]?\\s+DROP\\s+CONSTRAINT\\s+\\[?[a-zA-Z_][\\w]*]?\\s*;"
     );
+    private static final Pattern ALTER_TABLE_CHECKED_ADD_CONSTRAINT_PATTERN = Pattern.compile(
+            "(?ims)^ALTER\\s+TABLE\\s+(?:(?:\\[?[a-zA-Z_][\\w]*]?)\\.)?"
+                    + "\\[?[a-zA-Z_][\\w]*]?\\s+WITH\\s+CHECK\\s+ADD\\s+CONSTRAINT\\s+.*?;"
+    );
     private static final Pattern ALTER_TABLE_PATTERN = Pattern.compile("(?im)^ALTER\\s+TABLE\\s+");
 
     private final ResourcePatternResolver resourceResolver;
@@ -85,6 +89,9 @@ public class MigrationSchemaContractParser {
      */
     private void rejectUnsupportedSchemaChanges(Resource resource, String sql) {
         String supportedChangesRemoved = ALTER_TABLE_ADD_PATTERN.matcher(sql).replaceAll("");
+        supportedChangesRemoved = ALTER_TABLE_CHECKED_ADD_CONSTRAINT_PATTERN
+                .matcher(supportedChangesRemoved)
+                .replaceAll("");
         supportedChangesRemoved = ALTER_TABLE_DROP_CONSTRAINT_PATTERN
                 .matcher(supportedChangesRemoved)
                 .replaceAll("");

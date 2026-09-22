@@ -19,6 +19,7 @@ const organizationCode = ref('')
 const directoryType = ref<HospitalDirectoryType>('DEPARTMENT')
 const keyword = ref('')
 const selectedItemId = ref<number | null>(null)
+const tableWrap = ref<HTMLElement | null>(null)
 const isLoading = ref(true)
 const isRefreshing = ref(false)
 const error = ref<ApiClientError | null>(null)
@@ -91,8 +92,11 @@ function selectType(type: HospitalDirectoryType) {
 /** 应用名称或编码查询条件并回到第一页。 */
 function applyFilters() { page.value = 1; void load() }
 
-/** 展开或收起一条当前有效目录的来源链路。 */
-function toggleDetail(id: number) { selectedItemId.value = selectedItemId.value === id ? null : id }
+/** 展开目录时将横向滚动复位，让字段名从第一列开始可见。 */
+function toggleDetail(id: number) {
+  selectedItemId.value = selectedItemId.value === id ? null : id
+  if (selectedItemId.value && tableWrap.value) tableWrap.value.scrollLeft = 0
+}
 
 /** 切换服务端页码。 */
 function changePage(value: number) { page.value = value; void load() }
@@ -130,13 +134,13 @@ onBeforeUnmount(() => { mounted = false; controller?.abort() })
     @refresh="load(true)"
     @retry="load()"
   >
-    <div class="directory-table-wrap">
+    <div ref="tableWrap" class="directory-table-wrap">
           <table class="directory-table">
             <thead><tr><th>目录编码</th><th>{{ typeLabels[directoryType] }}名称</th><th>助记码</th><th>类别</th><th>有效关系</th><th>最近同步</th><th>来源批次</th><th><span class="visually-hidden">操作</span></th></tr></thead>
             <tbody>
               <template v-for="item in items" :key="item.id">
                 <tr :class="{ expanded: selectedItemId === item.id }"><td class="directory-code" :title="item.sourceRecordCode">{{ item.sourceRecordCode }}</td><td :title="item.sourceRecordName"><strong>{{ item.sourceRecordName }}</strong></td><td :title="item.mnemonicCode || '—'">{{ item.mnemonicCode || '—' }}</td><td :title="item.categoryName || '—'">{{ item.categoryName || '—' }}</td><td>{{ item.relationCount ? `${item.relationCount} 条` : '—' }}</td><td>{{ formatTime(item.lastSeenAt) }}</td><td><RouterLink class="batch-link" :to="`/master-data/batches/${item.latestBatchId}`">{{ item.latestBatchNo }}</RouterLink></td><td class="directory-actions"><button type="button" :aria-expanded="selectedItemId === item.id" @click="toggleDetail(item.id)"><ChevronDown v-if="selectedItemId === item.id" :size="15" /><ChevronRight v-else :size="15" />{{ selectedItemId === item.id ? '收起' : '查看' }}</button></td></tr>
-                <tr v-if="selectedItemId === item.id && selectedItem" class="directory-detail-row"><td colspan="8"><div class="directory-detail">
+                <tr v-if="selectedItemId === item.id && selectedItem" class="directory-detail-row"><td colspan="8"><div class="directory-detail directory-detail--hospital" role="region" aria-label="医院综合目录详情与来源追溯" tabindex="0">
                   <section><h4>平台当前数据</h4><dl><div><dt>目录类型</dt><dd>{{ typeLabels[selectedItem.directoryType] }}</dd></div><div><dt>目录编码</dt><dd>{{ selectedItem.sourceRecordCode }}</dd></div><div><dt>目录名称</dt><dd>{{ selectedItem.sourceRecordName }}</dd></div><div><dt>助记码</dt><dd>{{ selectedItem.mnemonicCode || '—' }}</dd></div><div><dt>类别</dt><dd>{{ selectedItem.categoryName || '—' }}</dd></div><div><dt>有效关系</dt><dd>{{ selectedItem.relationCount ? `${selectedItem.relationCount} 条` : '—' }}</dd></div></dl></section>
                   <section><h4>来源追溯</h4><dl><div><dt>来源系统</dt><dd>基层 HIS</dd></div><div><dt>平台机构</dt><dd>{{ selectedItem.organizationName }}</dd></div><div><dt>平台机构编码</dt><dd>{{ selectedItem.organizationCode }}</dd></div><div><dt>来源机构标识</dt><dd>{{ selectedItem.sourceOrganizationCode || 'HIS 本次未返回' }}</dd></div><div><dt>来源交易</dt><dd>100-003 · 医院综合目录查询</dd></div><div><dt>最近成功同步</dt><dd>{{ formatTime(selectedItem.lastSeenAt) }}</dd></div><div><dt>同步记录</dt><dd><RouterLink class="batch-link" :to="`/master-data/batches/${selectedItem.latestBatchId}`">{{ selectedItem.latestBatchNo }}</RouterLink></dd></div></dl></section>
                 </div></td></tr>

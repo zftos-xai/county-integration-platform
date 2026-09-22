@@ -74,16 +74,22 @@ class MedicalDirectoryCatalogSecurityWebTest {
         var reader = user(principal(List.of("master-data:read")));
         mockMvc.perform(get("/api/v1/master-data/medical-directory")
                         .param("organizationCode", " ORG001 ").param("keyword", " test ")
+                        .param("sourceEnabledFlag", " 是 ")
                         .with(reader))
                 .andExpect(status().isOk());
         ArgumentCaptor<MedicalDirectoryQuery> query = ArgumentCaptor.forClass(MedicalDirectoryQuery.class);
         verify(service).findPage(query.capture(), ArgumentMatchers.eq(List.of("ORG001")));
         assertEquals("ORG001", query.getValue().organizationCode());
         assertEquals("test", query.getValue().keyword());
+        assertEquals("是", query.getValue().sourceEnabledFlag());
         assertEquals(1, query.getValue().page());
         assertEquals(20, query.getValue().pageSize());
         mockMvc.perform(get("/api/v1/master-data/medical-directory")
                         .param("pageSize", "101").with(user(principal(List.of("master-data:read")))))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/master-data/medical-directory")
+                        .param("sourceEnabledFlag", "x".repeat(101))
+                        .with(user(principal(List.of("master-data:read")))))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/v1/master-data/medical-directory")
                         .param("organizationCode", "ORG002")

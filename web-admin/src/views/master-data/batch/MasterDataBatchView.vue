@@ -634,6 +634,24 @@ function environmentLabel(item: MasterDataBatchSummary) {
       : '开发环境';
 }
 
+/** 汇总列表行的业务、环境和同步方式，便于识别同一机构的不同批次。 */
+function scopeDescription(item: MasterDataBatchSummary) {
+  const mode = item.mode === 'FULL'
+    ? '全量同步'
+    : item.mode === 'TIME_RANGE'
+      ? '指定时间范围'
+      : '目录同步';
+  return `${masterDataCategoryLabels[item.category]} · ${environmentLabel(item)} · ${mode}`;
+}
+
+/** 将取得数和来源声明数放在同一视觉层级。 */
+function resultCountLabel(item: MasterDataBatchSummary) {
+  const { returned, declared } = item.counts;
+  return declared === null
+    ? `取得 ${returned} 条 · 总数未提供`
+    : `取得 ${returned} 条 / 声明 ${declared} 条`;
+}
+
 /** @param item 同步批次 @return 本次实际处理的目录范围 */
 function batchScopeDescription(item: MasterDataBatchSummary) {
   return item.category === 'MEDICAL_DIRECTORY' ? '中药、西药、诊疗、耗材' : '科室、医生、病区、床位';
@@ -777,7 +795,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section
-      class="prototype-section work-table-section batch-table-section action-column-table"
+      class="prototype-section work-table-section batch-table-section"
     >
       <div v-if="isLoading" class="page-state" aria-live="polite">
         <LoaderCircle class="spinning" :size="27" /><strong
@@ -796,9 +814,10 @@ onBeforeUnmount(() => {
         <table class="work-table">
           <thead>
             <tr>
-              <th>批次与同步范围</th>
+              <th>批次号 / 开始时间</th>
+              <th>同步对象</th>
               <th>取得结果</th>
-              <th>状态与处理结果</th>
+              <th>处理结果</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -810,26 +829,22 @@ onBeforeUnmount(() => {
                   type="button"
                   @click="openReview(item.id)"
                 >
-                  {{ item.batchNo }}</button
-                ><strong>{{ scopeLabel(item) }}</strong
-                ><small
-                  >{{ masterDataCategoryLabels[item.category] }} ·
-                  {{ environmentLabel(item) }} · {{ item.mode === 'FULL' ? '全量同步' : item.mode === 'TIME_RANGE' ? '指定时间范围' : '目录同步' }}</small
-                >
+                  {{ item.batchNo }}</button>
+                <small>
+                  {{ item.startedAt ? `开始 ${formatTime(item.startedAt)}` : '尚未开始' }}
+                </small>
               </td>
               <td>
-                <strong>{{
+                <strong :title="scopeLabel(item)">{{ scopeLabel(item) }}</strong>
+                <small :title="scopeDescription(item)">{{ scopeDescription(item) }}</small>
+              </td>
+              <td>
+                <strong>{{ resultCountLabel(item) }}</strong>
+                <small>{{
                   item.countTradeCode
                     ? `${item.dataTradeCode} / ${item.countTradeCode}`
                     : item.dataTradeCode
-                }}</strong
-                ><small
-                  >取得 {{ item.counts.returned }} 条{{
-                    item.counts.declared === null
-                      ? ' · 来源未提供总数'
-                      : ` / 声明 ${item.counts.declared} 条`
-                  }}</small
-                >
+                }}</small>
               </td>
               <td>
                 <span
@@ -840,42 +855,35 @@ onBeforeUnmount(() => {
                   >{{
                     statusPresentation(item.status, item.failureCode).label
                   }}</span
-                ><small
-                  >{{ formatTime(item.startedAt) }} ·
-                  {{ formatDuration(item) }}</small
-                >
+                ><small>{{ item.finishedAt ? '耗时 ' : '' }}{{ formatDuration(item) }}</small>
                 <small
                   v-if="item.status === 'FAILED' || item.status === 'RESULT_UNKNOWN'"
                   class="batch-result-note"
                   :title="resultSummary(item)"
                   >{{ resultSummary(item) }}</small
                 >
-                <small v-else class="batch-result-note"
-                  >由系统自动校验；未完成类型不改变当前数据</small
-                >
               </td>
-              <td class="batch-row-actions">
-                <button
-                  v-if="
-                    hasPermission('master-data:sync') &&
-                    item.status === 'CREATED'
-                  "
-                  class="work-danger-button"
-                  type="button"
-                  :disabled="isAdvancing"
-                  @click="cancelBatch(item)"
-                >
-                  {{ confirmCancelId === item.id ? '确认取消' : '取消' }}
-                </button>
-                <button
-                  class="icon-button"
-                  type="button"
-                  aria-label="查看批次详情"
-                  title="查看详情"
-                  @click="openReview(item.id)"
-                >
-                  <ChevronRight :size="16" />
-                </button>
+              <td>
+                <div class="batch-row-actions">
+                  <button
+                    v-if="
+                      hasPermission('master-data:sync') &&
+                      item.status === 'CREATED'
+                    "
+                    class="work-danger-button"
+                    type="button"
+                    :disabled="isAdvancing"
+                    @click="cancelBatch(item)"
+                  >
+                    {{ confirmCancelId === item.id ? '确认取消' : '取消' }}
+                  </button>
+                  <button
+                    class="work-quiet-button"
+                    type="button"
+                    aria-label="查看批次详情"
+                    @click="openReview(item.id)"
+                  >详情</button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -1177,23 +1185,29 @@ onBeforeUnmount(() => {
   overflow-x: auto;
 }
 .batch-table-section .work-table {
-  min-width: 760px;
+  min-width: 960px;
   table-layout: fixed;
 }
 .batch-table-section th:nth-child(1) {
-  width: 34%;
+  width: 23%;
 }
 .batch-table-section th:nth-child(2) {
-  width: 24%;
+  width: 25%;
 }
 .batch-table-section th:nth-child(3) {
-  width: 30%;
+  width: 20%;
 }
-.batch-table-section th:nth-child(4) {
-  width: 12%;
+.batch-table-section th:nth-child(5) {
+  width: 150px;
 }
 .batch-table-section td {
   overflow: hidden;
+}
+.batch-table-section .work-row-link {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .batch-row-actions {
   display: flex;
@@ -1208,9 +1222,8 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.batch-table-section td:first-child strong {
+.batch-table-section td strong {
   display: block;
-  margin-top: 4px;
 }
 .batch-result-note {
   display: block;

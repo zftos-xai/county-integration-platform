@@ -31,6 +31,16 @@ export type MedicalDirectoryItem = {
   manufacturerName: string | null
   sourceEnabledFlag: string
   sourceCreatedAt: string
+  dosageForm: string | null
+  remark: string | null
+  packageUnit: string | null
+  conversionFactor: string | null
+  approvalNumber: string | null
+  standardCode: string | null
+  packageMaterial: string | null
+  processingMethod: string | null
+  region: string | null
+  category: string | null
   latestBatchId: number
   latestBatchNo: string
   sourceOrganizationId: string | null
@@ -78,6 +88,16 @@ export function isMedicalDirectoryItem(
     (typeof value.manufacturerName === 'string' || value.manufacturerName === null) &&
     typeof value.sourceEnabledFlag === 'string' &&
     typeof value.sourceCreatedAt === 'string' &&
+    (typeof value.dosageForm === 'string' || value.dosageForm === null) &&
+    (typeof value.remark === 'string' || value.remark === null) &&
+    (typeof value.packageUnit === 'string' || value.packageUnit === null) &&
+    (typeof value.conversionFactor === 'string' || value.conversionFactor === null) &&
+    (typeof value.approvalNumber === 'string' || value.approvalNumber === null) &&
+    (typeof value.standardCode === 'string' || value.standardCode === null) &&
+    (typeof value.packageMaterial === 'string' || value.packageMaterial === null) &&
+    (typeof value.processingMethod === 'string' || value.processingMethod === null) &&
+    (typeof value.region === 'string' || value.region === null) &&
+    (typeof value.category === 'string' || value.category === null) &&
     typeof value.latestBatchId === 'number' &&
     typeof value.latestBatchNo === 'string' &&
     (typeof value.sourceOrganizationId === 'string' ||

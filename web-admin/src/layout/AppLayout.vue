@@ -275,7 +275,7 @@ async function logout() {
       @click="isMobileOpen = false"
     />
 
-    <main class="prototype-main">
+    <main class="prototype-main" :class="{ 'directory-page': route.path.startsWith('/master-data/directory') }">
       <header class="prototype-topbar">
         <button
           class="prototype-icon prototype-menu"

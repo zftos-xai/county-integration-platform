@@ -59,7 +59,9 @@ public class MedicalDirectoryCatalogServiceImpl implements MedicalDirectoryCatal
                 record.id(), record.organizationCode(), record.organizationName(), record.directoryType(),
                 record.sourceRecordCode(), record.sourceRecordName(), record.mnemonicCode(), record.categoryName(),
                 record.unit(), record.specification(), record.manufacturerName(), record.sourceEnabledFlag(),
-                record.sourceCreatedAt(), record.latestBatchId(), record.latestBatchNo(),
+                record.sourceCreatedAt(), record.dosageForm(), record.remark(), record.packageUnit(),
+                record.conversionFactor(), record.approvalNumber(), record.standardCode(), record.packageMaterial(),
+                record.processingMethod(), record.region(), record.category(), record.latestBatchId(), record.latestBatchNo(),
                 record.sourceOrganizationId(), Func.toOffset(record.lastSeenAt()));
     }
 }

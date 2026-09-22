@@ -70,10 +70,32 @@ function checkDocumentedObjects(file, sql) {
     }
   }
 
+  // 增量迁移的字段和约束同样必须有数据库元数据说明。
+  const addedColumnsPattern = /ALTER\s+TABLE\s+(?:dbo\.)?([a-z][a-z0-9_]*)\s+ADD\s*\n([\s\S]*?);/gi
+  for (const match of file.includes('_patch_') ? sql.matchAll(addedColumnsPattern) : []) {
+    const tableName = match[1].toLowerCase()
+    for (const rawLine of match[2].split(/\r?\n/)) {
+      const line = rawLine.trim()
+      const field = line.match(/^([a-z][a-z0-9_]*)\s+(?:N?VARCHAR|VARBINARY|BIGINT|INT|BIT|DATETIME2)\b/i)
+      if (!field) continue
+      createdObjects.push({ file, type: 'COLUMN', table: tableName, object: field[1].toLowerCase() })
+      if (!line.includes('--')) report(file, `增量字段缺少行内说明：“${line}”`)
+      const defaultConstraint = line.match(/\bCONSTRAINT\s+([a-z][a-z0-9_]*)\s+DEFAULT\b/i)
+      if (defaultConstraint) {
+        createdObjects.push({ file, type: 'CONSTRAINT', table: tableName, object: defaultConstraint[1].toLowerCase() })
+      }
+    }
+  }
+
+  const addedConstraintPattern = /ALTER\s+TABLE\s+(?:dbo\.)?([a-z][a-z0-9_]*)\s+WITH\s+CHECK\s+ADD\s+CONSTRAINT\s+([a-z][a-z0-9_]*)/gi
+  for (const match of file.includes('_patch_') ? sql.matchAll(addedConstraintPattern) : []) {
+    createdObjects.push({ file, type: 'CONSTRAINT', table: match[1].toLowerCase(), object: match[2].toLowerCase() })
+  }
+
   const indexPattern = /CREATE\s+(?:UNIQUE\s+)?INDEX\s+([a-z][a-z0-9_]*)/gi
   for (const indexMatch of sql.matchAll(indexPattern)) {
     const afterIndex = sql.slice(indexMatch.index)
-    const tableMatch = afterIndex.match(/\bON\s+([a-z][a-z0-9_]*)\s*\(/i)
+    const tableMatch = afterIndex.match(/\bON\s+(?:dbo\.)?([a-z][a-z0-9_]*)\s*\(/i)
     if (tableMatch) {
       createdObjects.push({ file, type: 'INDEX', table: tableMatch[1].toLowerCase(), object: indexMatch[1].toLowerCase() })
     }

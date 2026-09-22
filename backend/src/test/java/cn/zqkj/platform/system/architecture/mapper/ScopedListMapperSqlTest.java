@@ -94,7 +94,7 @@ class ScopedListMapperSqlTest {
                         "organizationCodes", List.of()));
         String medicalDirectory = sql(configuration,
                 "cn.zqkj.platform.masterdata.mapper.medicaldirectory.MedicalDirectoryCatalogMapper.countPage",
-                Map.of("query", new MedicalDirectoryQuery(null, null, null, 1, 20),
+                Map.of("query", new MedicalDirectoryQuery(null, null, null, null, 1, 20),
                         "organizationCodes", List.of()));
         String batches = sql(configuration,
                 "cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper.countPage",
@@ -105,6 +105,24 @@ class ScopedListMapperSqlTest {
         assertTrue(medicalDirectory.contains("WHERE 1 = 0"));
         assertTrue(batches.contains("batches.scope_type = 'PLATFORM'"));
         assertTrue(!batches.contains("organizations.organization_code IN"));
+    }
+
+    /** 医疗目录的HIS启用原值同时约束总数和分页，不丢失机构范围。 */
+    @Test
+    void scopesMedicalDirectoryFiltersInCountAndPage() {
+        Configuration configuration = parse("mapper/masterdata/medicaldirectory/MedicalDirectoryCatalogMapper.xml");
+        MedicalDirectoryQuery query = new MedicalDirectoryQuery(
+                "ORG001", null, null, "是", 1, 20);
+        for (String statement : List.of("countPage", "findPage")) {
+            BoundSql bound = configuration.getMappedStatement(
+                    "cn.zqkj.platform.masterdata.mapper.medicaldirectory.MedicalDirectoryCatalogMapper." + statement)
+                    .getBoundSql(Map.of("query", query, "organizationCodes", List.of("ORG001")));
+            String sql = bound.getSql();
+            assertTrue(sql.contains("organizations.organization_code IN"), statement);
+            assertTrue(sql.contains("directory.source_enabled_flag = ?"), statement);
+            assertTrue(bound.getParameterMappings().stream()
+                    .anyMatch(parameter -> parameter.getProperty().equals("query.sourceEnabledFlag")), statement);
+        }
     }
 
     /**

@@ -17,6 +17,7 @@ const props = defineProps<{
   isLoading: boolean
   isRefreshing: boolean
   isEmpty: boolean
+  hasExtraFilters?: boolean
   error: ApiClientError | null
 }>()
 const organizationCode = defineModel<string>('organizationCode', { required: true })
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   organizationChange: []
   typeChange: [type: T]
   search: []
+  clear: []
   refresh: []
   retry: []
 }>()
@@ -99,6 +101,7 @@ function selectOrganization(code: string) {
 
 function clearFilters() {
   keyword.value = ''
+  emit('clear')
   emit('search')
 }
 
@@ -138,14 +141,12 @@ onBeforeUnmount(() => request.abort())
         <button v-for="type in types" :key="type" type="button" :aria-pressed="directoryType === type" :class="{ active: directoryType === type }" @click="emit('typeChange', type)">{{ typeLabels[type] }}<span>{{ isLoading || error ? '—' : counts[type] }}</span></button>
       </nav>
       <section class="directory-panel">
-        <header class="directory-panel-heading">
-          <div><h3>当前{{ title }} · {{ typeLabels[directoryType] }}</h3><p>当前有效数据 {{ isLoading || error ? '—' : counts[directoryType] }} 条 · 来自最近一次成功同步 · 查看不会重新调用 HIS</p></div>
-          <button class="work-quiet-button" type="button" :disabled="isBusy || !organizationCode" @click="emit('refresh')"><RefreshCw :size="16" aria-hidden="true" :class="{ spinning: isRefreshing }" />刷新</button>
-        </header>
         <form class="directory-toolbar" @submit.prevent="emit('search')">
           <label class="directory-search"><Search :size="17" aria-hidden="true" /><input v-model="keyword" maxlength="50" aria-label="搜索名称、编码或助记码" placeholder="搜索名称、编码或助记码" /></label>
+          <slot name="filters" />
           <button class="prototype-button" type="submit" :disabled="isBusy || !organizationCode">查询</button>
           <button class="work-quiet-button" type="button" :disabled="isBusy || !organizationCode" @click="clearFilters">清除</button><span>共 {{ isLoading || error ? '—' : total }} 条</span>
+          <button class="work-quiet-button" type="button" :disabled="isBusy || !organizationCode" @click="emit('refresh')"><RefreshCw :size="16" aria-hidden="true" :class="{ spinning: isRefreshing }" />刷新</button>
         </form>
         <p v-if="error" class="feedback danger" role="alert"><AlertCircle :size="18" aria-hidden="true" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="text-button" type="button" @click="emit('retry')">重试</button></p>
         <div v-else-if="isInitializing" class="directory-state" role="status">正在读取机构…</div>
@@ -153,7 +154,7 @@ onBeforeUnmount(() => request.abort())
         <div v-else-if="isLoading" class="directory-state" role="status">正在读取当前有效数据…</div>
         <div v-else-if="isEmpty" class="directory-state" role="status">
           <Database :size="28" aria-hidden="true" />
-          <template v-if="keyword.trim()"><strong>没有符合查询条件的{{ typeLabels[directoryType] }}</strong><span>请调整关键词或清除查询条件。</span></template>
+          <template v-if="keyword.trim() || hasExtraFilters"><strong>没有符合查询条件的{{ typeLabels[directoryType] }}</strong><span>请调整条件或清除筛选。</span></template>
           <template v-else><strong>当前机构没有{{ typeLabels[directoryType] }}有效数据</strong><span>请到“同步批次”查看最近一次{{ title }}同步结果。</span></template>
         </div>
         <slot v-else />
@@ -165,7 +166,7 @@ onBeforeUnmount(() => request.abort())
 
 <style scoped>
 .directory-layout { display:grid; grid-template-columns:260px minmax(0,1fr); gap:14px; align-items:start; }
-.dataset-nav { grid-column:1/-1; display:flex; gap:8px; border-bottom:1px solid var(--line); overflow-x:auto; }
+.dataset-nav { grid-column:1/-1; padding:0; display:flex; gap:8px; border-bottom:1px solid var(--line); overflow-x:auto; }
 .dataset-nav a { flex:none; padding:11px 13px; border:1px solid transparent; border-bottom:0; border-radius:7px 7px 0 0; color:var(--muted); font-size:13px; text-decoration:none; }
 .dataset-nav a:hover { background:#f5f8f8; }
 .dataset-nav a.active { border-color:#d6e5e1; background:#eaf5f2; color:var(--accent); font-weight:650; }
@@ -201,18 +202,15 @@ onBeforeUnmount(() => request.abort())
 .directory-tabs button.active { border-bottom-color:var(--accent); color:var(--accent); }
 .directory-tabs button.active span { background:#e2f1ed; color:var(--accent); }
 .directory-panel { min-width:0; background:var(--surface); }
-.directory-panel-heading { padding:13px 16px; border-bottom:1px solid var(--line-soft); display:flex; justify-content:space-between; align-items:center; gap:16px; }
-.directory-panel-heading h3 { margin:0; color:var(--ink); font-size:15px; }
-.directory-panel-heading p { margin:4px 0 0; color:var(--muted); font-size:12px; }
-.directory-panel-heading button { flex:none; }
-.directory-toolbar { padding:11px 16px; border-bottom:1px solid var(--line-soft); display:grid; grid-template-columns:minmax(120px,420px) auto auto minmax(55px,1fr); gap:8px; align-items:center; }
-.directory-toolbar>span { justify-self:end; color:var(--muted); font-size:12px; white-space:nowrap; }
+.directory-toolbar { padding:11px 16px; border-bottom:1px solid var(--line-soft); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.directory-toolbar>span { margin-left:auto; color:var(--muted); font-size:12px; white-space:nowrap; }
 .directory-search { min-width:0; height:36px; padding:0 11px; border:1px solid #ccd9dc; border-radius:6px; display:flex; align-items:center; gap:8px; color:var(--muted); }
+.directory-toolbar>.directory-search { flex:1 1 230px; max-width:420px; }
 .directory-state { min-height:260px; padding:30px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; color:var(--muted); text-align:center; }
 .directory-state strong { color:var(--ink); }
 .directory-state span { font-size:12px; }
 button:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 @media(max-width:1100px) { .directory-layout { grid-template-columns:220px minmax(0,1fr); } .directory-context { flex-wrap:wrap; } }
-@media(max-width:780px) { .directory-layout { grid-template-columns:minmax(0,1fr); } .organization-rail { position:static; } .organization-list { max-height:210px; } .directory-toolbar { grid-template-columns:minmax(0,1fr) auto auto; } .directory-toolbar>span { grid-column:1/-1; justify-self:start; } }
-@media(max-width:520px) { .directory-context { display:grid; } .directory-tabs { gap:20px; } .directory-panel-heading { align-items:flex-start; } .directory-toolbar { grid-template-columns:1fr 1fr; } .directory-search,.directory-toolbar>span { grid-column:1/-1; } }
+@media(max-width:780px) { .directory-layout { grid-template-columns:minmax(0,1fr); } .organization-rail { position:static; } .organization-list { max-height:210px; } }
+@media(max-width:520px) { .directory-context { display:grid; } .directory-tabs { gap:20px; } .directory-toolbar>.directory-search { flex-basis:100%; max-width:none; } }
 </style>

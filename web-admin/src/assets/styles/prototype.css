@@ -533,6 +533,10 @@
 .prototype-title-line p { color: #7a8794; font-size: 13px; line-height: 1.5; }
 .prototype-heading > p { margin: 0; color: #7a8794; font-size: 13px; line-height: 1.5; }
 .prototype-content { max-width: none; padding: 24px 28px 40px; }
+.prototype-main.directory-page .prototype-topbar { min-height: 0; padding: 12px 24px 14px; }
+.prototype-main.directory-page .prototype-breadcrumb { margin-bottom: 6px; padding: 0; }
+.prototype-main.directory-page .prototype-heading h1 { margin-bottom: 4px; font-size: 24px; }
+.prototype-main.directory-page .prototype-content { padding: 12px 20px 28px; }
 .prototype-section, .work-toolbar, .work-health-strip, .work-status-summary, .prototype-metrics { border-color: #e1e5e9; border-radius: 6px; box-shadow: 0 1px 2px #18243308; }
 .work-table th { height: 44px; background: #f7f8fa; color: #536170; font-size: 11px; font-weight: 650; }
 .work-table td { border-color: #edf0f2; }

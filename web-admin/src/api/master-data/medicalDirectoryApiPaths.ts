@@ -7,6 +7,7 @@ export type MedicalDirectoryQueryParameters = {
     | 'TREATMENT'
     | 'CONSUMABLE'
   keyword?: string
+  sourceEnabledFlag?: string
   page: number
   pageSize: number
 }
@@ -23,6 +24,7 @@ export function medicalDirectoryListPath(
     parameters.set('directoryType', query.directoryType)
   }
   if (query.keyword) parameters.set('keyword', query.keyword)
+  if (query.sourceEnabledFlag) parameters.set('sourceEnabledFlag', query.sourceEnabledFlag)
   parameters.set('page', String(query.page))
   parameters.set('pageSize', String(query.pageSize))
   return `/master-data/medical-directory?${parameters.toString()}`

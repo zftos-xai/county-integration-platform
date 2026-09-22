@@ -64,7 +64,9 @@ async function mountLayout(t, { query = {}, codes = ['ORG-A', 'ORG-B'], organiza
     'onUpdate:organizationCode': value => { props.organizationCode = value },
     'onUpdate:keyword': value => { props.keyword = value },
     onOrganizationChange: () => events.push(props.organizationCode),
+    onClear: () => events.push('clear'),
     onSearch: () => events.push('search'),
+    onRefresh: () => events.push('refresh'),
   }, { default: () => Vue.h('table', '测试业务记录'), pagination: () => Vue.h('footer', '测试分页') }) })
   app.component('RouterLink', { props: ['to'], setup: (props, { slots }) => () => Vue.h('a', { to: props.to }, slots.default?.()) })
   app.mount(root)
@@ -84,6 +86,41 @@ test('两个页面使用同一布局和表格样式，不再独立定义机构�
   assert.ok(!staticClasses.includes('empty'))
   assert.doesNotMatch(source, /\{ empty:/)
   assert.match(source, /'is-empty':/)
+})
+
+test('两个目录的展开详情共用带单元格边界的字段栅格', async () => {
+  const styles = await readFile(new URL('directory-records.css', directory), 'utf8')
+  const hospital = await readFile(new URL('HospitalDirectoryView.vue', directory), 'utf8')
+  assert.match(styles, /\.directory-detail dl\s*\{[^}]*border-top:1px dashed var\(--detail-line\)/s)
+  assert.match(styles, /\.directory-detail dt\s*\{[^}]*border-right:1px dashed var\(--detail-line\)/s)
+  assert.match(styles, /\.directory-table th:last-child,\.directory-table td\.directory-actions\s*\{[^}]*position:sticky/s)
+  assert.match(styles, /\.directory-detail--hospital section:first-child dl\s*\{ grid-template-columns:max-content; \}/)
+  assert.match(hospital, /directory-detail directory-detail--hospital/)
+  assert.match(styles, /\.directory-detail dt,\.directory-detail dd\s*\{[^}]*white-space:nowrap;/s)
+  assert.doesNotMatch(styles, /\.directory-detail dl div\s*\{[^}]*min-height:/s)
+  assert.match(styles, /\.directory-detail\s*\{[^}]*width:100%;[^}]*overflow-x:auto;[^}]*grid-template-columns:max-content max-content;/s)
+  assert.match(styles, /\.directory-detail section:last-child dl\s*\{ grid-template-columns:max-content; \}/)
+  assert.doesNotMatch(styles, /@media\s*\(max-width:1100px\)[\s\S]*?\.directory-detail/)
+})
+
+test('数据目录页头和页签去除通用导航内边距造成的多余留白', async () => {
+  const layout = await readFile(new URL('../../../layout/AppLayout.vue', directory), 'utf8')
+  const shellStyles = await readFile(new URL('../../../assets/styles/prototype.css', directory), 'utf8')
+  assert.match(layout, /'directory-page': route\.path\.startsWith\('\/master-data\/directory'\)/)
+  assert.match(shellStyles, /\.prototype-main\.directory-page \.prototype-breadcrumb\s*\{[^}]*padding:\s*0;/s)
+  assert.match(shellStyles, /\.prototype-main\.directory-page \.prototype-content\s*\{[^}]*padding:\s*12px 20px 28px;/s)
+  assert.match(source, /\.dataset-nav\s*\{[^}]*padding:\s*0;/s)
+})
+
+test('类型页签已说明目录种类，不再重复标题说明；刷新仍在查询区可用', async t => {
+  const { root, events } = await mountLayout(t, { isEmpty: false, total: 46, counts: { DEPARTMENT: 46 } })
+  assert.doesNotMatch(text(root), /当前医院综合目录 · 科室|来自最近一次成功同步|查看不会重新调用 HIS/)
+  assert.equal(descendants(root).filter(item => item.type === 'h3').length, 0)
+  assert.match(text(root), /共 46 条/)
+  const refresh = descendants(root).find(item => item.type === 'button' && text(item) === '刷新')
+  assert.ok(refresh)
+  refresh.props.onClick()
+  assert.equal(events.at(-1), 'refresh')
 })
 
 test('URL中已授权机构优先于默认机构，两个页签链接携带同一机构', async t => {
@@ -122,8 +159,12 @@ test('无匹配、清除、失败和加载状态保留共用结构，不伪装�
   descendants(root).find(item => item.type === 'button' && text(item) === '清除').props.onClick()
   await flush()
   assert.equal(props.keyword, '')
-  assert.equal(events.at(-1), 'search')
+  assert.deepEqual(events.slice(-2), ['clear', 'search'])
   assert.match(text(root), /当前机构没有科室有效数据/)
+  props.hasExtraFilters = true
+  await flush()
+  assert.match(text(root), /没有符合查询条件的科室/)
+  props.hasExtraFilters = false
   props.error = { message: '无权读取目录', requestId: 'test-request' }
   await flush()
   assert.match(text(root), /当前数据读取失败/)

@@ -17,7 +17,7 @@ class PageOffsetTest {
     @Test
     void calculatesLargeOffsetsWithoutOverflow() {
         long expected = 214_748_364_600L;
-        assertEquals(expected, new MedicalDirectoryQuery(null, null, null, Integer.MAX_VALUE, 100).offset());
+        assertEquals(expected, new MedicalDirectoryQuery(null, null, null, null, Integer.MAX_VALUE, 100).offset());
         assertEquals(expected, new HospitalDirectoryQuery(null, null, null, Integer.MAX_VALUE, 100).offset());
         assertEquals(expected, new MasterDataBatchQuery(
                 null, null, null, null, null, null, Integer.MAX_VALUE, 100).offset());

@@ -22,6 +22,16 @@ import java.time.LocalDateTime;
  * @param manufacturerName 可选生产厂家
  * @param sourceEnabledFlag HIS启用状态原始值
  * @param sourceCreatedAt HIS返回创建时间原文
+ * @param dosageForm 来源剂型
+ * @param remark 来源备注
+ * @param packageUnit 来源包装单位
+ * @param conversionFactor 来源转换系数原文
+ * @param approvalNumber 来源国药准字号
+ * @param standardCode 来源药品本位码
+ * @param packageMaterial 来源包装材质
+ * @param processingMethod 来源炮制方法
+ * @param region 来源地区
+ * @param category 来源类别
  * @param latestBatchId 最近成功批次主键
  * @param latestBatchNo 最近成功批次编号
  * @param sourceOrganizationId 最近调用实际使用的HIS来源机构参数
@@ -41,6 +51,16 @@ public record MedicalDirectoryRecord(
         String manufacturerName,
         String sourceEnabledFlag,
         String sourceCreatedAt,
+        String dosageForm,
+        String remark,
+        String packageUnit,
+        String conversionFactor,
+        String approvalNumber,
+        String standardCode,
+        String packageMaterial,
+        String processingMethod,
+        String region,
+        String category,
         long latestBatchId,
         String latestBatchNo,
         String sourceOrganizationId,

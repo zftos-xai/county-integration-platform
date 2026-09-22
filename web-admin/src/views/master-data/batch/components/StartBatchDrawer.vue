@@ -2,9 +2,7 @@
 <script setup lang="ts">
 import {
   AlertCircle,
-  Database,
   LoaderCircle,
-  ShieldCheck,
   X,
 } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
@@ -85,6 +83,12 @@ watch(
   },
 )
 
+watch(fullSyncAvailable, (available) => {
+  if (!available && form.value.category === 'MEDICAL_DIRECTORY' && form.value.mode === 'FULL') {
+    form.value.mode = 'TIME_RANGE'
+  }
+}, { immediate: true })
+
 </script>
 
 <template>
@@ -140,19 +144,12 @@ watch(
         </section>
         <form
           v-else
-          class="work-form batch-start-form"
+          class="batch-start-form"
           @submit.prevent="emit('submit')"
         >
-          <section class="batch-form-section">
-            <div class="batch-section-heading">
-              <span>1</span>
-              <div>
-                <strong>选择 HIS 数据来源</strong>
-                <small>仅显示已启用且系统已自动确认可用的接口</small>
-              </div>
-            </div>
-            <label>
-              <span>机构</span>
+          <section class="batch-form-section" aria-label="HIS 数据来源">
+            <label class="batch-form-field">
+              <span>HIS 来源机构</span>
               <select v-model="form.organizationCode" required>
                 <option value="" disabled>请选择机构</option>
                 <option
@@ -166,59 +163,57 @@ watch(
             </label>
           </section>
 
-          <section class="batch-form-section">
-            <div class="batch-section-heading">
-              <span>2</span>
-              <div><strong>确认本次同步</strong></div>
+          <section class="batch-form-section" aria-label="同步设置">
+            <div class="batch-setup-grid">
+              <label class="batch-form-field">
+                <span>同步业务</span>
+                <select v-model="form.category" required>
+                  <option
+                    v-for="business in options.businesses"
+                    :key="business.category"
+                    :value="business.category"
+                  >
+                    {{ business.name }}
+                  </option>
+                </select>
+              </label>
+              <label class="batch-form-field">
+                <span>接口环境</span>
+                <select v-model="form.environment" required>
+                  <option
+                    v-for="environment in availableEnvironments"
+                    :key="environment"
+                    :value="environment"
+                  >
+                    {{ environmentLabel(environment) }}
+                  </option>
+                </select>
+              </label>
             </div>
-            <dl class="batch-confirmation">
-              <div>
-                <dt><Database :size="16" />同步业务</dt>
-                <dd>
-                  <select v-model="form.category" aria-label="同步业务" required>
-                    <option
-                      v-for="business in options.businesses"
-                      :key="business.category"
-                      :value="business.category"
-                    >
-                      {{ business.name }}
-                    </option>
-                  </select>
-                  <small v-if="selectedBusiness">
-                    基层 HIS 交易码 {{ selectedBusiness.tradeCode }}<template v-if="selectedBusiness.countTradeCode"> / {{ selectedBusiness.countTradeCode }}</template>
-                  </small>
-                </dd>
+            <small v-if="selectedBusiness" class="batch-field-help">
+              HIS 交易码：{{ selectedBusiness.tradeCode }}<template v-if="selectedBusiness.countTradeCode"> / {{ selectedBusiness.countTradeCode }}</template>
+            </small>
+            <fieldset v-if="selectedBusiness?.requiresTimeRange" class="batch-mode-field">
+              <legend>本次同步方式</legend>
+              <div class="batch-mode-options">
+                <label class="batch-mode-option" :class="{ 'is-selected': form.mode === 'FULL', 'is-disabled': !fullSyncAvailable }">
+                  <input v-model="form.mode" type="radio" value="FULL" :disabled="!fullSyncAvailable" />
+                  <span>全量同步</span>
+                </label>
+                <label class="batch-mode-option" :class="{ 'is-selected': form.mode === 'TIME_RANGE' }">
+                  <input v-model="form.mode" type="radio" value="TIME_RANGE" />
+                  <span>指定时间范围</span>
+                </label>
               </div>
-              <div>
-                <dt><ShieldCheck :size="16" />接口环境</dt>
-                <dd>
-                  <select v-model="form.environment" aria-label="接口环境" required>
-                    <option
-                      v-for="environment in availableEnvironments"
-                      :key="environment"
-                      :value="environment"
-                    >
-                      {{ environmentLabel(environment) }}
-                    </option>
-                  </select>
-                </dd>
-              </div>
-            </dl>
-            <div v-if="selectedBusiness?.requiresTimeRange" class="batch-range-field">
-              <strong>本次同步方式</strong>
-              <label><input v-model="form.mode" type="radio" value="FULL" />全量同步</label>
-              <label><input v-model="form.mode" type="radio" value="TIME_RANGE" />指定时间范围</label>
-              <small v-if="form.mode === 'FULL' && !fullSyncAvailable" role="status">
-                当前机构和接口环境尚未登记经来源方确认的全量规则，不能执行全量同步。
-              </small>
-            </div>
+              <small v-if="!fullSyncAvailable" class="batch-mode-note">当前机构与环境尚未配置全量规则，暂不可选全量同步。</small>
+            </fieldset>
             <div v-if="selectedBusiness?.requiresTimeRange && form.mode === 'TIME_RANGE'" class="batch-range-field">
-              <strong>来源数据时间范围（北京时间 UTC+08:00）</strong>
-              <small>100-005 与 100-004 会使用完全相同的时间范围；请按接口提供方确认的口径填写。</small>
-              <div>
-                <label><span>开始时间</span><input v-model="form.rangeStart" type="datetime-local" required /></label>
-                <label><span>结束时间</span><input v-model="form.rangeEnd" type="datetime-local" required /></label>
+              <strong>查询时间范围 <span>（北京时间）</span></strong>
+              <div class="batch-range-grid">
+                <label class="batch-form-field"><span>开始时间</span><input v-model="form.rangeStart" type="datetime-local" required /></label>
+                <label class="batch-form-field"><span>结束时间</span><input v-model="form.rangeEnd" type="datetime-local" required /></label>
               </div>
+              <small>数量核对与目录查询使用同一范围，请按 HIS 提供方确认的口径填写。</small>
             </div>
           </section>
         </form>
@@ -268,52 +263,59 @@ watch(
   box-shadow: 0 24px 70px rgb(20 34 44 / 24%);
 }
 .batch-dialog-header {
-  padding: 20px 22px 16px;
+  padding: 18px 22px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid #e1e7e9;
 }
 .batch-dialog-header h2 { margin: 0; color: #1f3039; font-size: 20px; }
-.batch-dialog-body { padding: 20px 22px; overflow-y: auto; }
+.batch-dialog-body { padding: 16px 22px 18px; overflow-y: auto; }
 .sync-source-unavailable { padding: 14px; border: 1px solid #ead6a8; border-radius: 6px; background: #fffaf0; display: grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:start; gap:10px; color:#805819; }
 .sync-source-unavailable>div { display:grid; gap:4px; }.sync-source-unavailable strong { color:#6f4d16; font-size:14px; }.sync-source-unavailable span { font-size:12px; line-height:1.6; }.sync-source-unavailable button { white-space:nowrap; }
 .batch-start-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
+  gap: 14px;
 }
-.batch-form-section { min-width: 0; padding: 16px; border: 1px solid #dfe6e8; border-radius: 7px; }
-.batch-section-heading { margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
-.batch-section-heading > span { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: #e5f3ef; color: #176f61; font-weight: 700; }
-.batch-section-heading div { display: grid; gap: 2px; }
-.batch-section-heading strong { color: #2b414a; font-size: 13px; }
-.batch-section-heading small { color: #7b8990; font-size: 10px; font-weight: 500; }
-.batch-start-form label {
+.batch-form-section { min-width: 0; }
+.batch-form-section + .batch-form-section { padding-top: 14px; border-top: 1px solid #e1e7e9; }
+.batch-start-form .batch-form-field {
   display: grid;
-  gap: 7px;
+  min-width: 0;
+  gap: 6px;
   color: #40545d;
   font-size: 12px;
   font-weight: 650;
 }
-.batch-start-form select {
+.batch-start-form select,
+.batch-start-form input[type="datetime-local"] {
+  width: 100%;
   min-height: 40px;
   padding: 0 11px;
   border: 1px solid #cfd9dd;
   border-radius: 5px;
   background: #fff;
   color: #263741;
+  font-size: 12px;
+  outline-color: var(--accent);
 }
-.batch-confirmation { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.batch-confirmation > div { padding: 11px 12px; border-radius: 5px; background: #f6f8f9; }
-.batch-confirmation dt { display: flex; align-items: center; gap: 6px; color: #718089; font-size: 10px; }
-.batch-confirmation dd { margin: 7px 0 0; color: #2b414a; font-size: 12px; font-weight: 650; }
-.batch-confirmation dd > small { display: block; margin-top: 3px; color: #7b8990; font-size: 10px; font-weight: 500; }
-.batch-confirmation select { width: 100%; min-height: 32px; padding: 0 8px; }
-.batch-range-field { margin-top: 12px; display: grid; gap: 7px; color: #40545d; }
-.batch-range-field > strong { font-size: 12px; }.batch-range-field > small { color: #718089; font-size: 11px; line-height: 1.5; }
-.batch-range-field > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.batch-range-field label { font-size: 11px; }.batch-range-field input { min-height: 38px; padding: 0 9px; border: 1px solid #cfd9dd; border-radius: 5px; color: #263741; }
+.batch-setup-grid,
+.batch-range-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.batch-field-help { display: block; margin-top: 6px; color: #718089; font-size: 11px; line-height: 1.5; }
+.batch-mode-field { min-width: 0; margin: 12px 0 0; padding: 0; border: 0; }
+.batch-mode-field legend { margin-bottom: 8px; padding: 0; color: #40545d; font-size: 12px; font-weight: 700; }
+.batch-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.batch-start-form .batch-mode-option { min-height: 42px; padding: 8px 11px; display: flex; align-items: center; gap: 9px; border: 1px solid #cfd9dd; border-radius: 5px; background: #fff; cursor: pointer; }
+.batch-mode-option.is-selected { border-color: #70ae9f; background: #f1f8f6; color: #176f61; }
+.batch-mode-option.is-disabled { color: #87949a; background: #f6f8f9; cursor: not-allowed; }
+.batch-mode-option input[type="radio"] { width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: #176f61; }
+.batch-mode-note { display: block; margin-top: 7px; color: #718089; font-size: 11px; line-height: 1.5; }
+.batch-range-field { margin-top: 12px; display: grid; gap: 6px; color: #40545d; }
+.batch-range-field > strong { font-size: 12px; }
+.batch-range-field > strong span { color: #718089; font-weight: 500; }
+.batch-range-field > small { color: #718089; font-size: 11px; line-height: 1.5; }
 .batch-dialog-footer {
   min-height: 64px;
   padding: 12px 22px;
@@ -334,7 +336,10 @@ watch(
 @media (max-width: 640px) {
   .batch-dialog-backdrop { padding: 0; place-items: end center; }
   .batch-start-dialog { width: 100%; max-height: 92vh; border-radius: 10px 10px 0 0; }
-  .batch-confirmation { grid-template-columns: 1fr; }
-  .batch-range-field > div { grid-template-columns: 1fr; }
+  .batch-setup-grid,
+  .batch-range-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 420px) {
+  .batch-mode-options { grid-template-columns: 1fr; }
 }
 </style>
