@@ -24,9 +24,11 @@
 ## Java 与 AI Coding
 
 - Java、MyBatis 和数据库修改必须遵守 `docs/standards/java-coding-guidelines.md`。
+- 跨 Controller、Service、Mapper、权限、数据库或外部接口的改动，编码前先读完整调用链并明确关键方法签名、参数来源、鉴权与机构范围位置、失败语义，以及新增对象不可由现有类型表达的原因；先用越权、内部调用、重复请求或结果未知等反例检验设计。局部简单修复不强制写设计文档，不能把实现后的勾选表当作事前设计。
 - Java基础包统一为`cn.zqkj.platform`；采用易于定位的`controller / domain / mapper / service / service.impl`分包。`controller`只放Controller，输入对象放`domain/dto`，API输出对象放`domain/vo`并使用`VO`后缀，内部模型放`domain/model`。`mapper`只放MyBatis Mapper接口，不增加Repository或MyBatis适配实现，XML放`resources/mapper/<业务域>`。Controller依赖Service接口，事务和业务规则由`service.impl`实现。
+- 分包不意味着每层都复制一个对象；只有独立契约、必要转换、敏感字段隔离或真实复用才新增 Request、Command、Query 或 VO。逐字段原样转抄和用可空字段混合不同操作必须在评审中说明理由。
 - 不再使用`modules/<模块>/api/application/infrastructure`多重目录。`common`只能包含跨业务且边界明确的基础类型，不得演变为通用工具或业务规则堆放区；不创建空包占位，不引入无边界的`shared`或`utils`包。
-- 所有新增或修改的类、接口、枚举、`record` 和方法必须添加准确的 Javadoc，并随实现同步更新。
+- 所有新增或修改的类、接口、枚举、`record` 及非私有方法必须添加准确的 Javadoc；私有方法仅在承担非显然业务规则、权限、事务、外部调用或异常语义时补充说明，简单辅助方法优先用清楚的名称表达意图。注释须随实现同步更新，不得逐行复述代码。
 - AI 生成内容必须经过需求、权限、数据安全、兼容性、测试和实际差异检查；不得编造接口规范、环境条件或验证结果。
 
 ## 前端开发

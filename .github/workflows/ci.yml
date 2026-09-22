@@ -5,13 +5,7 @@ on:
   pull_request:
 
 jobs:
-  governance:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - run: python3 plugins/team-engineering-standards/skills/project-engineering-guardrails/scripts/audit_repository.py . --strict
-
-  backend:
+  verify:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -23,28 +17,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node tools/verify-java-package-layout.mjs
-      - run: node tools/verify-java-comments.mjs
-      - run: node tools/verify-mapper-comments.mjs
-      - run: mvn -B verify
-        working-directory: backend
-
-  sql-migrations:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: node tools/verify-sql-migrations.mjs
-
-  frontend:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm run verify:frontend
+      - run: ./tools/verify.sh

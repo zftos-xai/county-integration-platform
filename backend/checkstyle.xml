@@ -19,7 +19,7 @@
             <property name="scope" value="private"/>
         </module>
         <module name="MissingJavadocMethod">
-            <property name="scope" value="private"/>
+            <property name="scope" value="package"/>
             <property name="allowedAnnotations" value="Generated"/>
         </module>
     </module>

@@ -98,7 +98,7 @@ function verifySystemDomainLayout(sourcePath, source) {
   }
 
   const packagePath = relative(systemRoot, join(sourcePath, ".."));
-  const allowed = /^(?:identity|organization|configuration|audit|bootstrap)\/(?:controller|mapper)$|^(?:identity|organization|configuration|audit|bootstrap)\/domain\/(?:dto|model|vo)$|^(?:identity|organization|configuration|audit|bootstrap)\/service(?:\/impl)?$/;
+  const allowed = /^configuration\/validation$|^(?:identity|organization|configuration|audit|bootstrap)\/(?:controller|mapper)$|^(?:identity|organization|configuration|audit|bootstrap)\/domain\/(?:dto|model|vo)$|^(?:identity|organization|configuration|audit|bootstrap)\/service(?:\/impl)?$/;
   if (!allowed.test(packagePath)) {
     violations.push(`${relative(projectRoot, sourcePath)}: system 必须按 identity、organization、configuration、audit、bootstrap 子域归属`);
   }

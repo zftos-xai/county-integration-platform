@@ -14,6 +14,7 @@ const mapperRoot = path.join(projectRoot, 'backend/src/main/resources/mapper');
 const migrationRoot = path.join(projectRoot, 'backend/src/main/resources/db/migration');
 
 const persistenceContracts = new Map([
+  ['cn.zqkj.platform.system.configuration.domain.model.EncryptedExternalEndpointCredential', ['sys_external_endpoint_credential']],
   ['cn.zqkj.platform.databasecontract.domain.model.DatabaseContractPlanItemSnapshot', ['db_contract_plan_item', 'db_contract_plan']],
   ['cn.zqkj.platform.databasecontract.domain.model.DatabaseContractPlanSnapshot', ['db_contract_plan']],
   ['cn.zqkj.platform.exchange.domain.model.ExchangeRuntimeRecord', ['exch_exchange_record']],
@@ -21,9 +22,11 @@ const persistenceContracts = new Map([
   ['cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryRecord', ['md_hospital_directory', 'org_organization', 'md_sync_batch', 'md_hospital_directory_relation']],
   ['cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryRelationRecord', ['md_hospital_directory_relation']],
   ['cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySourceRecord', ['md_hospital_directory']],
-  ['cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectorySyncResult', ['md_hospital_directory_sync_result']],
-  ['cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectorySyncResult', ['md_medical_directory_sync_result']],
-  ['cn.zqkj.platform.masterdata.domain.hospitaldirectory.model.HospitalDirectoryTypeCount', ['md_hospital_directory', 'org_organization']],
+  ['cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO', ['md_hospital_directory_sync_result']],
+  ['cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectorySyncResultVO', ['md_medical_directory_sync_result']],
+  ['cn.zqkj.platform.masterdata.domain.medicaldirectory.model.MedicalDirectoryRecord', ['md_medical_directory', 'org_organization', 'md_sync_batch']],
+  ['cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectoryCountVO', ['md_medical_directory', 'org_organization']],
+  ['cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectoryCountVO', ['md_hospital_directory', 'org_organization']],
   ['cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchSnapshot', ['md_sync_batch', 'org_organization']],
   ['cn.zqkj.platform.system.configuration.domain.model.DictionaryItem', ['sys_dictionary_item', 'sys_dictionary_type']],
   ['cn.zqkj.platform.system.configuration.domain.model.DictionaryType', ['sys_dictionary_type']],
@@ -32,6 +35,9 @@ const persistenceContracts = new Map([
   ['cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointScope', ['sys_external_endpoint', 'sys_external_system', 'org_organization', 'sys_external_endpoint_credential']],
   ['cn.zqkj.platform.system.configuration.domain.model.ExternalSystem', ['sys_external_system']],
   ['cn.zqkj.platform.system.identity.domain.model.ManagedUserSummary', ['sys_user', 'org_organization']],
+  ['cn.zqkj.platform.system.identity.domain.model.UserRoleAssignment', ['sys_user_role']],
+  ['cn.zqkj.platform.system.identity.domain.model.UserOrganizationAssignment', ['sys_user_organization_scope']],
+  ['cn.zqkj.platform.system.identity.domain.model.RolePermissionAssignment', ['sys_role_permission']],
   ['cn.zqkj.platform.system.audit.domain.model.ManagementAuditEvent', ['audit_management_event']],
   ['cn.zqkj.platform.system.configuration.domain.model.ParameterValue', ['sys_parameter_value', 'org_organization']],
   ['cn.zqkj.platform.system.identity.domain.model.RoleSummary', ['sys_role', 'sys_role_permission']],

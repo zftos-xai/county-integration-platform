@@ -23,6 +23,9 @@ python3 "$project_root/plugins/team-engineering-standards/skills/project-enginee
 echo "Checking Java package layout..."
 node "$project_root/tools/verify-java-package-layout.mjs"
 
+echo "Checking Controller identity mapping..."
+node "$project_root/tools/verify-controller-boundaries.mjs"
+
 echo "Checking Java comment quality and persistence-model table documentation..."
 node "$project_root/tools/verify-java-comments.mjs"
 
