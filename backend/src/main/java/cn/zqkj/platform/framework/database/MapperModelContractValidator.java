@@ -1,5 +1,7 @@
 package cn.zqkj.platform.framework.database;
 
+import cn.zqkj.platform.common.utils.Func;
+
 import org.apache.ibatis.mapping.ResultMap;
 import org.apache.ibatis.mapping.ResultMapping;
 import org.apache.ibatis.session.Configuration;
@@ -9,7 +11,6 @@ import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /** 在应用启动时核对MyBatis构造映射与Java记录组件。 */
@@ -112,17 +113,7 @@ public class MapperModelContractValidator {
         if (COLUMN_NAME_OVERRIDES.containsKey(overrideKey)) {
             return COLUMN_NAME_OVERRIDES.get(overrideKey);
         }
-        return COMPONENT_COLUMN_CONVENTIONS.getOrDefault(componentName, toSnakeCase(componentName));
-    }
-
-    /**
-     * 将Java驼峰组件名转换成默认下划线结果列名。
-     *
-     * @param value Java组件名
-     * @return 小写下划线列名
-     */
-    private String toSnakeCase(String value) {
-        return value.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase(Locale.ROOT);
+        return COMPONENT_COLUMN_CONVENTIONS.getOrDefault(componentName, Func.toSnakeCase(componentName));
     }
 
     /**

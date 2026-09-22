@@ -2,7 +2,6 @@ package cn.zqkj.platform.system.bootstrap.controller;
 
 import cn.zqkj.platform.common.core.ApiResponse;
 import cn.zqkj.platform.system.bootstrap.domain.dto.BootstrapCommand;
-import cn.zqkj.platform.system.bootstrap.domain.dto.BootstrapRequest;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapResultVO;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapStatusVO;
 import cn.zqkj.platform.system.identity.service.IdentityService;
@@ -55,12 +54,8 @@ public class BootstrapController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<BootstrapResultVO> bootstrap(
             @RequestHeader("X-Platform-Bootstrap-Secret") String bootstrapSecret,
-            @Valid @RequestBody BootstrapRequest request
+            @Valid @RequestBody BootstrapCommand request
     ) {
-        BootstrapCommand command = new BootstrapCommand(
-                request.organizationCode(), request.organizationName(), request.organizationType(),
-                request.loginName(), request.displayName(), request.initialPassword()
-        );
-        return ApiResponse.success(service.bootstrap(bootstrapSecret, command));
+        return ApiResponse.success(service.bootstrap(bootstrapSecret, request));
     }
 }

@@ -122,10 +122,10 @@
     </update>
 
     <update id="markFailed">
-        <!-- DDL事务回滚后单独记录失败摘要 -->
+        <!-- DDL事务回滚后仅对原行版本仍已批准的方案记录本次失败，避免覆盖并发操作。 -->
         UPDATE db_contract_plan SET status = N'FAILED', failure_message = #{message},
                executed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
-        WHERE id = #{id} AND status IN (N'APPROVED', N'EXECUTING')
+        WHERE id = #{id} AND status = N'APPROVED' AND row_version = #{version}
     </update>
 
     <update id="cancel">

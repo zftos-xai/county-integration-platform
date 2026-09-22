@@ -102,7 +102,7 @@ class DatabaseContractMaintenanceSecurityWebTest {
      */
     private void prepareAccount(List<String> permissions) {
         when(identityMapper.findById(1L)).thenReturn(
-                new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false));
+                new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false, new byte[8]));
         when(identityMapper.findPermissionCodes(1L)).thenReturn(permissions);
         when(identityMapper.findOrganizationCodes(1L)).thenReturn(List.of("ORG001"));
     }
@@ -118,6 +118,6 @@ class DatabaseContractMaintenanceSecurityWebTest {
         permissions.forEach(value -> authorities.add(new SimpleGrantedAuthority(value)));
         authorities.add(new SimpleGrantedAuthority("ORG:ORG001"));
         return new PlatformUserPrincipal(
-                1L, "admin", "Administrator", null, 10L, "ORG001", true, false, authorities);
+                1L, "admin", "Administrator", null, 10L, "ORG001", true, false, authorities, new byte[8]);
     }
 }

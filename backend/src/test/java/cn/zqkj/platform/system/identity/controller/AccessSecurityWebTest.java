@@ -1,23 +1,25 @@
 package cn.zqkj.platform.system.identity.controller;
 
-import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
-import cn.zqkj.platform.framework.config.SecurityConfiguration;
 import cn.zqkj.platform.common.exception.GlobalExceptionHandler;
+import cn.zqkj.platform.framework.config.SecurityConfiguration;
+import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
+import cn.zqkj.platform.system.identity.domain.model.UserAccount;
+import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import cn.zqkj.platform.system.identity.service.RoleAdministrationService;
 import cn.zqkj.platform.system.identity.service.UserAdministrationService;
-import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
-import cn.zqkj.platform.system.identity.domain.model.UserAccount;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.util.List;
-import java.util.Optional;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -46,6 +48,37 @@ class AccessSecurityWebTest {
 
     @MockitoBean
     private UserDetailsService userDetailsService;
+
+    /**
+     * 角色与机构列表中的空元素、非正主键和过短密码都在入口拒绝。
+     * @throws Exception MockMvc 调用失败时抛出
+     */
+    @Test
+    void validatesRelationshipIdsAndPasswordBeforeService() throws Exception {
+        prepareActiveAccount("access:write");
+        for (String element : List.of("null", "0", "-1")) {
+            mockMvc.perform(MockMvcRequestBuilders
+                            .put("/api/v1/users/2/roles").with(user(principal("access:write")))
+                            .with(SecurityMockMvcRequestPostProcessors.csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"roleIds\":[" + element + "]}"))
+                    .andExpect(status().isBadRequest());
+            mockMvc.perform(MockMvcRequestBuilders
+                            .put("/api/v1/users/2/organization-scopes").with(user(principal("access:write")))
+                            .with(SecurityMockMvcRequestPostProcessors.csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"organizationIds\":[" + element + "]}"))
+                    .andExpect(status().isBadRequest());
+        }
+        prepareActiveAccount("identity:write");
+        mockMvc.perform(MockMvcRequestBuilders
+                        .post("/api/v1/users/2/password-reset").with(user(principal("identity:write")))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"temporaryPassword\":\"short\"}"))
+                .andExpect(status().isBadRequest());
+        Mockito.verifyNoInteractions(userAdministrationService, roleAdministrationService);
+    }
 
     /**
      * 验证具有读取权限和机构范围的用户可进入用户查询服务。
@@ -85,7 +118,7 @@ class AccessSecurityWebTest {
     void invalidatesSessionAfterPermissionChange() throws Exception {
         PlatformUserPrincipal principal = principal("identity:read");
         when(identityMapper.findById(1L)).thenReturn(
-                new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false)
+                new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false, new byte[8])
         );
         when(identityMapper.findPermissionCodes(1L)).thenReturn(List.of());
         when(identityMapper.findOrganizationCodes(1L)).thenReturn(List.of("ORG001"));
@@ -108,8 +141,7 @@ class AccessSecurityWebTest {
                         new SimpleGrantedAuthority("ORG:ORG001")
                 );
         return new PlatformUserPrincipal(
-                1L, "admin", "Administrator", null, 10L, "ORG001", true, false, authorities
-        );
+                1L, "admin", "Administrator", null, 10L, "ORG001", true, false, authorities, new byte[8]);
     }
 
     /**
@@ -119,7 +151,7 @@ class AccessSecurityWebTest {
      */
     private void prepareActiveAccount(String permission) {
         when(identityMapper.findById(1L)).thenReturn(
-                new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false)
+                new UserAccount(1L, "admin", "Administrator", "hash", 10L, "ORG001", true, false, new byte[8])
         );
         when(identityMapper.findPermissionCodes(1L)).thenReturn(
                 permission == null ? List.of() : List.of(permission)

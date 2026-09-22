@@ -1,15 +1,16 @@
 package cn.zqkj.platform.his.service.impl;
 
 import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.his.client.PhisInvocationContext;
 import cn.zqkj.platform.his.client.PhisProtocolClient;
 import cn.zqkj.platform.his.client.PhisRequestValidator;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
-import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
-import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
+import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
 import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
 import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
 import cn.zqkj.platform.his.domain.protocol.model.PhisTrade;
@@ -23,13 +24,12 @@ import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointAuthen
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointRuntimeConfiguration;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
 import cn.zqkj.platform.system.configuration.service.ExternalEndpointResolutionService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
 import java.net.URI;
 import java.util.List;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
 /**
  * 解析机构配置、装配可信认证字段并通过SOAP适配器调用基层HIS。
@@ -60,7 +60,7 @@ public class PhisServiceImpl implements PhisService {
     }
 
     /**
-     * {@inheritDoc}
+     * 通过机构已验证端点查询医院综合目录。
      *
      * <p>仅使用已启用且校验通过的机构端点；按“未发送、结果未知、完成”区分运行日志，
      * 不记录地址、请求正文或认证信息。</p>
@@ -77,7 +77,7 @@ public class PhisServiceImpl implements PhisService {
     }
 
     /**
-     * {@inheritDoc}
+     * 通过待验证端点检查医院综合目录查询能力。
      *
      * <p>供端点启用前的能力校验使用，允许读取已配置但尚未验证的端点，且不绕过机构绑定检查。</p>
      */
@@ -93,7 +93,7 @@ public class PhisServiceImpl implements PhisService {
     }
 
     /**
-     * {@inheritDoc}
+     * 通过机构已验证端点读取一页医疗目录。
      *
      * <p>解析已启用端点后调用100-004，并将通信或协议异常记录为结果未知；不在此层自动重试。</p>
      */
@@ -107,7 +107,7 @@ public class PhisServiceImpl implements PhisService {
     }
 
     /**
-     * {@inheritDoc}
+     * 通过机构已验证端点读取同范围医疗目录数量。
      *
      * <p>解析已启用端点后调用100-005，并保留通信失败与HIS业务失败的语义差异。</p>
      */
@@ -121,7 +121,7 @@ public class PhisServiceImpl implements PhisService {
     }
 
     /**
-     * {@inheritDoc}
+     * 通过机构已验证端点查询 HIS 机构信息。
      *
      * <p>使用已启用端点执行100-008，并统一输出不含敏感配置的运行日志。</p>
      */
@@ -137,7 +137,7 @@ public class PhisServiceImpl implements PhisService {
     }
 
     /**
-     * {@inheritDoc}
+     * 通过待验证端点查询 HIS 机构，供配置确认使用。
      *
      * <p>供端点配置校验使用，可调用尚未启用的已配置端点，但仍执行参数和机构范围校验。</p>
      */
@@ -184,11 +184,12 @@ public class PhisServiceImpl implements PhisService {
             logCompletion(organizationId, environment, trade, response, startedAt);
             return response;
         } catch (PhisConfigurationException | PhisRequestException exception) {
-            logFailure(organizationId, environment, trade, "未发送", exception.getMessage(), startedAt);
+            logFailure(organizationId, environment, trade, "未发送",
+                    exception instanceof PhisConfigurationException ? "接口配置不可用" : "请求参数不符合协议", startedAt);
             throw exception;
         } catch (PhisCommunicationException | PhisProtocolException exception) {
             logFailure(organizationId, environment, trade, "结果未知",
-                    conciseReason(exception.getMessage()), startedAt);
+                    exception instanceof PhisCommunicationException ? "通信失败或超时" : "响应不符合协议", startedAt);
             throw exception;
         } catch (RuntimeException exception) {
             logFailure(organizationId, environment, trade,
@@ -255,10 +256,9 @@ public class PhisServiceImpl implements PhisService {
             long startedAt
     ) {
         String outcome = response.success() ? "成功" : "业务失败";
-        String result = outcome + "(" + response.resultCode() + ")";
         String template = "HIS交易｜{}｜机构{}/{}｜{}｜耗时{}";
         Object[] values = {tradeLabel(trade), organizationId,
-                environmentName(environment), result, formatDuration(elapsedMillis(startedAt))};
+                environmentName(environment), outcome, formatDuration(elapsedMillis(startedAt))};
         if (response.success()) {
             LOGGER.info(template, values);
         } else {
@@ -309,7 +309,11 @@ public class PhisServiceImpl implements PhisService {
         if (environment == null) {
             return "环境未知";
         }
-        return environment == ParameterEnvironment.PRODUCTION ? "生产" : "测试";
+        return switch (environment) {
+            case DEVELOPMENT -> "开发";
+            case TEST -> "测试";
+            case PRODUCTION -> "生产";
+        };
     }
 
     /**
@@ -346,19 +350,6 @@ public class PhisServiceImpl implements PhisService {
     }
 
     /**
-     * 压缩并清理外部调用异常原因，避免重复状态文字和换行。
-     *
-     * @param reason 安全异常原因
-     * @return 去除与结果状态重复文字后的简短原因
-     */
-    private String conciseReason(String reason) {
-        if (reason == null || reason.isBlank()) {
-            return "通信失败";
-        }
-        return reason.replace("，结果未知", "");
-    }
-
-    /**
      * 读取本次HIS调用使用的机构授权码。
      *
      * @param authentication 机构认证信息
@@ -368,22 +359,10 @@ public class PhisServiceImpl implements PhisService {
         if (authentication == null) {
             throw new PhisConfigurationException("当前机构未配置基层HIS认证信息");
         }
-        return requireSecret(
-                authentication.authorizationCode(), "当前机构未配置HIS授权码");
-    }
-
-    /**
-     * 校验运行期认证字段存在且不为空白。
-     *
-     * @param value 认证字段
-     * @param message 缺失提示
-     * @return 非空认证字段
-     */
-    private String requireSecret(String value, String message) {
-        if (value == null || value.isBlank()) {
-            throw new PhisConfigurationException(message);
+        if (Func.isBlank(authentication.authorizationCode())) {
+            throw new PhisConfigurationException("当前机构未配置HIS授权码");
         }
-        return value;
+        return authentication.authorizationCode();
     }
 
     /** 限定业务调用允许解析的HIS端点状态。 */

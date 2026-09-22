@@ -1,28 +1,40 @@
 package cn.zqkj.platform.system.organization.service;
-import cn.zqkj.platform.system.organization.service.impl.OrganizationServiceImpl;
 
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
-import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.domain.dto.UpdateOrganizationCommand;
+import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.mapper.OrganizationMapper;
-import org.junit.jupiter.api.Test;
-
+import cn.zqkj.platform.system.organization.service.impl.OrganizationServiceImpl;
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.time.OffsetDateTime;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.any;
 
 /**
  * 验证机构编码、层级、停用和并发边界。
  */
 class OrganizationServiceTest {
+
+    /** 无法取得机构树事务锁时，不读取父链，也不执行任何修改。 */
+    @Test
+    void rejectsHierarchyWriteWhenLockFails() {
+        OrganizationMapper mapper = mock(OrganizationMapper.class);
+        when(mapper.lockHierarchy()).thenReturn(-1);
+        var service = new OrganizationServiceImpl(mapper);
+        assertThrows(ResourceConflictException.class, () -> service.update(1L,
+                new UpdateOrganizationCommand("Updated", "HOSPITAL", 2L, null, null, version()), "admin"));
+        verify(mapper).lockHierarchy();
+        org.mockito.Mockito.verifyNoMoreInteractions(mapper);
+    }
 
     /**
      * 验证重复机构编码在进入写入边界前被拒绝。
@@ -70,10 +82,10 @@ class OrganizationServiceTest {
         assertThrows(ResourceConflictException.class,
                 () -> service.setEnabled(1L, false, version(), "admin"));
         verify(mapper, never()).setEnabled(
-                org.mockito.ArgumentMatchers.eq(1L),
-                org.mockito.ArgumentMatchers.eq(false),
+                ArgumentMatchers.eq(1L),
+                ArgumentMatchers.eq(false),
                 any(byte[].class),
-                org.mockito.ArgumentMatchers.eq("admin")
+                ArgumentMatchers.eq("admin")
         );
     }
 
@@ -99,23 +111,23 @@ class OrganizationServiceTest {
     @Test
     void normalizesCreateText() {
         OrganizationMapper mapper = mock(OrganizationMapper.class);
-        when(mapper.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("admin")))
+        when(mapper.create(ArgumentMatchers.any(), ArgumentMatchers.eq("admin")))
                 .thenReturn(1L);
         when(mapper.findById(1L)).thenReturn(view(1L, null, true));
         OrganizationService service = new OrganizationServiceImpl(mapper);
         CreateOrganizationCommand command = new CreateOrganizationCommand(
                 " ORG001 ", " County Hospital ", " HOSPITAL ", null,
-                LocalDateTime.of(2026, 9, 16, 0, 0), null
+                OffsetDateTime.parse("2026-09-16T00:00:00Z"), null
         );
 
         OrganizationVO result = service.create(command, " admin ");
 
         assertEquals(1L, result.id());
         verify(mapper).create(
-                org.mockito.ArgumentMatchers.argThat(value -> "ORG001".equals(value.organizationCode())
+                ArgumentMatchers.argThat(value -> "ORG001".equals(value.organizationCode())
                         && "County Hospital".equals(value.organizationName())
                         && "HOSPITAL".equals(value.organizationType())),
-                org.mockito.ArgumentMatchers.eq("admin")
+                ArgumentMatchers.eq("admin")
         );
     }
 

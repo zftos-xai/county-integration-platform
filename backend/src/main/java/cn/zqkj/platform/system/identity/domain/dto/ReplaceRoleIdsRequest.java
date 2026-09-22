@@ -1,9 +1,7 @@
 package cn.zqkj.platform.system.identity.domain.dto;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-
 import java.util.List;
 
 /**
@@ -11,5 +9,5 @@ import java.util.List;
  *
  * @param roleIds 目标角色主键
  */
-public record ReplaceRoleIdsRequest(@NotNull List<@Valid @Positive Long> roleIds) {
+public record ReplaceRoleIdsRequest(@NotNull List<@NotNull @Positive Long> roleIds) {
 }

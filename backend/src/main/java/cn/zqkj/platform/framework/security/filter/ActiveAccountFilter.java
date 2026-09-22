@@ -1,24 +1,26 @@
 package cn.zqkj.platform.framework.security.filter;
 
-import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
+import cn.zqkj.platform.common.utils.Func;
+import java.util.Objects;
+import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import java.io.IOException;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 /**
- * 在每个已认证请求上复核用户和主机构仍处于启用状态。
+ * 逐请求复核账号版本、启用状态与权限，撤销改密、停用或授权变化前的旧会话。
  */
 public class ActiveAccountFilter extends OncePerRequestFilter {
 
@@ -34,10 +36,10 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
     }
 
     /**
-     * {@inheritDoc}
+     * 每次请求重新确认账号、权限和机构范围，变化后立即使旧会话失效。
      *
-     * <p>对已经认证的本地账号逐请求复查数据库启用状态；账号被停用或删除后立即清除认证，
-     * 防止既有会话继续访问受保护资源。</p>
+     * <p>使用用户行版本而非密码哈希判断账号变更；改密、重置和账号资料更新均撤销旧会话。
+     * 角色与机构授权另行比较，避免仅修改关联表时漏掉权限撤销。</p>
      */
     @Override
     protected void doFilterInternal(
@@ -47,8 +49,9 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof PlatformUserPrincipal principal) {
-            boolean active = java.util.Optional.ofNullable(mapper.findById(principal.userId()))
+            boolean active = Optional.ofNullable(mapper.findById(principal.userId()))
                     .map(account -> account.enabled()
+                            && Objects.equals(Func.encodeBase64(account.version()), principal.accountVersion())
                             && account.loginName().equals(principal.getUsername())
                             && account.primaryOrganizationId() == principal.primaryOrganizationId()
                             && account.organizationCode().equals(principal.organizationCode())

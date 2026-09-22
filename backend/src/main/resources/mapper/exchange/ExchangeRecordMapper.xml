@@ -39,11 +39,11 @@
         WHERE organization_code = #{organizationCode}
         <if test="receivedFrom != null">
             <!-- 可选接收时间UTC下界，包含边界 -->
-            AND received_at &gt;= #{receivedFrom}
+            AND received_at &gt;= #{receivedFromUtc}
         </if>
         <if test="receivedTo != null">
             <!-- 可选接收时间UTC上界，包含边界 -->
-            AND received_at &lt;= #{receivedTo}
+            AND received_at &lt;= #{receivedToUtc}
         </if>
         <if test="interfaceCode != null and interfaceCode != ''">
             <!-- 可选接口交易代码精确过滤 -->

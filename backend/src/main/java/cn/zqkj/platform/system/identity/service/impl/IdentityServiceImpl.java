@@ -5,24 +5,23 @@ import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.system.bootstrap.domain.dto.BootstrapCommand;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapResultVO;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapStatusVO;
-import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
-import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.identity.domain.model.UserAccount;
 import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import cn.zqkj.platform.system.identity.service.IdentityService;
+import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
+import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.service.OrganizationService;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
+import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 实现平台一次性安全引导、初始管理员创建和本地密码修改。
@@ -32,9 +31,6 @@ public class IdentityServiceImpl implements IdentityService {
 
     private static final String BOOTSTRAP_ACTOR = "platform-bootstrap";
     private static final int MINIMUM_BOOTSTRAP_SECRET_LENGTH = 32;
-    private static final int MINIMUM_PASSWORD_LENGTH = 9;
-    private static final int MAXIMUM_PASSWORD_LENGTH = 128;
-    private static final Pattern LOGIN_PATTERN = Pattern.compile("[A-Za-z0-9._-]{3,64}");
     private static final Map<String, String> INITIAL_PERMISSIONS = initialPermissions();
 
     private final IdentityMapper mapper;
@@ -85,36 +81,40 @@ public class IdentityServiceImpl implements IdentityService {
     @Override
     public BootstrapResultVO bootstrap(String suppliedSecret, BootstrapCommand command) {
         validateBootstrapSecret(suppliedSecret);
-        BootstrapCommand normalized = normalize(command);
+        rejectPasswordContainingLogin(command.initialPassword(), command.loginName());
         if (mapper.lockAndCountUsers() > 0) {
             throw new ResourceConflictException("平台初始管理员已经创建，不能重复初始化");
         }
 
         OrganizationVO organization = organizationService.create(
                 new CreateOrganizationCommand(
-                        normalized.organizationCode(),
-                        normalized.organizationName(),
-                        normalized.organizationType(),
+                        command.organizationCode(),
+                        command.organizationName(),
+                        command.organizationType(),
                         null,
                         null,
                         null
                 ),
                 BOOTSTRAP_ACTOR
         );
-        INITIAL_PERMISSIONS.forEach(mapper::upsertPermission);
+        for (Map.Entry<String, String> permission : INITIAL_PERMISSIONS.entrySet()) {
+            mapper.upsertPermission(permission.getKey(), permission.getValue());
+        }
         long roleId = mapper.createRole("PLATFORM_ADMIN", "平台管理员", BOOTSTRAP_ACTOR);
         long userId = mapper.createUser(
-                normalized,
-                passwordEncoder.encode(normalized.initialPassword()),
+                command,
+                passwordEncoder.encode(command.initialPassword()),
                 organization.id(),
                 BOOTSTRAP_ACTOR
         );
-        INITIAL_PERMISSIONS.keySet().forEach(code -> mapper.grantPermission(roleId, code, BOOTSTRAP_ACTOR));
+        for (String code : INITIAL_PERMISSIONS.keySet()) {
+            mapper.grantPermission(roleId, code, BOOTSTRAP_ACTOR);
+        }
         mapper.grantRole(userId, roleId, BOOTSTRAP_ACTOR);
         mapper.grantOrganization(userId, organization.id(), BOOTSTRAP_ACTOR);
         return new BootstrapResultVO(
                 userId,
-                normalized.loginName(),
+                command.loginName(),
                 organization.id(),
                 organization.organizationCode(),
                 false
@@ -131,45 +131,21 @@ public class IdentityServiceImpl implements IdentityService {
     @Transactional
     @Override
     public void changePassword(long userId, String currentPassword, String newPassword) {
-        UserAccount account = java.util.Optional.ofNullable(mapper.findById(userId))
+        UserAccount account = Optional.ofNullable(mapper.findById(userId))
                 .filter(UserAccount::enabled)
                 .orElseThrow(() -> new AccessDeniedException("Current user is unavailable"));
         if (!passwordEncoder.matches(currentPassword, account.passwordHash())) {
             throw new InvalidRequestException("当前密码不正确");
         }
-        validatePassword(newPassword, account.loginName());
+        rejectPasswordContainingLogin(newPassword, account.loginName());
         if (passwordEncoder.matches(newPassword, account.passwordHash())) {
             throw new InvalidRequestException("新密码不能与当前密码相同");
         }
-        if (mapper.changePassword(userId, passwordEncoder.encode(newPassword), account.loginName()) != 1) {
+        if (mapper.changePassword(userId, passwordEncoder.encode(newPassword), account.loginName(), account.version()) != 1) {
             throw new ResourceConflictException("密码状态已被其他操作修改，请重新登录后再试");
         }
     }
 
-    /**
-     * 规范化并校验安全引导请求。
-     *
-     * @param command 原始安全引导请求
-     * @return 规范化请求
-     */
-    private BootstrapCommand normalize(BootstrapCommand command) {
-        if (command == null) {
-            throw new InvalidRequestException("必须提供平台初始化信息");
-        }
-        String loginName = requireText(command.loginName(), "loginName", 64).toLowerCase(Locale.ROOT);
-        if (!LOGIN_PATTERN.matcher(loginName).matches()) {
-            throw new InvalidRequestException("loginName 格式无效");
-        }
-        validatePassword(command.initialPassword(), loginName);
-        return new BootstrapCommand(
-                requireText(command.organizationCode(), "organizationCode", 64),
-                requireText(command.organizationName(), "organizationName", 200),
-                requireText(command.organizationType(), "organizationType", 32),
-                loginName,
-                requireText(command.displayName(), "displayName", 100),
-                command.initialPassword()
-        );
-    }
 
     /**
      * 校验一次性启动密钥已安全配置且使用常量时间比较匹配。
@@ -199,35 +175,15 @@ public class IdentityServiceImpl implements IdentityService {
     }
 
     /**
-     * 校验密码长度并禁止包含登录名。
+     * 禁止密码包含登录名，长度和必填性由入口校验。
      *
      * @param password 待校验密码
      * @param loginName 规范化登录名
      */
-    private void validatePassword(String password, String loginName) {
-        if (password == null
-                || password.length() < MINIMUM_PASSWORD_LENGTH
-                || password.length() > MAXIMUM_PASSWORD_LENGTH) {
-            throw new InvalidRequestException("密码长度不符合要求");
-        }
+    private void rejectPasswordContainingLogin(String password, String loginName) {
         if (password.toLowerCase(Locale.ROOT).contains(loginName.toLowerCase(Locale.ROOT))) {
             throw new InvalidRequestException("密码不能包含登录名");
         }
-    }
-
-    /**
-     * 校验并裁剪受控文本。
-     *
-     * @param value 输入文本
-     * @param field 字段名
-     * @param maximumLength 最大长度
-     * @return 裁剪后的文本
-     */
-    private String requireText(String value, String field, int maximumLength) {
-        if (value == null || value.isBlank() || value.trim().length() > maximumLength) {
-            throw new InvalidRequestException(field + " is invalid");
-        }
-        return value.trim();
     }
 
     /**
@@ -246,6 +202,7 @@ public class IdentityServiceImpl implements IdentityService {
         permissions.put("configuration:read", "查询平台配置");
         permissions.put("configuration:write", "维护平台配置");
         permissions.put("audit:read", "查询管理审计");
+        permissions.put("exchange:read", "查询交换记录");
         permissions.put("master-data:read", "查询基础数据");
         permissions.put("master-data:sync", "发起基础数据同步");
         return Map.copyOf(permissions);

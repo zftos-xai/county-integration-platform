@@ -17,6 +17,7 @@ package cn.zqkj.platform.system.identity.domain.model;
  * @param organizationCode 主归属机构代码
  * @param enabled 用户与主机构是否均可用
  * @param mustChangePassword 是否必须修改初始密码
+ * @param version 用户行版本，用于凭证并发更新和撤销旧会话，不包含密码信息
  */
 public record UserAccount(
         long id,
@@ -26,6 +27,7 @@ public record UserAccount(
         long primaryOrganizationId,
         String organizationCode,
         boolean enabled,
-        boolean mustChangePassword
+        boolean mustChangePassword,
+        byte[] version
 ) {
 }

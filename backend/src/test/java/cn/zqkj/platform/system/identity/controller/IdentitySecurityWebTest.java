@@ -127,12 +127,11 @@ class IdentitySecurityWebTest {
         String passwordHash = new BCryptPasswordEncoder(12).encode("Initial!Pass123");
         PlatformUserPrincipal principal = new PlatformUserPrincipal(
                 30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true,
-                List.of(new SimpleGrantedAuthority("password:change"))
-        );
+                List.of(new SimpleGrantedAuthority("password:change")), new byte[8]);
         when(userDetailsService.loadUserByUsername("admin")).thenReturn(principal);
         when(identityMapper.findById(30L)).thenReturn(
                 new cn.zqkj.platform.system.identity.domain.model.UserAccount(
-                        30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true
+                        30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true, new byte[8]
                 )
         );
 
@@ -149,6 +148,15 @@ class IdentitySecurityWebTest {
         mockMvc.perform(get("/api/v1/session/current").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.permissions[0]").value("password:change"));
+
+        byte[] changedVersion = new byte[8];
+        changedVersion[7] = 1;
+        when(identityMapper.findById(30L)).thenReturn(
+                new cn.zqkj.platform.system.identity.domain.model.UserAccount(
+                        30L, "admin", "Administrator", "changed-hash", 10L, "ORG001", true, true, changedVersion));
+        mockMvc.perform(get("/api/v1/session/current").session(session))
+                .andExpect(status().isUnauthorized());
+        assertTrue(session.isInvalid());
     }
 
     /**
@@ -161,12 +169,11 @@ class IdentitySecurityWebTest {
         String passwordHash = new BCryptPasswordEncoder(12).encode("Initial!Pass123");
         PlatformUserPrincipal principal = new PlatformUserPrincipal(
                 30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true,
-                List.of(new SimpleGrantedAuthority("password:change"))
-        );
+                List.of(new SimpleGrantedAuthority("password:change")), new byte[8]);
         when(userDetailsService.loadUserByUsername("admin")).thenReturn(principal);
         when(identityMapper.findById(30L)).thenReturn(
                 new cn.zqkj.platform.system.identity.domain.model.UserAccount(
-                        30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true
+                        30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true, new byte[8]
                 )
         );
         MvcResult login = mockMvc.perform(post("/api/v1/session/login")

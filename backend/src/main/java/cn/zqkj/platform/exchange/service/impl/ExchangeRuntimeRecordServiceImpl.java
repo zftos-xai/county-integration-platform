@@ -1,10 +1,12 @@
 package cn.zqkj.platform.exchange.service.impl;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
-import cn.zqkj.platform.exchange.domain.model.ExchangeRuntimeRecord;
+import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.exchange.domain.model.ExchangeResult;
+import cn.zqkj.platform.exchange.domain.model.ExchangeRuntimeRecord;
 import cn.zqkj.platform.exchange.mapper.ExchangeRecordMapper;
 import cn.zqkj.platform.exchange.service.ExchangeRuntimeRecordService;
+import jakarta.validation.Validator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,29 +19,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ExchangeRuntimeRecordServiceImpl implements ExchangeRuntimeRecordService {
 
-    private static final int REQUEST_ID_MAX_LENGTH = 64;
-    private static final int INTERFACE_CODE_MAX_LENGTH = 64;
-    private static final int SYSTEM_CODE_MAX_LENGTH = 64;
-    private static final int ORGANIZATION_CODE_MAX_LENGTH = 64;
-    private static final int SOURCE_RECORD_ID_MAX_LENGTH = 128;
-    private static final int TARGET_RESULT_CODE_MAX_LENGTH = 64;
-    private static final int SUMMARY_MAX_LENGTH = 500;
 
     private final ExchangeRecordMapper mapper;
+    private final Validator validator;
 
     /**
      * 创建运行记录服务。
      *
      * @param mapper 交换运行记录写入边界
+     * @param validator 内部调用事实的结构约束校验器，不依赖 HTTP 入口
      */
-    public ExchangeRuntimeRecordServiceImpl(ExchangeRecordMapper mapper) {
+    public ExchangeRuntimeRecordServiceImpl(ExchangeRecordMapper mapper, Validator validator) {
         this.mapper = mapper;
+        this.validator = validator;
     }
 
     /**
      * 保存一次已经结束的真实目标调用结果。
      *
-     * <p>请求编号由数据库唯一约束防止重复。写入在独立短事务中完成，不应包围外部系统调用。</p>
+     * <p>请求编号由数据库唯一约束防止重复。调用方应在外部调用结束后进入此写入事务；本方法不发起网络请求。</p>
      *
      * @param record 待保存的最小运行记录
      * @return 已保存记录的请求编号
@@ -64,31 +62,8 @@ public class ExchangeRuntimeRecordServiceImpl implements ExchangeRuntimeRecordSe
      * @throws InvalidRequestException 记录不满足最小运行事实规则时抛出
      */
     private void validate(ExchangeRuntimeRecord record) {
-        if (record == null) {
-            throw new InvalidRequestException("必须提供交换运行记录");
-        }
-        requireText(record.requestId(), "requestId", REQUEST_ID_MAX_LENGTH);
-        requireText(record.interfaceCode(), "interfaceCode", INTERFACE_CODE_MAX_LENGTH);
-        requireText(record.callerSystemCode(), "callerSystemCode", SYSTEM_CODE_MAX_LENGTH);
-        requireText(record.targetSystemCode(), "targetSystemCode", SYSTEM_CODE_MAX_LENGTH);
-        requireText(record.organizationCode(), "organizationCode", ORGANIZATION_CODE_MAX_LENGTH);
-        requireText(record.sourceRecordId(), "sourceRecordId", SOURCE_RECORD_ID_MAX_LENGTH);
-        if (record.result() == null) {
-            throw new InvalidRequestException("必须提供处理结果 result");
-        }
-        requireOptionalLength(record.targetResultCode(), "targetResultCode", TARGET_RESULT_CODE_MAX_LENGTH);
-        requireOptionalLength(record.resultMessage(), "resultMessage", SUMMARY_MAX_LENGTH);
-        requireOptionalLength(record.requestSummary(), "requestSummary", SUMMARY_MAX_LENGTH);
-        requireOptionalLength(
-                record.communicationErrorSummary(),
-                "communicationErrorSummary",
-                SUMMARY_MAX_LENGTH
-        );
-        if (record.durationMs() < 0) {
-            throw new InvalidRequestException("durationMs 不能小于 0");
-        }
-        if (record.receivedAt() == null || record.processedAt() == null) {
-            throw new InvalidRequestException("必须提供 receivedAt 和 processedAt");
+        if (record == null || !validator.validate(record).isEmpty()) {
+            throw new InvalidRequestException("交换运行记录缺少必填信息或超过允许范围");
         }
         if (record.processedAt().isBefore(record.receivedAt())) {
             throw new InvalidRequestException("processedAt 不能早于 receivedAt");
@@ -106,50 +81,12 @@ public class ExchangeRuntimeRecordServiceImpl implements ExchangeRuntimeRecordSe
         if (record.result() != ExchangeResult.NO_RESPONSE) {
             return;
         }
-        if (hasText(record.targetResultCode())) {
+        if (Func.isNotBlank(record.targetResultCode())) {
             throw new InvalidRequestException("结果为 NO_RESPONSE 时不能包含目标系统结果代码");
         }
-        if (!hasText(record.communicationErrorSummary())) {
+        if (Func.isBlank(record.communicationErrorSummary())) {
             throw new InvalidRequestException("结果为 NO_RESPONSE 时必须提供通信错误摘要");
         }
     }
 
-    /**
-     * 校验必填文本及数据库字段长度。
-     *
-     * @param value 字段值
-     * @param fieldName 用于受控错误日志的字段名
-     * @param maxLength 数据库允许的最大字符数
-     * @throws InvalidRequestException 字段为空或超长时抛出
-     */
-    private void requireText(String value, String fieldName, int maxLength) {
-        if (!hasText(value)) {
-            throw new InvalidRequestException(fieldName + " is required");
-        }
-        requireOptionalLength(value, fieldName, maxLength);
-    }
-
-    /**
-     * 校验可选文本的数据库字段长度。
-     *
-     * @param value 字段值；为空时跳过
-     * @param fieldName 用于受控错误日志的字段名
-     * @param maxLength 数据库允许的最大字符数
-     * @throws InvalidRequestException 字段超长时抛出
-     */
-    private void requireOptionalLength(String value, String fieldName, int maxLength) {
-        if (value != null && value.length() > maxLength) {
-            throw new InvalidRequestException(fieldName + " exceeds maximum length");
-        }
-    }
-
-    /**
-     * 判断文本是否包含至少一个非空白字符。
-     *
-     * @param value 待判断文本
-     * @return 文本非空且不全为空白时返回 {@code true}
-     */
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank();
-    }
 }

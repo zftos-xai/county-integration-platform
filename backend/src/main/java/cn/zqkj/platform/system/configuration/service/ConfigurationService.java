@@ -2,21 +2,22 @@ package cn.zqkj.platform.system.configuration.service;
 
 import cn.zqkj.platform.system.configuration.domain.dto.CreateDictionaryItemCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.CreateDictionaryTypeCommand;
+import cn.zqkj.platform.system.configuration.domain.dto.CreateExternalEndpointRequest;
+import cn.zqkj.platform.system.configuration.domain.dto.CreateExternalSystemRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.DeleteParameterCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryItemCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeCommand;
+import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalEndpointRequest;
+import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalSystemRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpsertParameterCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.ExternalEndpointCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.ExternalSystemCommand;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryItemVO;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryTypeVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointAuthenticationVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterDefinitionVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterValueVO;
-import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointVO;
-import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointAuthenticationVO;
-import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemVO;
-
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import java.util.List;
 
 /**
@@ -145,7 +146,7 @@ public interface ConfigurationService {
      * @param actor 操作人
      * @return 新外部系统
      */
-    ExternalSystemVO createExternalSystem(ExternalSystemCommand command, AccessActor actor);
+    ExternalSystemVO createExternalSystem(CreateExternalSystemRequest command, AccessActor actor);
 
     /**
      * 使用行版本更新外部系统登记信息。
@@ -155,7 +156,7 @@ public interface ConfigurationService {
      * @param actor 操作人
      * @return 修改后系统
      */
-    ExternalSystemVO updateExternalSystem(long systemId, ExternalSystemCommand command, AccessActor actor);
+    ExternalSystemVO updateExternalSystem(long systemId, UpdateExternalSystemRequest command, AccessActor actor);
 
     /**
      * 查询授权范围内服务地址。
@@ -183,7 +184,7 @@ public interface ConfigurationService {
      * @param actor 操作人
      * @return 新服务地址
      */
-    ExternalEndpointVO createExternalEndpoint(long systemId, ExternalEndpointCommand command, AccessActor actor);
+    ExternalEndpointVO createExternalEndpoint(long systemId, CreateExternalEndpointRequest command, AccessActor actor);
 
     /**
      * 使用行版本更新端点并使旧验证结果失效。
@@ -193,7 +194,7 @@ public interface ConfigurationService {
      * @param actor 操作人
      * @return 修改后服务地址
      */
-    ExternalEndpointVO updateExternalEndpoint(long endpointId, ExternalEndpointCommand command, AccessActor actor);
+    ExternalEndpointVO updateExternalEndpoint(long endpointId, UpdateExternalEndpointRequest command, AccessActor actor);
 
     /**
      * 调用100-008确认当前保存的基层HIS配置所对应的唯一来源机构。

@@ -36,6 +36,8 @@ server:
         same-site: strict
 
 platform:
+  his:
+    query-zone: ${PLATFORM_HIS_QUERY_ZONE:Asia/Shanghai}
   database-contract:
     enabled: ${PLATFORM_DATABASE_CONTRACT_ENABLED:true}
   security:

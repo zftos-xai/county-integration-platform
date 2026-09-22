@@ -22,13 +22,4 @@ public record AccessActor(long userId, String loginName, Set<String> organizatio
         organizationCodes = Set.copyOf(organizationCodes);
     }
 
-    /**
-     * 判断操作人是否拥有指定机构范围。
-     *
-     * @param organizationCode 机构代码
-     * @return 在范围内时为true
-     */
-    public boolean canAccess(String organizationCode) {
-        return organizationCodes.contains(organizationCode);
-    }
 }

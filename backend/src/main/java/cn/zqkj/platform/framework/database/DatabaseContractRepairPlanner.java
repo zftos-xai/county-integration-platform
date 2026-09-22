@@ -3,6 +3,7 @@ package cn.zqkj.platform.framework.database;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 /** 根据可信契约快照为有限的低风险字段差异生成SQL Server 2012 DDL。 */
@@ -27,18 +28,29 @@ public class DatabaseContractRepairPlanner {
         if (expected == null || actual == null) {
             return rejected("字段缺失或快照不完整，只能通过正式Flyway迁移处理");
         }
-        if (!expected.typeName().equals(actual.typeName()) || expected.identity() || expected.computed()) {
+        if (!expected.qualifiedName().equals(actual.qualifiedName())
+                || !expected.typeName().equals(actual.typeName()) || expected.identity() || expected.computed()
+                || actual.identity() || actual.computed()) {
             return rejected("字段类型、IDENTITY或计算属性变化不允许在线自动执行");
         }
         if ("DBCONTRACT-E103".equals(violation.code())) {
             if (!LENGTH_TYPES.contains(expected.typeName())
                     || expected.maxLength() == null || actual.maxLength() == null
-                    || expected.maxLength() < actual.maxLength()) {
+                    || actual.maxLength() == -1
+                    || (expected.maxLength() != -1 && expected.maxLength() <= actual.maxLength())) {
                 return rejected("字段缩短或非长度类型需要离线迁移和数据影响评审");
+            }
+            if (expected.nullable() != actual.nullable()
+                    || !Objects.equals(expected.precision(), actual.precision())
+                    || !Objects.equals(expected.scale(), actual.scale())) {
+                return rejected("扩容不得同时改变可空性或精度");
             }
             return executable(expected, "仅扩大字段长度；事务失败会自动回滚");
         }
-        if ("DBCONTRACT-E106".equals(violation.code()) && expected.nullable()) {
+        if ("DBCONTRACT-E106".equals(violation.code()) && expected.nullable() && !actual.nullable()
+                && Objects.equals(expected.maxLength(), actual.maxLength())
+                && Objects.equals(expected.precision(), actual.precision())
+                && Objects.equals(expected.scale(), actual.scale())) {
             return executable(expected, "仅放宽为允许NULL；事务失败会自动回滚");
         }
         return rejected("该差异需要数据核查或复杂迁移，不允许在线自动执行");
@@ -52,11 +64,13 @@ public class DatabaseContractRepairPlanner {
      * @return 可执行DDL
      */
     private DatabaseContractRepairSql executable(DatabaseContractColumn expected, String reason) {
+        String type = typeSql(expected);
+        if (type == null) return rejected("当前类型不能安全生成在线DDL，请使用正式迁移");
         requireIdentifier(expected.schemaName());
         requireIdentifier(expected.tableName());
         requireIdentifier(expected.columnName());
         String sql = "ALTER TABLE " + quote(expected.schemaName()) + "." + quote(expected.tableName())
-                + " ALTER COLUMN " + quote(expected.columnName()) + " " + typeSql(expected)
+                + " ALTER COLUMN " + quote(expected.columnName()) + " " + type
                 + (expected.nullable() ? " NULL" : " NOT NULL") + ";";
         return new DatabaseContractRepairSql(true, sql, reason);
     }
@@ -74,7 +88,16 @@ public class DatabaseContractRepairPlanner {
                     : expected.typeName().startsWith("n") ? expected.maxLength() / 2 : expected.maxLength();
             return type + "(" + (value == -1 ? "MAX" : value) + ")";
         }
-        return type;
+        return switch (expected.typeName()) {
+            case "decimal", "numeric" -> expected.precision() == null || expected.scale() == null
+                    ? null : type + "(" + expected.precision() + "," + expected.scale() + ")";
+            case "datetime2", "datetimeoffset", "time" -> expected.scale() == null
+                    ? null : type + "(" + expected.scale() + ")";
+            case "float" -> expected.precision() == null ? null : type + "(" + expected.precision() + ")";
+            case "bigint", "int", "smallint", "tinyint", "bit", "date", "datetime", "smalldatetime",
+                    "money", "smallmoney", "real", "uniqueidentifier" -> type;
+            default -> null;
+        };
     }
 
     /**

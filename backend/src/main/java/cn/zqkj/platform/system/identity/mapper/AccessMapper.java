@@ -5,13 +5,15 @@ import cn.zqkj.platform.system.identity.domain.dto.CreateUserCommand;
 import cn.zqkj.platform.system.identity.domain.dto.UpdateRoleCommand;
 import cn.zqkj.platform.system.identity.domain.dto.UpdateUserCommand;
 import cn.zqkj.platform.system.identity.domain.model.ManagedUserSummary;
+import cn.zqkj.platform.system.identity.domain.model.RolePermissionAssignment;
 import cn.zqkj.platform.system.identity.domain.model.RoleSummary;
+import cn.zqkj.platform.system.identity.domain.model.UserOrganizationAssignment;
+import cn.zqkj.platform.system.identity.domain.model.UserRoleAssignment;
 import cn.zqkj.platform.system.identity.domain.vo.PermissionVO;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-
 import java.util.List;
 import java.util.Optional;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 使用MyBatis实现用户、角色、权限和机构范围持久化边界。
@@ -20,19 +22,22 @@ import java.util.Optional;
 public interface AccessMapper {
 
     /**
-     * 查询全部用户基础投影；机构可见范围由服务层筛选。
+     * 只查询指定机构范围内的用户基础投影；空范围不返回用户。
      *
-     * @return 全部用户基础快照
+     * @param organizationCodes 调用人获准访问的机构代码
+     * @return 范围内的用户基础快照
      */
-    List<ManagedUserSummary> findUsers();
+    List<ManagedUserSummary> findUsers(@Param("organizationCodes") List<String> organizationCodes);
 
     /**
-     * 查询用户存在时的基础快照。
+     * 在获准机构范围内读取并锁定用户主机构归属，管理事务结束前不允许并发转移。
      *
      * @param userId 用户主键
+     * @param organizationCodes 获准机构代码；空集合拒绝全部行
      * @return 用户存在时的基础快照
      */
-    Optional<ManagedUserSummary> findUser(long userId);
+    Optional<ManagedUserSummary> findUser(@Param("userId") long userId,
+                                         @Param("organizationCodes") List<String> organizationCodes);
 
     /**
      * 判断规范化登录名是否已被占用。
@@ -109,12 +114,28 @@ public interface AccessMapper {
     List<Long> findUserRoleIds(long userId);
 
     /**
+     * 一次读取指定用户的角色关系；空用户集合不返回记录。
+     *
+     * @param organizationCodes 当前调用人获准访问的机构代码
+     * @return 范围内按用户和角色主键稳定排序的授权关系
+     */
+    List<UserRoleAssignment> findUserRoles(@Param("organizationCodes") List<String> organizationCodes);
+
+    /**
      * 查询机构主键。
      *
      * @param userId 用户主键
      * @return 机构主键
      */
     List<Long> findUserOrganizationIds(long userId);
+
+    /**
+     * 一次读取指定用户的显式机构范围；空用户集合不返回记录。
+     *
+     * @param organizationCodes 当前调用人获准访问的机构代码
+     * @return 范围内按用户和机构主键稳定排序的授权关系
+     */
+    List<UserOrganizationAssignment> findUserOrganizations(@Param("organizationCodes") List<String> organizationCodes);
 
     /**
      * 判断是否为启用的平台管理员。
@@ -235,6 +256,13 @@ public interface AccessMapper {
      * @return 权限代码
      */
     List<String> findRolePermissionCodes(long roleId);
+
+    /**
+     * 一次读取角色列表所需的全部功能权限关系。
+     *
+     * @return 按角色和权限代码稳定排序的授权关系
+     */
+    List<RolePermissionAssignment> findRolePermissions();
 
     /**
      * 在同一事务中整体替换角色权限关系。

@@ -1,50 +1,39 @@
 package cn.zqkj.platform.system.configuration.controller;
 
 import cn.zqkj.platform.common.core.ApiResponse;
-import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.system.configuration.domain.dto.CreateDictionaryItemCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.CreateDictionaryItemRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.CreateDictionaryTypeCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.CreateDictionaryTypeRequest;
-import cn.zqkj.platform.system.configuration.domain.dto.DeleteParameterCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.DeleteParameterRequest;
-import cn.zqkj.platform.system.configuration.domain.dto.DeleteDictionaryRequest;
-import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryItemCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryItemRequest;
-import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeRequest;
-import cn.zqkj.platform.system.configuration.domain.dto.UpsertParameterCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.UpsertParameterRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.CreateExternalEndpointRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.CreateExternalSystemRequest;
-import cn.zqkj.platform.system.configuration.domain.dto.ExternalEndpointCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.ExternalEndpointAuthenticationCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.ExternalEndpointAuthenticationRequest;
-import cn.zqkj.platform.system.configuration.domain.dto.ExternalSystemCommand;
+import cn.zqkj.platform.system.configuration.domain.dto.DeleteDictionaryRequest;
+import cn.zqkj.platform.system.configuration.domain.dto.DeleteParameterCommand;
+import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryItemCommand;
+import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalEndpointRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalSystemRequest;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
-import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
+import cn.zqkj.platform.system.configuration.domain.dto.UpsertParameterCommand;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryItemVO;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryTypeVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointAuthenticationVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterDefinitionVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterValueVO;
-import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointVO;
-import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointAuthenticationVO;
-import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemVO;
 import cn.zqkj.platform.system.configuration.service.ConfigurationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
-import org.springframework.http.HttpStatus;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -53,9 +42,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
-import java.util.Locale;
 
 /**
  * 提供代码注册参数和平台系统字典管理API。
@@ -79,7 +65,7 @@ public class ConfigurationController {
     /**
      * 查询由后端代码注册的参数定义和校验边界。
      *
-     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:read} 功能权限。</p>
      *
      * @return 代码注册参数元数据
      */
@@ -92,7 +78,7 @@ public class ConfigurationController {
     /**
      * 查询当前操作人可见的平台参数值。
      *
-     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:read} 功能权限。</p>
      *
      * @param principal 当前用户
      * @return 当前机构范围内及全局参数值
@@ -102,13 +88,13 @@ public class ConfigurationController {
     public ApiResponse<List<ParameterValueVO>> parameters(
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.findParameterValues(actor(principal)));
+        return ApiResponse.success(service.findParameterValues(principal.accessActor()));
     }
 
     /**
      * 按参数键和适用范围新增或更新参数值。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param key 注册参数键
      * @param request 写入请求
@@ -119,29 +105,21 @@ public class ConfigurationController {
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<ParameterValueVO> upsertParameter(
             @PathVariable String key,
-            @Valid @RequestBody UpsertParameterRequest request,
+            @Valid @RequestBody UpsertParameterCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        ParameterEnvironment environment;
-        try {
-            environment = ParameterEnvironment.valueOf(request.environment().trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("environment 不是允许的环境名称");
-        }
+        key = Func.requireText(key, "parameterKey", 64).toLowerCase(Locale.ROOT);
         return ApiResponse.success(service.upsertParameter(
                 key,
-                new UpsertParameterCommand(
-                        environment, request.organizationId(), request.value(), request.enabled(),
-                        decodeOptionalVersion(request.version())
-                ),
-                actor(principal)
+                request,
+                principal.accessActor()
         ));
     }
 
     /**
      * 按适用范围和并发版本删除参数值。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param key 注册参数键
      * @param request 删除请求
@@ -152,16 +130,14 @@ public class ConfigurationController {
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<Void> deleteParameter(
             @PathVariable String key,
-            @Valid @RequestBody DeleteParameterRequest request,
+            @Valid @RequestBody DeleteParameterCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
+        key = Func.requireText(key, "parameterKey", 64).toLowerCase(Locale.ROOT);
         service.deleteParameter(
                 key,
-                new DeleteParameterCommand(
-                        parseEnvironment(request.environment()), request.organizationId(),
-                        decodeVersion(request.version())
-                ),
-                actor(principal)
+                request,
+                principal.accessActor()
         );
         return ApiResponse.success(null);
     }
@@ -169,7 +145,7 @@ public class ConfigurationController {
     /**
      * 查询系统字典类型。
      *
-     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:read} 功能权限。</p>
      *
      * @return 全部平台系统字典类型
      */
@@ -182,7 +158,7 @@ public class ConfigurationController {
     /**
      * 创建系统字典类型。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param request 创建请求
      * @param principal 当前用户
@@ -192,19 +168,19 @@ public class ConfigurationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<DictionaryTypeVO> createDictionaryType(
-            @Valid @RequestBody CreateDictionaryTypeRequest request,
+            @Valid @RequestBody CreateDictionaryTypeCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.createDictionaryType(
-                new CreateDictionaryTypeCommand(request.typeCode(), request.typeName(), request.description()),
-                actor(principal)
+                request,
+                principal.accessActor()
         ));
     }
 
     /**
      * 使用行版本更新系统字典类型。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param typeId 类型主键
      * @param request 修改请求
@@ -215,22 +191,20 @@ public class ConfigurationController {
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<DictionaryTypeVO> updateDictionaryType(
             @PathVariable @Positive long typeId,
-            @Valid @RequestBody UpdateDictionaryTypeRequest request,
+            @Valid @RequestBody UpdateDictionaryTypeCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.updateDictionaryType(
                 typeId,
-                new UpdateDictionaryTypeCommand(
-                        request.typeName(), request.description(), request.enabled(), decodeVersion(request.version())
-                ),
-                actor(principal)
+                request,
+                principal.accessActor()
         ));
     }
 
     /**
      * 删除未包含字典项的系统字典类型。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param typeId 类型主键
      * @param request 删除请求
@@ -244,14 +218,14 @@ public class ConfigurationController {
             @Valid @RequestBody DeleteDictionaryRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        service.deleteDictionaryType(typeId, decodeVersion(request.version()), actor(principal));
+        service.deleteDictionaryType(typeId, Func.decodeRowVersion(request.version()), principal.accessActor());
         return ApiResponse.success(null);
     }
 
     /**
      * 查询指定字典类型下的字典项。
      *
-     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:read} 功能权限。</p>
      *
      * @param typeId 类型主键
      * @param includeDisabled 是否包含停用项
@@ -269,7 +243,7 @@ public class ConfigurationController {
     /**
      * 在指定字典类型下创建字典项。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param typeId 类型主键
      * @param request 创建请求
@@ -281,20 +255,20 @@ public class ConfigurationController {
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<DictionaryItemVO> createDictionaryItem(
             @PathVariable @Positive long typeId,
-            @Valid @RequestBody CreateDictionaryItemRequest request,
+            @Valid @RequestBody CreateDictionaryItemCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.createDictionaryItem(
                 typeId,
-                new CreateDictionaryItemCommand(request.itemCode(), request.itemLabel(), request.sortOrder()),
-                actor(principal)
+                request,
+                principal.accessActor()
         ));
     }
 
     /**
      * 使用行版本更新系统字典项。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param itemId 字典项主键
      * @param request 修改请求
@@ -305,22 +279,20 @@ public class ConfigurationController {
     @PreAuthorize("hasAuthority('configuration:write')")
     public ApiResponse<DictionaryItemVO> updateDictionaryItem(
             @PathVariable @Positive long itemId,
-            @Valid @RequestBody UpdateDictionaryItemRequest request,
+            @Valid @RequestBody UpdateDictionaryItemCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.updateDictionaryItem(
                 itemId,
-                new UpdateDictionaryItemCommand(
-                        request.itemLabel(), request.sortOrder(), request.enabled(), decodeVersion(request.version())
-                ),
-                actor(principal)
+                request,
+                principal.accessActor()
         ));
     }
 
     /**
      * 删除未被业务外键引用的系统字典项。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param itemId 字典项主键
      * @param request 删除请求
@@ -334,14 +306,14 @@ public class ConfigurationController {
             @Valid @RequestBody DeleteDictionaryRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        service.deleteDictionaryItem(itemId, decodeVersion(request.version()), actor(principal));
+        service.deleteDictionaryItem(itemId, Func.decodeRowVersion(request.version()), principal.accessActor());
         return ApiResponse.success(null);
     }
 
     /**
      * 查询已登记的外部系统。
      *
-     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:read} 功能权限。</p>
      *
      * @return 已确认外部系统
      */
@@ -354,7 +326,7 @@ public class ConfigurationController {
     /**
      * 创建外部系统登记信息。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param request 创建请求
      * @param principal 当前用户
@@ -367,15 +339,13 @@ public class ConfigurationController {
             @Valid @RequestBody CreateExternalSystemRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.createExternalSystem(new ExternalSystemCommand(
-                request.systemCode(), request.systemName(), request.description(), true, null
-        ), actor(principal)));
+        return ApiResponse.success(service.createExternalSystem(request, principal.accessActor()));
     }
 
     /**
      * 使用行版本更新外部系统登记信息。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param systemId 系统主键
      * @param request 修改请求
@@ -389,15 +359,13 @@ public class ConfigurationController {
             @Valid @RequestBody UpdateExternalSystemRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.updateExternalSystem(systemId, new ExternalSystemCommand(
-                null, request.systemName(), request.description(), request.enabled(), decodeVersion(request.version())
-        ), actor(principal)));
+        return ApiResponse.success(service.updateExternalSystem(systemId, request, principal.accessActor()));
     }
 
     /**
      * 查询指定外部系统的服务端点。
      *
-     * <p>需要 {@code configuration:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:read} 功能权限。</p>
      *
      * @param systemId 系统主键
      * @param principal 当前用户
@@ -409,13 +377,15 @@ public class ConfigurationController {
             @PathVariable @Positive long systemId,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.findExternalEndpoints(systemId, actor(principal)));
+        return ApiResponse.success(service.findExternalEndpoints(systemId, principal.accessActor()));
     }
 
     /**
-     * 读取指定端点的认证配置状态，不返回任何明文凭证。
+     * 供有配置写权限且获准访问该机构的管理员按需查看端点认证信息。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>响应包含解密后的密码和授权码，仅用于编辑页短暂展示；禁止缓存、记录或复用为普通列表数据。</p>
+     *
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param endpointId 服务地址主键
      * @param principal 当前用户
@@ -429,13 +399,13 @@ public class ConfigurationController {
     ) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(ApiResponse.success(service.findExternalEndpointAuthentication(endpointId, actor(principal))));
+                .body(ApiResponse.success(service.findExternalEndpointAuthentication(endpointId, principal.accessActor())));
     }
 
     /**
      * 创建尚未投入业务运行的外部系统端点。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param systemId 系统主键
      * @param request 创建请求
@@ -450,17 +420,13 @@ public class ConfigurationController {
             @Valid @RequestBody CreateExternalEndpointRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.createExternalEndpoint(systemId, new ExternalEndpointCommand(
-                parseEnvironment(request.environment()), request.organizationId(), request.baseUrl(),
-                request.connectTimeoutMs(), request.readTimeoutMs(), authentication(request.authentication()),
-                request.enabled(), null
-        ), actor(principal)));
+        return ApiResponse.success(service.createExternalEndpoint(systemId, request, principal.accessActor()));
     }
 
     /**
      * 使用行版本更新端点并使旧验证结果失效。
      *
-     * <p>需要 {@code configuration:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code configuration:write} 功能权限。</p>
      *
      * @param endpointId 服务地址主键
      * @param request 修改请求
@@ -474,11 +440,7 @@ public class ConfigurationController {
             @Valid @RequestBody UpdateExternalEndpointRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.updateExternalEndpoint(endpointId, new ExternalEndpointCommand(
-                parseEnvironment(request.environment()), request.organizationId(), request.baseUrl(),
-                request.connectTimeoutMs(), request.readTimeoutMs(),
-                authentication(request.authentication()), request.enabled(), decodeVersion(request.version())
-        ), actor(principal)));
+        return ApiResponse.success(service.updateExternalEndpoint(endpointId, request, principal.accessActor()));
     }
 
     /**
@@ -494,73 +456,8 @@ public class ConfigurationController {
             @PathVariable @Positive long endpointId,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.verifyExternalEndpoint(endpointId, actor(principal)));
+        return ApiResponse.success(service.verifyExternalEndpoint(endpointId, principal.accessActor()));
     }
 
-    /**
-     * 将API认证输入转换为服务层认证命令。
-     *
-     * @param request 可选认证请求
-     * @return 服务层认证命令；未提交时为空
-     */
-    private ExternalEndpointAuthenticationCommand authentication(ExternalEndpointAuthenticationRequest request) {
-        if (request == null) {
-            return null;
-        }
-        return new ExternalEndpointAuthenticationCommand(
-                request.vendorCode(), request.username(), request.password(), request.authorizationCode()
-        );
-    }
 
-    /**
-     * 将当前登录主体转换为携带机构范围的服务层操作人。
-     *
-     * @param principal 当前用户
-     * @return 服务端可信操作人信息
-     */
-    private AccessActor actor(PlatformUserPrincipal principal) {
-        return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
-    }
-
-    /**
-     * 解析并校验外部端点运行环境代码。
-     *
-     * @param value 环境文本
-     * @return 环境枚举
-     */
-    private ParameterEnvironment parseEnvironment(String value) {
-        try {
-            return ParameterEnvironment.valueOf(value.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("environment 不是允许的环境名称");
-        }
-    }
-
-    /**
-     * 解码可选的SQL Server行版本；未提供时返回空值。
-     *
-     * @param value 可选Base64版本
-     * @return 解码值或空
-     */
-    private byte[] decodeOptionalVersion(String value) {
-        return value == null || value.isBlank() ? null : decodeVersion(value);
-    }
-
-    /**
-     * 解码并校验客户端提交的SQL Server行版本。
-     *
-     * @param value Base64版本
-     * @return 8字节SQL Server并发版本
-     */
-    private byte[] decodeVersion(String value) {
-        try {
-            byte[] version = Func.decodeBase64(value);
-            if (version.length != Long.BYTES) {
-                throw new IllegalArgumentException("invalid length");
-            }
-            return version;
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("version 必须是由 8 字节 SQL Server 行版本号编码得到的 Base64 文本");
-        }
-    }
 }

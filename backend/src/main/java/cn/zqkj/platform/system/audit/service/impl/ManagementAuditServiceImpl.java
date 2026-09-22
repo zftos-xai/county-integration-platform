@@ -1,49 +1,55 @@
 package cn.zqkj.platform.system.audit.service.impl;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
+import jakarta.validation.Validator;
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditQuery;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import cn.zqkj.platform.system.audit.domain.model.ManagementAuditEvent;
 import cn.zqkj.platform.system.audit.domain.vo.ManagementAuditEventVO;
 import cn.zqkj.platform.system.audit.mapper.ManagementAuditMapper;
 import cn.zqkj.platform.system.audit.service.ManagementAuditService;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 /** 实现只追加、脱敏和机构范围过滤的管理审计规则。 */
 @Service
 public class ManagementAuditServiceImpl implements ManagementAuditService {
 
     private final ManagementAuditMapper mapper;
+    private final Validator validator;
 
     /**
      * 创建管理审计服务。
      *
      * @param mapper 审计Mapper
+     * @param validator 校验内部流程提交的审计事实，不要求登录会话
      */
-    public ManagementAuditServiceImpl(ManagementAuditMapper mapper) {
+    public ManagementAuditServiceImpl(ManagementAuditMapper mapper, Validator validator) {
         this.mapper = mapper;
+        this.validator = validator;
     }
 
     /**
-     * {@inheritDoc}
+     * 随业务事务追加操作结果，保留真实的成功或失败状态。
      *
-     * <p>必须加入调用方事务，使业务变更与成功审计同成同败，避免留下虚假成功记录。</p>
+     * <p>要求调用方已开启事务，操作结果和审计必须一起提交或回滚。</p>
      */
     @Transactional(propagation = Propagation.MANDATORY)
     @Override
-    public long recordSuccess(ManagementAuditCommand command) {
-        validate(command, "SUCCESS");
+    public long append(ManagementAuditCommand command) {
+        if (command == null || !validator.validate(command).isEmpty()) {
+            throw new InvalidRequestException("审计事实缺少必填信息或超过允许范围");
+        }
         return mapper.insert(command);
     }
 
     /**
-     * {@inheritDoc}
+     * 独立记录登录失败审计，只保存脱敏账号提示。
      *
      * <p>使用独立事务记录失败事件，并只保存脱敏后的账号提示，不保存密码、令牌或凭证。</p>
      */
@@ -56,89 +62,21 @@ public class ManagementAuditServiceImpl implements ManagementAuditService {
     }
 
     /**
-     * {@inheritDoc}
+     * 按机构范围和稳定游标读取管理审计记录。
      *
-     * <p>规范化筛选条件并按机构范围查询，使用时间与主键组成稳定的历史游标。</p>
+     * <p>按已校验筛选条件和机构范围查询，使用时间与主键组成稳定的历史游标。</p>
      */
     @Transactional(readOnly = true)
     @Override
     public List<ManagementAuditEventVO> findVisible(
-            AccessActor actor,
+            Set<String> organizationCodes,
             ManagementAuditQuery query
     ) {
-        if (query == null || query.limit() < 1 || query.limit() > 200) {
-            throw new InvalidRequestException("limit 必须在 1 到 200 之间");
+        List<ManagementAuditEventVO> result = new ArrayList<>();
+        for (ManagementAuditEvent event : mapper.findVisible(organizationCodes, query)) {
+            result.add(toVO(event));
         }
-        if (query.occurredFrom() != null && query.occurredTo() != null
-                && query.occurredFrom().isAfter(query.occurredTo())) {
-            throw new InvalidRequestException("开始时间不能晚于结束时间");
-        }
-        if ((query.beforeOccurredAt() == null) != (query.beforeId() == null)) {
-            throw new InvalidRequestException("继续查询历史记录时必须同时提供时间和记录编号");
-        }
-        ManagementAuditQuery normalized = new ManagementAuditQuery(normalizeFilter(query.actorLogin()),
-                normalizeFilter(query.actionCode()), normalizeFilter(query.targetType()),
-                normalizeFilter(query.targetId()), normalizeFilter(query.requestId()),
-                normalizeResult(query.resultCode()),
-                query.occurredFrom(), query.occurredTo(), query.beforeOccurredAt(), query.beforeId(),
-                query.limit());
-        return mapper.findVisible(actor.organizationCodes(), normalized).stream().map(this::toVO).toList();
-    }
-
-    /**
-     * 校验输入对象的必填字段、长度和安全边界。
-     *
-     * @param command 命令
-     * @param expectedResult 预期结果
-     */
-    private void validate(ManagementAuditCommand command, String expectedResult) {
-        if (command == null || command.actor() == null || !expectedResult.equals(command.resultCode())) {
-            throw new InvalidRequestException("写入审计记录时必须提供可信的操作人和操作结果");
-        }
-        requireText(command.actionCode(), "actionCode", 64);
-        requireText(command.targetType(), "targetType", 64);
-        requireText(command.targetId(), "targetId", 128);
-        requireText(command.changeSummary(), "changeSummary", 1000);
-    }
-
-    /**
-     * 规范化可选审计筛选条件。
-     *
-     * @param value 可选筛选值
-     * @return 裁剪值
-     */
-    private String normalizeFilter(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
-
-    /**
-     * 规范化并限制审计结果代码。
-     *
-     * @param value 可选结果代码
-     * @return 规范结果代码
-     */
-    private String normalizeResult(String value) {
-        String normalized = normalizeFilter(value);
-        if (normalized == null) {
-            return null;
-        }
-        if (!"SUCCESS".equals(normalized) && !"FAILURE".equals(normalized)) {
-            throw new InvalidRequestException("处理结果只能是成功或失败");
-        }
-        return normalized;
-    }
-
-    /**
-     * 校验审计必填文本并返回裁剪后的值。
-     *
-     * @param value 文本
-     * @param field 字段
-     * @param max 最大长度
-     */
-    private void requireText(String value, String field, int max) {
-        if (value == null || value.isBlank() || value.trim().length() > max) {
-            throw new InvalidRequestException(field + " is invalid");
-        }
+        return result;
     }
 
     /**

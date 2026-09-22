@@ -2,21 +2,19 @@ package cn.zqkj.platform.system.organization.service.impl;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
-import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
-import cn.zqkj.platform.system.organization.domain.dto.UpdateOrganizationCommand;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
-import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
-import cn.zqkj.platform.system.identity.mapper.AccessMapper;
 import cn.zqkj.platform.system.audit.service.ManagementAuditService;
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
+import cn.zqkj.platform.system.identity.mapper.AccessMapper;
+import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
+import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
+import cn.zqkj.platform.system.organization.domain.dto.UpdateOrganizationCommand;
+import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.service.OrganizationAdministrationService;
 import cn.zqkj.platform.system.organization.service.OrganizationService;
-import org.springframework.security.access.AccessDeniedException;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * 协调机构唯一写入服务与用户机构范围，落实机构管理的数据范围边界。
@@ -26,6 +24,7 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
 
     private final OrganizationService organizationService;
     private final AccessMapper accessMapper;
+    private final IdentityMapper identityMapper;
     private final ManagementAuditService auditService;
 
     /**
@@ -33,15 +32,18 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
      *
      * @param organizationService 机构唯一写入服务
      * @param accessMapper 机构范围持久化边界
+     * @param identityMapper 新机构的增量授权写入
      * @param auditService 管理审计服务
      */
     public OrganizationAdministrationServiceImpl(
             OrganizationService organizationService,
             AccessMapper accessMapper,
+            IdentityMapper identityMapper,
             ManagementAuditService auditService
     ) {
         this.organizationService = organizationService;
         this.accessMapper = accessMapper;
+        this.identityMapper = identityMapper;
         this.auditService = auditService;
     }
 
@@ -55,9 +57,7 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
     @Transactional(readOnly = true)
     @Override
     public List<OrganizationVO> findAll(Boolean enabled, AccessActor actor) {
-        return organizationService.findAll(enabled).stream()
-                .filter(organization -> actor.canAccess(organization.organizationCode()))
-                .toList();
+        return organizationService.findVisible(enabled, List.copyOf(actor.organizationCodes()));
     }
 
     /**
@@ -70,9 +70,7 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
     @Transactional(readOnly = true)
     @Override
     public OrganizationVO get(long organizationId, AccessActor actor) {
-        OrganizationVO organization = organizationService.get(organizationId);
-        requireAccess(actor, organization.organizationCode());
-        return organization;
+        return organizationService.getVisible(organizationId, List.copyOf(actor.organizationCodes()));
     }
 
     /**
@@ -88,13 +86,12 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
         if (command.parentId() == null) {
             throw new InvalidRequestException("新增下级机构时，上级机构必须在当前账号可访问范围内");
         }
+        if (accessMapper.findUser(actor.userId(), List.copyOf(actor.organizationCodes())).isEmpty()) {
+            throw new ResourceConflictException("创建人账号或机构范围已变化，请重新登录后再试");
+        }
         get(command.parentId(), actor);
         OrganizationVO created = organizationService.create(command, actor.loginName());
-        List<Long> scopes = new ArrayList<>(accessMapper.findUserOrganizationIds(actor.userId()));
-        scopes.add(created.id());
-        accessMapper.replaceUserOrganizations(
-                actor.userId(), scopes.stream().distinct().sorted().toList(), actor.loginName()
-        );
+        identityMapper.grantOrganization(actor.userId(), created.id(), actor.loginName());
         audit(actor, created, "ORGANIZATION_CREATED", "创建机构并授予创建人机构范围");
         return created;
     }
@@ -149,7 +146,7 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
     }
 
     /**
-     * 追加不包含DDL全文和连接信息的管理审计事件。
+     * 追加机构档案维护审计，记录目标机构和变更摘要。
      *
      * @param actor 操作人
      * @param organization 机构
@@ -157,20 +154,9 @@ public class OrganizationAdministrationServiceImpl implements OrganizationAdmini
      * @param summary 不含敏感内容的摘要
      */
     private void audit(AccessActor actor, OrganizationVO organization, String action, String summary) {
-        auditService.recordSuccess(new ManagementAuditCommand(actor, null, organization.id(),
+        auditService.append(new ManagementAuditCommand(actor.userId(), actor.loginName(), organization.id(),
                 organization.organizationCode(), action, "ORGANIZATION", organization.organizationCode(),
                 "SUCCESS", summary, auditService.currentRequestId()));
     }
 
-    /**
-     * 校验当前操作人拥有目标机构数据范围。
-     *
-     * @param actor 操作人
-     * @param organizationCode 机构代码
-     */
-    private void requireAccess(AccessActor actor, String organizationCode) {
-        if (!actor.canAccess(organizationCode)) {
-            throw new AccessDeniedException("当前账号无权访问该机构");
-        }
-    }
 }

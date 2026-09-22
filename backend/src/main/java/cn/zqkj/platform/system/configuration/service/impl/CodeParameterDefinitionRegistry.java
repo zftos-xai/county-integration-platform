@@ -3,22 +3,22 @@ package cn.zqkj.platform.system.configuration.service.impl;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterDefinition;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
 import cn.zqkj.platform.system.configuration.service.ParameterDefinitionRegistry;
-import org.springframework.stereotype.Component;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.stereotype.Component;
 
 import static cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment.DEVELOPMENT;
 import static cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment.PRODUCTION;
 import static cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment.TEST;
 import static cn.zqkj.platform.system.configuration.domain.model.ParameterValueType.INTEGER;
+import static cn.zqkj.platform.system.configuration.domain.model.ParameterValueType.STRING;
 
 /**
  * 保存代码评审批准的平台注册参数清单。
  *
- * <p>清单只包含项目已确认的平台管理默认项；新增参数仍必须通过代码评审加入，不能由API动态创建。</p>
+ * <p>管理默认项目前只保存配置；医疗目录全量规则由同步批次创建时按机构和环境读取。</p>
  */
 @Component
 public class CodeParameterDefinitionRegistry implements ParameterDefinitionRegistry {
@@ -28,7 +28,7 @@ public class CodeParameterDefinitionRegistry implements ParameterDefinitionRegis
     private static final List<ParameterDefinition> DEFINITIONS = List.of(
             new ParameterDefinition(
                     "management.list.default-page-size",
-                    "管理列表默认每页条数",
+                    "管理列表默认每页条数（未接入运行）",
                     INTEGER,
                     ALL_ENVIRONMENTS,
                     false,
@@ -40,7 +40,7 @@ public class CodeParameterDefinitionRegistry implements ParameterDefinitionRegis
             ),
             new ParameterDefinition(
                     "management.audit.default-query-limit",
-                    "管理审计默认查询条数",
+                    "管理审计默认查询条数（未接入运行）",
                     INTEGER,
                     ALL_ENVIRONMENTS,
                     false,
@@ -49,16 +49,28 @@ public class CodeParameterDefinitionRegistry implements ParameterDefinitionRegis
                     BigDecimal.TEN,
                     BigDecimal.valueOf(200),
                     null
+            ),
+            new ParameterDefinition(
+                    "medical-directory.full-sync-rule",
+                    "医疗目录全量范围确认规则（JSON）",
+                    STRING,
+                    ALL_ENVIRONMENTS,
+                    true,
+                    false,
+                    1000,
+                    null,
+                    null,
+                    null
             )
     );
 
-    /** {@inheritDoc} 返回按注册顺序固定且不可由数据库扩展的参数定义。 */
+    /** 按登记顺序返回工程批准的参数定义，数据库不能扩展该清单。 */
     @Override
     public List<ParameterDefinition> findAll() {
         return DEFINITIONS;
     }
 
-    /** {@inheritDoc} 参数键按精确值匹配，未注册键返回空结果。 */
+    /** 按完整参数键读取已登记定义，未登记时返回空结果。 */
     @Override
     public Optional<ParameterDefinition> find(String key) {
         return DEFINITIONS.stream().filter(definition -> definition.key().equals(key)).findFirst();

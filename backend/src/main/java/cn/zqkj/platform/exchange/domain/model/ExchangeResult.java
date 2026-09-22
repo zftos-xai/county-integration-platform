@@ -3,7 +3,7 @@ package cn.zqkj.platform.exchange.domain.model;
 /**
  * 表示目标系统调用的最终交换结果。
  *
- * <p>该枚举只描述成功、明确失败和未取得业务响应三种事实，不表达发送过程状态。</p>
+ * <p>区分业务成功、明确失败、无响应和已收到但不可解析的响应；不表达发送过程状态。</p>
  */
 public enum ExchangeResult {
 
@@ -14,5 +14,8 @@ public enum ExchangeResult {
     FAILURE,
 
     /** 平台未取得目标系统业务响应。 */
-    NO_RESPONSE
+    NO_RESPONSE,
+
+    /** 已收到目标响应，但报文不符合协议，业务结论无法确认。 */
+    INVALID_RESPONSE
 }

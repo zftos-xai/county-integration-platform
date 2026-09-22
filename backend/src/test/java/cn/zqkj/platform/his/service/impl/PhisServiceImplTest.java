@@ -146,7 +146,7 @@ class PhisServiceImplTest {
                 new HospitalDirectoryQuery(HospitalDirectoryType.DOCTOR, "不应进入日志", null));
 
         assertTrue(output.getOut().contains("HIS交易｜100-003 医院综合目录查询"));
-        assertTrue(output.getOut().contains("｜机构8/测试｜成功(1)｜耗时"));
+        assertTrue(output.getOut().contains("｜机构8/测试｜成功｜耗时"));
         assertFalse(output.getOut().contains("不应进入日志"));
     }
 
@@ -156,7 +156,7 @@ class PhisServiceImplTest {
     void logsUnknownResultForCommunicationFailure(CapturedOutput output) {
         PhisProtocolClient client = mock(PhisProtocolClient.class);
         when(client.queryHospitalDirectory(any(), any()))
-                .thenThrow(new PhisCommunicationException("基层HIS调用超时，结果未知"));
+                .thenThrow(new PhisCommunicationException("http://his.example.invalid password=SYNTHETIC-SECRET\n正文"));
         PhisServiceImpl service = new PhisServiceImpl(
                 configuredResolver(8L, "AUTH-008"), client);
 
@@ -164,8 +164,23 @@ class PhisServiceImplTest {
                 () -> service.queryHospitalDirectory(8L, ParameterEnvironment.TEST,
                         new HospitalDirectoryQuery(HospitalDirectoryType.BED, null, null)));
 
-        assertTrue(output.getOut().contains("｜机构8/测试｜结果未知｜基层HIS调用超时｜耗时"));
+        assertTrue(output.getOut().contains("｜机构8/测试｜结果未知｜通信失败或超时｜耗时"));
         assertFalse(output.getOut().contains("his.example.invalid"));
+        assertFalse(output.getOut().contains("SYNTHETIC-SECRET"));
+    }
+
+    /** 上游结果码同样不可信，业务失败日志不得回显任意文本。 */
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void doesNotLogUntrustedResultCode(CapturedOutput output) {
+        PhisProtocolClient client = mock(PhisProtocolClient.class);
+        when(client.queryHospitalDirectory(any(), any()))
+                .thenReturn(new PhisResponse<>(false, "SYNTHETIC-SECRET", null, "sensitive body"));
+        new PhisServiceImpl(configuredResolver(8L, "AUTH-008"), client).queryHospitalDirectory(
+                8L, ParameterEnvironment.TEST, new HospitalDirectoryQuery(HospitalDirectoryType.BED, null, null));
+        assertTrue(output.getOut().contains("业务失败"));
+        assertFalse(output.getOut().contains("SYNTHETIC-SECRET"));
+        assertFalse(output.getOut().contains("sensitive body"));
     }
 
     /** 验证耗时格式按毫秒、秒和分秒分段展示。 */

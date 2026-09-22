@@ -43,8 +43,7 @@
              change_summary,            <!-- 不包含凭证及敏感正文的变更摘要 -->
              request_id)                <!-- 贯穿一次请求的追踪编号 -->
         VALUES
-            (<choose><when test="actor != null">#{actor.userId}</when><otherwise>NULL</otherwise></choose>,
-             <choose><when test="actor != null">#{actor.loginName}</when><otherwise>#{actorHint}</otherwise></choose>,
+            (#{actorUserId,jdbcType=BIGINT}, #{actorLogin,jdbcType=NVARCHAR},
              #{organizationId}, #{organizationCode}, #{actionCode}, #{targetType}, #{targetId},
              #{resultCode}, #{changeSummary}, #{requestId});
         SELECT CONVERT(BIGINT, SCOPE_IDENTITY());

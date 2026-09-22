@@ -31,6 +31,21 @@ public final class TextUtils {
     }
 
     /**
+     * 判断可选文本裁剪后是否超过指定长度。
+     *
+     * @param value 可选文本
+     * @param maximumLength 允许的最大长度，不得为负数
+     * @return 裁剪后超长时为true；空值或空白文本为false
+     */
+    public static boolean exceedsTrimmedLength(String value, int maximumLength) {
+        if (maximumLength < 0) {
+            throw new IllegalArgumentException("最大长度不能为负数");
+        }
+        String text = trimToNull(value);
+        return text != null && text.length() > maximumLength;
+    }
+
+    /**
      * 判断文本是否为空或仅包含空白字符。
      *
      * <p>示例：{@code isBlank("  ")}返回{@code true}。</p>
@@ -103,9 +118,10 @@ public final class TextUtils {
         for (int index = 0; index < value.length(); index++) {
             char current = value.charAt(index);
             boolean currentUpper = Character.isUpperCase(current);
-            boolean previousLower = index > 0 && Character.isLowerCase(value.charAt(index - 1));
+            boolean previousLowerOrDigit = index > 0 && (Character.isLowerCase(value.charAt(index - 1))
+                    || Character.isDigit(value.charAt(index - 1)));
             boolean nextLower = index + 1 < value.length() && Character.isLowerCase(value.charAt(index + 1));
-            if (currentUpper && index > 0 && (previousLower || nextLower)) {
+            if (currentUpper && index > 0 && (previousLowerOrDigit || nextLower)) {
                 result.append('_');
             }
             result.append(Character.toLowerCase(current));

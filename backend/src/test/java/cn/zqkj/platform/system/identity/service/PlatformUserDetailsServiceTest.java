@@ -60,7 +60,6 @@ class PlatformUserDetailsServiceTest {
      */
     private UserAccount account(boolean mustChangePassword) {
         return new UserAccount(
-                30L, "admin", "平台管理员", "hash", 10L, "ORG001", true, mustChangePassword
-        );
+                30L, "admin", "平台管理员", "hash", 10L, "ORG001", true, mustChangePassword, new byte[8]);
     }
 }

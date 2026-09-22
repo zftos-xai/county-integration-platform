@@ -28,6 +28,7 @@ class CodeParameterDefinitionRegistryTest {
         assertEquals(BigDecimal.valueOf(100), definition.maximumNumber());
         assertFalse(definition.organizationScoped());
         assertFalse(definition.sensitive());
+        assertTrue(definition.name().contains("未接入运行"));
     }
 
     /** 验证审计查询默认条数与现有API最大限制一致。 */
@@ -39,6 +40,7 @@ class CodeParameterDefinitionRegistryTest {
         assertEquals(BigDecimal.TEN, definition.minimumNumber());
         assertEquals(BigDecimal.valueOf(200), definition.maximumNumber());
         assertTrue(registry.findAll().contains(definition));
-        assertEquals(2, registry.findAll().size());
+        assertEquals(3, registry.findAll().size());
+        assertTrue(definition.name().contains("未接入运行"));
     }
 }

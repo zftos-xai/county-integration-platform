@@ -22,6 +22,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 class OrganizationMapperXmlTest {
 
+    /** 机构树写锁限定于事务并设置等待上限，避免连接池连接长期持锁。 */
+    @Test
+    void usesBoundedTransactionOwnedHierarchyLock() {
+        String sql = parseMapper().getMappedStatement(
+                "cn.zqkj.platform.system.organization.mapper.OrganizationMapper.lockHierarchy").getBoundSql(null).getSql();
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("sys.sp_getapplock"));
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("@LockOwner = 'Transaction'"));
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("@LockTimeout = 10000"));
+    }
+
     /**
      * 验证创建机构时可空父机构和有效期不会被MyBatis按VARBINARY绑定。
      */
@@ -46,8 +56,22 @@ class OrganizationMapperXmlTest {
         }
 
         assertEquals(JDBCType.BIGINT, jdbcTypes.get("command.parentId"));
-        assertEquals(JDBCType.TIMESTAMP, jdbcTypes.get("command.validFrom"));
-        assertEquals(JDBCType.TIMESTAMP, jdbcTypes.get("command.validTo"));
+        assertEquals(JDBCType.TIMESTAMP, jdbcTypes.get("command.validFromUtc"));
+        assertEquals(JDBCType.TIMESTAMP, jdbcTypes.get("command.validToUtc"));
+    }
+
+    /** 直接复用 HTTP 输入时，MyBatis 仍将偏移时间转换为 SQL Server 约定的 UTC。 */
+    @Test
+    void resolvesUtcDatesFromBoundOrganizationCommand() {
+        var command = new cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand(
+                "ORG001", "测试机构", "HOSPITAL", null,
+                java.time.OffsetDateTime.parse("2026-09-21T08:00:00+08:00"),
+                java.time.OffsetDateTime.parse("2026-09-22T08:00:00+08:00"));
+        var parameters = parseMapper().newMetaObject(Map.of("command", command));
+        assertEquals(java.time.LocalDateTime.parse("2026-09-21T00:00:00"),
+                parameters.getValue("command.validFromUtc"));
+        assertEquals(java.time.LocalDateTime.parse("2026-09-22T00:00:00"),
+                parameters.getValue("command.validToUtc"));
     }
 
     /**

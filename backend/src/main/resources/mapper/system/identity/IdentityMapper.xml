@@ -19,6 +19,8 @@
             <arg column="account_enabled" javaType="_boolean"/>
             <!-- 是否必须先修改初始或重置密码 -->
             <arg column="must_change_password" javaType="_boolean"/>
+            <!-- 账号及凭证变更版本，用于撤销旧会话 -->
+            <arg column="row_version" javaType="_byte[]"/>
         </constructor>
     </resultMap>
 
@@ -38,7 +40,8 @@
         <!-- 用户与主机构均启用时账号才可用 -->
         CASE WHEN users.is_enabled = 1 AND organizations.is_enabled = 1 THEN 1 ELSE 0 END AS account_enabled,
         <!-- 是否必须先修改密码 -->
-        users.must_change_password
+        users.must_change_password,
+        users.row_version  <!-- 当前账号与凭证的并发版本 -->
     </sql>
 
     <select id="lockAndCountUsers" resultType="int">
@@ -190,5 +193,6 @@
         <!-- 仅修改当前仍启用的目标用户 -->
         WHERE id = #{userId}
           AND is_enabled = 1
+          AND row_version = #{expectedVersion} <!-- 不覆盖读取凭证后发生的重置或改密 -->
     </update>
 </mapper>

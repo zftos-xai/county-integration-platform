@@ -1,14 +1,15 @@
 package cn.zqkj.platform.framework.security;
 
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.CredentialsContainer;
-import org.springframework.security.core.userdetails.UserDetails;
-
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
+import cn.zqkj.platform.common.utils.Func;
 import java.io.Serial;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.security.core.CredentialsContainer;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 /**
  * 表示保存于服务端会话中的平台已登录用户。
@@ -35,9 +36,11 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
     private final boolean mustChangePassword;
     /** 由已启用角色解析出的功能权限。 */
     private final List<GrantedAuthority> authorities;
+    /** 登录时用户行版本；凭证或账号资料变化后旧会话失效。 */
+    private final String accountVersion;
 
     /**
-     * 创建后不可变的平台登录用户信息。
+     * 保存登录时的账号、权限和行版本快照；认证后密码哈希可主动擦除。
      *
      * @param userId 用户主键
      * @param username 登录名
@@ -48,6 +51,7 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
      * @param enabled 用户是否可用
      * @param mustChangePassword 是否必须修改密码
      * @param authorities 当前有效功能权限
+     * @param version 登录时用户行版本
      */
     public PlatformUserPrincipal(
             long userId,
@@ -58,7 +62,8 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
             String organizationCode,
             boolean enabled,
             boolean mustChangePassword,
-            Collection<? extends GrantedAuthority> authorities
+            Collection<? extends GrantedAuthority> authorities,
+            byte[] version
     ) {
         this.userId = userId;
         this.username = username;
@@ -69,6 +74,12 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
         this.enabled = enabled;
         this.mustChangePassword = mustChangePassword;
         this.authorities = List.copyOf(authorities);
+        this.accountVersion = Func.encodeBase64(version);
+    }
+
+    /** @return 登录时的非敏感行版本；账号变更后用于撤销旧会话 */
+    public String accountVersion() {
+        return accountVersion;
     }
 
     /**
@@ -127,6 +138,18 @@ public final class PlatformUserPrincipal implements UserDetails, CredentialsCont
                 .filter(authority -> authority.startsWith("ORG:"))
                 .map(authority -> authority.substring("ORG:".length()))
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * 将已认证会话主体转换为业务操作人快照。
+     *
+     * <p>仅用于传递操作人身份和本次会话的机构范围；业务服务仍须执行目标资源授权，
+     * 不能将任意调用方构造的 {@link AccessActor} 当作认证凭证。</p>
+     *
+     * @return 当前会话对应的不可变业务操作人
+     */
+    public AccessActor accessActor() {
+        return new AccessActor(userId, username, organizationCodes());
     }
 
     /** 返回由平台权限代码转换得到的只读授权集合。 */

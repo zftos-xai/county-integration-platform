@@ -133,16 +133,18 @@ public interface IdentityMapper {
     );
 
     /**
-     * 校验旧密码后修改当前用户密码并解除强制改密状态。
+     * 仅在读取凭证后的账号版本未变化时修改密码并解除强制改密状态。
      *
      * @param userId 用户主键
      * @param passwordHash 新密码强哈希
      * @param actor 操作时记录的用户信息
+     * @param expectedVersion 验证旧密码时读取的用户行版本
      * @return 实际影响行数
      */
     int changePassword(
             @Param("userId") long userId,
             @Param("passwordHash") String passwordHash,
-            @Param("actor") String actor
+            @Param("actor") String actor,
+            @Param("expectedVersion") byte[] expectedVersion
     );
 }

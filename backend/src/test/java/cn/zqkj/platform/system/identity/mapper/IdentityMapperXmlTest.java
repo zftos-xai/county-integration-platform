@@ -16,6 +16,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class IdentityMapperXmlTest {
 
+    /** 密码更新 SQL 必须比较读取版本，会话查询必须返回同一用户行版本。 */
+    @Test
+    void bindsCredentialVersionForUpdateAndSessionReads() throws Exception {
+        String resource = "mapper/system/identity/IdentityMapper.xml";
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
+            Configuration configuration = new Configuration();
+            new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+            String prefix = "cn.zqkj.platform.system.identity.mapper.IdentityMapper.";
+            var update = configuration.getMappedStatement(prefix + "changePassword").getBoundSql(
+                    java.util.Map.of("userId", 1L, "passwordHash", "hash", "actor", "admin", "expectedVersion", new byte[8]));
+            assertTrue(update.getSql().contains("row_version = ?"));
+            assertTrue(update.getParameterMappings().stream().anyMatch(value -> value.getProperty().equals("expectedVersion")));
+            assertTrue(configuration.getMappedStatement(prefix + "findById").getBoundSql(1L).getSql().contains("users.row_version"));
+        }
+    }
+
     /**
      * 验证停用机构仍保留在显式管理范围中，以允许获授权管理员重新启用。
      */

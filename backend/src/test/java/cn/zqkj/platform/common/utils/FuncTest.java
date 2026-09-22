@@ -1,8 +1,6 @@
 package cn.zqkj.platform.common.utils;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +12,8 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,6 +26,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 验证公共工具门面保持时间、文本和校验行为稳定。
  */
 class FuncTest {
+
+    /** 行版本解码只接受八字节Base64值，防止格式错误进入业务用例。 */
+    @Test
+    void validatesRowVersionBeforeUse() {
+        Assertions.assertArrayEquals(new byte[8], Func.decodeRowVersion("AAAAAAAAAAA="));
+        for (String value : new String[]{null, "", "bad!", "AQ=="}) {
+            Assertions.assertThrows(
+                    InvalidRequestException.class,
+                    () -> Func.decodeRowVersion(value));
+        }
+    }
 
     /** 验证带偏移量的时间按同一时刻转换为UTC本地时间。 */
     @Test
@@ -53,6 +64,16 @@ class FuncTest {
         assertNull(Func.trimToNull(null));
     }
 
+    /** 验证可选文本的字段长度检查使用裁剪后的值，并拒绝非法上限。 */
+    @Test
+    void checksTrimmedTextLength() {
+        assertFalse(Func.exceedsTrimmedLength(null, 3));
+        assertFalse(Func.exceedsTrimmedLength("   ", 3));
+        assertFalse(Func.exceedsTrimmedLength(" abc ", 3));
+        assertTrue(Func.exceedsTrimmedLength(" abcd ", 3));
+        assertThrows(IllegalArgumentException.class, () -> Func.exceedsTrimmedLength("a", -1));
+    }
+
     /** 验证必填文本校验返回裁剪值并拒绝空白或超长内容。 */
     @Test
     void requiresTextWithinMaximumLength() {
@@ -69,6 +90,7 @@ class FuncTest {
         assertTrue(Func.isNotBlank(" value "));
         assertEquals("ab**ef", Func.mask("abcdef", 2, 4));
         assertEquals("http_server_url", Func.toSnakeCase("HTTPServerUrl"));
+        assertEquals("sha256_hash", Func.toSnakeCase("sha256Hash"));
         assertEquals("httpServerUrl", Func.toCamelCase("HTTP_SERVER_URL"));
         assertEquals("cde", Func.substring("abcdef", -4, -1));
         assertEquals("批次 B-1 已创建", Func.format("批次 {} 已创建", "B-1"));

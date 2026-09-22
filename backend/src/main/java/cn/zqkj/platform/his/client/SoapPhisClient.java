@@ -1,29 +1,26 @@
 package cn.zqkj.platform.his.client;
 
-import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
-import cn.zqkj.platform.his.domain.protocol.model.PhisTrade;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
-import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
-import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
-import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryRole;
+import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
+import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
+import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
 import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
+import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
+import cn.zqkj.platform.his.domain.protocol.model.PhisTrade;
 import cn.zqkj.platform.his.exception.PhisCommunicationException;
 import cn.zqkj.platform.his.exception.PhisProtocolException;
 import cn.zqkj.platform.his.exception.PhisRequestException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
@@ -32,6 +29,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.springframework.stereotype.Component;
 
 /**
  * 使用JDK HTTP客户端适配基层HIS SOAP 1.1服务。
@@ -67,7 +71,7 @@ public class SoapPhisClient implements PhisProtocolClient {
     }
 
     /**
-     * {@inheritDoc}
+     * 调用 100-003 查询医院综合目录。
      *
      * <p>将查询编码为100-003请求并执行一次SOAP调用；错误信息返回前会移除验证码。</p>
      */
@@ -85,7 +89,7 @@ public class SoapPhisClient implements PhisProtocolClient {
     }
 
     /**
-     * {@inheritDoc}
+     * 调用 100-008 查询 HIS 机构。
      *
      * <p>将查询编码为100-008请求并执行一次SOAP调用；错误信息返回前会移除验证码。</p>
      */
@@ -101,7 +105,7 @@ public class SoapPhisClient implements PhisProtocolClient {
     }
 
     /**
-     * {@inheritDoc}
+     * 调用 100-004 读取指定范围的一页医疗目录。
      *
      * <p>校验范围和行号后调用100-004；客户端不自动重试，避免调用方误判部分结果。</p>
      */
@@ -120,7 +124,7 @@ public class SoapPhisClient implements PhisProtocolClient {
     }
 
     /**
-     * {@inheritDoc}
+     * 调用 100-005 查询医疗目录数量，供完整性核对使用。
      *
      * <p>使用与100-004相同的范围字段调用100-005，保证声明数量可用于完整性校验。</p>
      */
@@ -218,26 +222,73 @@ public class SoapPhisClient implements PhisProtocolClient {
                 .header("SOAPAction", "\"" + PhisSoapCodec.SOAP_ACTION + "\"")
                 .POST(HttpRequest.BodyPublishers.ofString(soapRequest, StandardCharsets.UTF_8))
                 .build();
+        CompletableFuture<HttpResponse<byte[]>> pending = httpClient(context.connectTimeoutMs())
+                .sendAsync(request, response -> new LimitedBodySubscriber());
         try {
-            HttpResponse<InputStream> response = httpClient(context.connectTimeoutMs()).send(
-                    request, HttpResponse.BodyHandlers.ofInputStream());
-            try (InputStream body = response.body()) {
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    throw new PhisCommunicationException("基层HIS返回非成功HTTP状态：" + response.statusCode());
-                }
-                byte[] bytes = body.readNBytes(MAXIMUM_RESPONSE_BYTES + 1);
-                if (bytes.length > MAXIMUM_RESPONSE_BYTES) {
-                    throw new PhisProtocolException("基层HIS响应超过允许的安全大小");
-                }
-                return codec.decodeResponse(new String(bytes, StandardCharsets.UTF_8));
+            HttpResponse<byte[]> response = pending.get(context.requestTimeoutMs(), TimeUnit.MILLISECONDS);
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new PhisCommunicationException("基层HIS返回非成功HTTP状态：" + response.statusCode());
             }
-        } catch (HttpTimeoutException exception) {
+            return codec.decodeResponse(new String(response.body(), StandardCharsets.UTF_8));
+        } catch (TimeoutException exception) {
             throw new PhisCommunicationException("基层HIS调用超时，结果未知", exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new PhisCommunicationException("基层HIS调用被中断，结果未知", exception);
-        } catch (IOException exception) {
+        } catch (ExecutionException exception) {
+            if (exception.getCause() instanceof PhisProtocolException protocol) throw protocol;
             throw new PhisCommunicationException("基层HIS通信失败，结果未知", exception);
+        } finally {
+            // get 的期限覆盖完整正文；取消未完成交换会同时终止 HTTP 订阅和连接读取。
+            if (!pending.isDone()) pending.cancel(true);
+        }
+    }
+
+    /** 在完整收包前逐块限制内存占用，超限立即取消 HTTP 订阅。 */
+    private static final class LimitedBodySubscriber implements HttpResponse.BodySubscriber<byte[]> {
+        private final CompletableFuture<byte[]> body = new CompletableFuture<>();
+        private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        private Flow.Subscription subscription;
+
+        /** 只有完整收包才完成响应，供统一调用期限约束。 */
+        @Override
+        public CompletionStage<byte[]> getBody() {
+            return body;
+        }
+
+        /** 逐批申请数据，不在业务线程阻塞读取。 */
+        @Override
+        public void onSubscribe(Flow.Subscription source) {
+            subscription = source;
+            source.request(1);
+        }
+
+        /** 累计正文超过上限时拒绝整份响应，不保留部分业务数据。 */
+        @Override
+        public void onNext(List<ByteBuffer> buffers) {
+            for (ByteBuffer buffer : buffers) {
+                if (buffer.remaining() > MAXIMUM_RESPONSE_BYTES - bytes.size()) {
+                    subscription.cancel();
+                    body.completeExceptionally(new PhisProtocolException("基层HIS响应超过允许的安全大小"));
+                    return;
+                }
+                byte[] chunk = new byte[buffer.remaining()];
+                buffer.get(chunk);
+                bytes.writeBytes(chunk);
+            }
+            subscription.request(1);
+        }
+
+        /** 将传输错误交回调用边界，不记录响应正文。 */
+        @Override
+        public void onError(Throwable failure) {
+            body.completeExceptionally(failure);
+        }
+
+        /** 完整接收后提交有界正文。 */
+        @Override
+        public void onComplete() {
+            body.complete(bytes.toByteArray());
         }
     }
 

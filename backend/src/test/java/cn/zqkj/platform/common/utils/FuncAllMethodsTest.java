@@ -1,8 +1,6 @@
 package cn.zqkj.platform.common.utils;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
-import org.junit.jupiter.api.Test;
-
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
@@ -21,6 +19,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,6 +58,8 @@ class FuncAllMethodsTest {
     void coversEveryTextMethod() {
         assertEquals("value", Func.trimToNull(" value "));
         assertNull(Func.trimToNull(" "));
+        assertFalse(Func.exceedsTrimmedLength(" value ", 5));
+        assertTrue(Func.exceedsTrimmedLength(" value ", 4));
         assertTrue(Func.isBlank(" \t"));
         assertTrue(Func.isNotBlank(" value "));
         assertEquals("ab**ef", Func.mask("abcdef", 2, 4));
@@ -133,6 +134,7 @@ class FuncAllMethodsTest {
                 "durationBetween(LocalDateTime,LocalDateTime)",
                 "encodeBase64(byte[])",
                 "encodeBase64Utf8(String)",
+                "exceedsTrimmedLength(String,int)",
                 "fileBaseName(String)",
                 "fileExtension(String)",
                 "fileName(String)",
@@ -163,7 +165,8 @@ class FuncAllMethodsTest {
                 "toOffset(LocalDateTime)",
                 "toSnakeCase(String)",
                 "toUtc(OffsetDateTime)",
-                "trimToNull(String)"
+                "trimToNull(String)",
+                "decodeRowVersion(String)"
         );
         Set<String> actual = Arrays.stream(Func.class.getDeclaredMethods())
                 .filter(method -> Modifier.isPublic(method.getModifiers()) && Modifier.isStatic(method.getModifiers()))

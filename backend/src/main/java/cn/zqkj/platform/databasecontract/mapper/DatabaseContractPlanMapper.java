@@ -2,10 +2,9 @@ package cn.zqkj.platform.databasecontract.mapper;
 
 import cn.zqkj.platform.databasecontract.domain.model.DatabaseContractPlanItemSnapshot;
 import cn.zqkj.platform.databasecontract.domain.model.DatabaseContractPlanSnapshot;
+import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-
-import java.util.List;
 
 /** 持久化数据库契约维护方案、审批、执行和复验事实。 */
 @Mapper
@@ -91,9 +90,12 @@ public interface DatabaseContractPlanMapper {
      * 记录DDL事务失败后的受控错误摘要。
      *
      * @param id 方案主键
+     * @param version 发起执行时的并发版本；事务回滚后只允许更新同一版本
      * @param message 失败摘要
+     * @return 影响行数；版本或状态变化时为零
      */
-    void markFailed(@Param("id") long id, @Param("message") String message);
+    int markFailed(@Param("id") long id, @Param("version") byte[] version,
+                   @Param("message") String message);
 
     /**
      * 在执行开始前取消维护方案。

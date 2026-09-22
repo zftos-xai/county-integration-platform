@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState, updatePassword } from '@/store/modules/auth'
 import { ApiClientError } from '@/utils/request'
+import { isValidPasswordSize } from '@/utils/validation'
 
 const router = useRouter()
 const currentPassword = ref('')
@@ -17,8 +18,8 @@ const isSubmitDisabled = computed(() => !currentPassword.value || !newPassword.v
 async function submit() {
   localError.value = ''
   error.value = null
-  if (newPassword.value.length < 9 || newPassword.value.length > 128) {
-    localError.value = '新密码长度需为 9–128 个字符'
+  if (!isValidPasswordSize(newPassword.value)) {
+    localError.value = '新密码至少 9 个字符，UTF-8 编码不能超过 72 字节'
     return
   }
   if (newPassword.value !== confirmation.value) {

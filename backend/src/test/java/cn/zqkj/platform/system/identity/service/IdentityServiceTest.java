@@ -1,21 +1,19 @@
 package cn.zqkj.platform.system.identity.service;
-import cn.zqkj.platform.system.identity.service.impl.IdentityServiceImpl;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.system.bootstrap.domain.dto.BootstrapCommand;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapResultVO;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapStatusVO;
-import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
-import cn.zqkj.platform.system.organization.service.OrganizationService;
 import cn.zqkj.platform.system.identity.domain.model.UserAccount;
 import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
+import cn.zqkj.platform.system.identity.service.impl.IdentityServiceImpl;
+import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
+import cn.zqkj.platform.system.organization.service.OrganizationService;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
-import java.time.LocalDateTime;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -56,6 +54,8 @@ class IdentityServiceTest {
         verify(mapper).grantRole(30L, 20L, "platform-bootstrap");
         verify(mapper).grantOrganization(30L, 10L, "platform-bootstrap");
         verify(mapper).grantPermission(20L, "organization:write", "platform-bootstrap");
+        verify(mapper).upsertPermission("exchange:read", "查询交换记录");
+        verify(mapper).grantPermission(20L, "exchange:read", "platform-bootstrap");
     }
 
     /**
@@ -117,7 +117,22 @@ class IdentityServiceTest {
 
         assertThrows(InvalidRequestException.class,
                 () -> service.changePassword(30L, "wrong", "Another!Pass123"));
-        verify(mapper, never()).changePassword(anyLong(), any(), any());
+        verify(mapper, never()).changePassword(anyLong(), any(), any(), any());
+    }
+
+    /** 两个改密请求验证同一旧密码后，只有持有当前账号版本的写入可以成功。 */
+    @Test
+    void rejectsPasswordChangeWhenAccountVersionHasChanged() {
+        IdentityMapper mapper = mock(IdentityMapper.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+        UserAccount current = account();
+        when(mapper.findById(30L)).thenReturn(current);
+        when(encoder.matches("old", "hash")).thenReturn(true);
+        when(encoder.encode("Another!Pass123")).thenReturn("new-hash");
+        IdentityService service = new IdentityServiceImpl(
+                mapper, mock(OrganizationService.class), encoder, BOOTSTRAP_SECRET);
+        assertThrows(ResourceConflictException.class, () -> service.changePassword(30L, "old", "Another!Pass123"));
+        verify(mapper).changePassword(30L, "new-hash", "admin", current.version());
     }
 
     /**
@@ -149,6 +164,6 @@ class IdentityServiceTest {
      * @return 用户记录
      */
     private UserAccount account() {
-        return new UserAccount(30L, "admin", "平台管理员", "hash", 10L, "ORG001", true, true);
+        return new UserAccount(30L, "admin", "平台管理员", "hash", 10L, "ORG001", true, true, new byte[8]);
     }
 }

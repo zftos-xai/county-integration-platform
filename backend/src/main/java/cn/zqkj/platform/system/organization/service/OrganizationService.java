@@ -1,9 +1,8 @@
 package cn.zqkj.platform.system.organization.service;
 
 import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
-import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.domain.dto.UpdateOrganizationCommand;
-
+import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import java.util.List;
 
 /**
@@ -29,12 +28,29 @@ public interface OrganizationService {
     OrganizationVO get(long id);
 
     /**
-     * 查询当前调用方可见的机构档案列表。
+     * 读取获准范围内的机构档案，范围外与不存在使用相同失败语义。
+     * @param id 机构主键
+     * @param organizationCodes 获准访问的机构代码
+     * @return 可见机构
+     */
+    OrganizationVO getVisible(long id, List<String> organizationCodes);
+
+    /**
+     * 查询全部机构档案供受信内部流程使用，不执行调用人的机构范围过滤。
      *
      * @param enabled 可选启用状态
      * @return 机构列表
      */
     List<OrganizationVO> findAll(Boolean enabled);
+
+    /**
+     * 在数据库中限定机构代码后查询可见机构，避免先读取全量机构。
+     *
+     * @param enabled 可选启用状态
+     * @param organizationCodes 获准访问的机构代码；空列表不返回机构
+     * @return 范围内稳定排序的机构列表
+     */
+    List<OrganizationVO> findVisible(Boolean enabled, List<String> organizationCodes);
 
     /**
      * 按并发版本更新机构档案并返回最新视图。

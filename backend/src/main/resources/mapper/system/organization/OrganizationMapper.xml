@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.zqkj.platform.system.organization.mapper.OrganizationMapper">
+    <!-- 事务结束时自动释放；负返回码由服务转为冲突并回滚。 -->
+    <select id="lockHierarchy" resultType="int">
+        <!-- 机构树所有写入共用此事务级互斥锁，等待最多十秒。 -->
+        DECLARE @lock_result INT;
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = N'platform:organization-hierarchy',
+            @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        SELECT @lock_result;
+    </select>
     <resultMap id="organizationView" type="cn.zqkj.platform.system.organization.domain.vo.OrganizationVO">
         <constructor>
             <!-- 平台机构内部主键 -->
@@ -60,6 +69,22 @@
         WHERE id = #{id}
     </select>
 
+    <select id="findVisibleById" resultMap="organizationView">
+        <!-- 按主键和获准机构代码同时过滤；空集合拒绝全部行。 -->
+        SELECT <include refid="organizationColumns"/>
+        FROM org_organization
+        WHERE id = #{id}
+        <choose>
+            <when test="organizationCodes != null and !organizationCodes.isEmpty()">
+                AND organization_code IN
+                <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </when>
+            <otherwise>AND 1 = 0</otherwise>
+        </choose>
+    </select>
+
     <select id="countByCode" resultType="int">
         SELECT COUNT(1)
         FROM org_organization
@@ -75,6 +100,26 @@
             WHERE is_enabled = #{enabled}
         </if>
         <!-- 按机构名称及内部主键稳定排序 -->
+        ORDER BY organization_name, id
+    </select>
+
+    <select id="findVisible" resultMap="organizationView">
+        SELECT <include refid="organizationColumns"/>
+        FROM org_organization
+        <!-- 空机构范围不返回记录；可见范围在数据库查询边界生效。 -->
+        <choose>
+            <when test="organizationCodes != null and !organizationCodes.isEmpty()">
+                WHERE organization_code IN
+                <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </when>
+            <otherwise>WHERE 1 = 0</otherwise>
+        </choose>
+        <if test="enabled != null">
+            AND is_enabled = #{enabled}
+        </if>
+        <!-- 机构名称和主键共同保证稳定排序。 -->
         ORDER BY organization_name, id
     </select>
 
@@ -104,8 +149,8 @@
             #{command.organizationType},
             #{command.parentId,jdbcType=BIGINT},
             1,
-            #{command.validFrom,jdbcType=TIMESTAMP},
-            #{command.validTo,jdbcType=TIMESTAMP},
+            #{command.validFromUtc,jdbcType=TIMESTAMP},
+            #{command.validToUtc,jdbcType=TIMESTAMP},
             #{actor},
             #{actor}
         );
@@ -121,9 +166,9 @@
             <!-- 可修改的父机构主键 -->
             parent_id = #{command.parentId,jdbcType=BIGINT},
             <!-- 可选业务有效起始UTC时间 -->
-            valid_from = #{command.validFrom,jdbcType=TIMESTAMP},
+            valid_from = #{command.validFromUtc,jdbcType=TIMESTAMP},
             <!-- 可选业务有效结束UTC时间 -->
-            valid_to = #{command.validTo,jdbcType=TIMESTAMP},
+            valid_to = #{command.validToUtc,jdbcType=TIMESTAMP},
             <!-- 最后修改人稳定用户标识快照 -->
             updated_by = #{actor},
             <!-- 最后修改UTC时间 -->

@@ -1,6 +1,7 @@
 package cn.zqkj.platform.common.utils.validation;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
+import cn.zqkj.platform.common.utils.encoding.EncodingUtils;
 import cn.zqkj.platform.common.utils.text.TextUtils;
 
 /**
@@ -14,6 +15,25 @@ public final class ValidationUtils {
      * 禁止创建校验工具实现实例。
      */
     private ValidationUtils() {
+    }
+
+    /**
+     * 将客户端版本转换为可用于 SQL Server 条件更新的八字节值。
+     *
+     * @param value Base64 行版本
+     * @return 八字节行版本
+     * @throws InvalidRequestException 版本缺失、编码错误或长度不正确时抛出
+     */
+    public static byte[] decodeRowVersion(String value) {
+        try {
+            byte[] version = EncodingUtils.decodeBase64(value);
+            if (version == null || version.length != Long.BYTES) {
+                throw new InvalidRequestException("version 必须表示一个 8 字节的 SQL Server 行版本号");
+            }
+            return version;
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidRequestException("version 必须是有效的 Base64 文本");
+        }
     }
 
     /**

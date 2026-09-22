@@ -1,14 +1,13 @@
 package cn.zqkj.platform.exchange.service;
-import cn.zqkj.platform.exchange.service.impl.ExchangeRecordQueryServiceImpl;
 
-import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.exchange.domain.dto.ExchangeRecordQuery;
 import cn.zqkj.platform.exchange.mapper.ExchangeRecordMapper;
+import cn.zqkj.platform.exchange.service.impl.ExchangeRecordQueryServiceImpl;
+import jakarta.validation.Validation;
+import java.time.OffsetDateTime;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -19,15 +18,15 @@ import static org.mockito.Mockito.verify;
 class ExchangeRecordQueryServiceTest {
 
     /**
-     * 验证过大的查询数量在进入持久化边界前被限制为 100。
+     * 查询直接复用已校验输入，不另建截断参数的查询对象。
      */
     @Test
-    void limitsPageSizeToOneHundred() {
+    void passesValidatedQueryWithoutCopying() {
         ExchangeRecordMapper mapper = mock(ExchangeRecordMapper.class);
         ExchangeRecordQueryService service = new ExchangeRecordQueryServiceImpl(mapper);
 
         ExchangeRecordQuery query = new ExchangeRecordQuery(
-                "ORG001", null, null, null, null, null, null, 500
+                "ORG001", null, null, null, null, null, null, 100
         );
 
         service.findRecent(query);
@@ -45,8 +44,8 @@ class ExchangeRecordQueryServiceTest {
         ExchangeRecordQueryService service = new ExchangeRecordQueryServiceImpl(mapper);
         ExchangeRecordQuery query = new ExchangeRecordQuery(
                 "ORG001",
-                LocalDateTime.of(2026, 9, 16, 12, 0),
-                LocalDateTime.of(2026, 9, 16, 11, 0),
+                OffsetDateTime.parse("2026-09-16T12:00:00Z"),
+                OffsetDateTime.parse("2026-09-16T11:00:00Z"),
                 null,
                 null,
                 null,
@@ -54,11 +53,13 @@ class ExchangeRecordQueryServiceTest {
                 20
         );
 
-        assertThrows(InvalidRequestException.class, () -> service.findRecent(query));
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            Assertions.assertFalse(factory.getValidator().validate(query).isEmpty());
+        }
     }
 
     /**
-     * 验证应用服务拒绝无效的非正返回数量，防止非 HTTP 调用绕过控制器校验。
+     * 入口约束拒绝非正返回数量，内部调用可复用同一约束。
      */
     @Test
     void rejectsNonPositiveLimit() {
@@ -68,6 +69,8 @@ class ExchangeRecordQueryServiceTest {
                 "ORG001", null, null, null, null, null, null, 0
         );
 
-        assertThrows(InvalidRequestException.class, () -> service.findRecent(query));
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            Assertions.assertFalse(factory.getValidator().validate(query).isEmpty());
+        }
     }
 }

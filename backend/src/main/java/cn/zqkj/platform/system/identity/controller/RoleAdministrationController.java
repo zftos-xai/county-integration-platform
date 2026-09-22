@@ -1,27 +1,24 @@
 package cn.zqkj.platform.system.identity.controller;
 
-import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.common.core.ApiResponse;
-import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.utils.Func;
+import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.system.identity.domain.dto.CreateRoleCommand;
-import cn.zqkj.platform.system.identity.domain.dto.CreateRoleRequest;
 import cn.zqkj.platform.system.identity.domain.dto.DeleteRoleRequest;
 import cn.zqkj.platform.system.identity.domain.dto.ReplacePermissionCodesRequest;
 import cn.zqkj.platform.system.identity.domain.dto.UpdateRoleCommand;
-import cn.zqkj.platform.system.identity.domain.dto.UpdateRoleRequest;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import cn.zqkj.platform.system.identity.domain.vo.PermissionVO;
 import cn.zqkj.platform.system.identity.domain.vo.RoleVO;
 import cn.zqkj.platform.system.identity.service.RoleAdministrationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -30,10 +27,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 /**
- * 提供平台角色和代码注册功能权限管理API。
+ * 提供平台级角色和代码注册功能权限管理API。
+ *
+ * <p>功能权限在入口校验；角色和权限本身不是按机构分区的资源。</p>
  */
 @Validated
 @RestController
@@ -54,7 +51,7 @@ public class RoleAdministrationController {
     /**
      * 查询全部角色及其权限配置。
      *
-     * <p>需要 {@code access:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:read} 功能权限。</p>
      *
      * @return 平台角色列表
      */
@@ -67,7 +64,7 @@ public class RoleAdministrationController {
     /**
      * 按主键读取角色及其权限配置。
      *
-     * <p>需要 {@code access:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:read} 功能权限。</p>
      *
      * @param roleId 角色主键
      * @return 角色详情
@@ -81,7 +78,7 @@ public class RoleAdministrationController {
     /**
      * 创建角色。
      *
-     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:write} 功能权限。</p>
      *
      * @param request 创建请求
      * @param principal 当前用户
@@ -91,18 +88,18 @@ public class RoleAdministrationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<RoleVO> createRole(
-            @Valid @RequestBody CreateRoleRequest request,
+            @Valid @RequestBody CreateRoleCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.create(
-                new CreateRoleCommand(request.roleCode(), request.roleName()), actor(principal)
+                request, principal.accessActor()
         ));
     }
 
     /**
      * 按并发版本更新角色资料。
      *
-     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:write} 功能权限。</p>
      *
      * @param roleId 角色主键
      * @param request 修改请求
@@ -113,18 +110,16 @@ public class RoleAdministrationController {
     @PreAuthorize("hasAuthority('access:write')")
     public ApiResponse<RoleVO> updateRole(
             @PathVariable @Positive long roleId,
-            @Valid @RequestBody UpdateRoleRequest request,
+            @Valid @RequestBody UpdateRoleCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.update(roleId, new UpdateRoleCommand(
-                request.roleName(), request.enabled(), decodeVersion(request.version())
-        ), actor(principal)));
+        return ApiResponse.success(service.update(roleId, request, principal.accessActor()));
     }
 
     /**
      * 删除未被用户引用且不受平台保护的角色。
      *
-     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:write} 功能权限。</p>
      *
      * @param roleId 角色主键
      * @param request 删除请求
@@ -138,14 +133,14 @@ public class RoleAdministrationController {
             @Valid @RequestBody DeleteRoleRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        service.delete(roleId, decodeVersion(request.version()), actor(principal));
+        service.delete(roleId, Func.decodeRowVersion(request.version()), principal.accessActor());
         return ApiResponse.success(null);
     }
 
     /**
      * 整体替换角色的功能权限集合。
      *
-     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:write} 功能权限。</p>
      *
      * @param roleId 角色主键
      * @param request 权限请求
@@ -160,14 +155,14 @@ public class RoleAdministrationController {
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.replacePermissions(
-                roleId, request.permissionCodes(), actor(principal)
+                roleId, request.permissionCodes(), principal.accessActor()
         ));
     }
 
     /**
      * 查询后端已注册的功能权限。
      *
-     * <p>需要 {@code access:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:read} 功能权限。</p>
      *
      * @return 后端代码注册权限清单
      */
@@ -177,31 +172,4 @@ public class RoleAdministrationController {
         return ApiResponse.success(service.findPermissions());
     }
 
-    /**
-     * 将当前登录主体转换为携带机构范围的服务层操作人。
-     *
-     * @param principal 当前用户
-     * @return 审计操作人
-     */
-    private AccessActor actor(PlatformUserPrincipal principal) {
-        return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
-    }
-
-    /**
-     * 解码并校验客户端提交的SQL Server行版本。
-     *
-     * @param value Base64版本
-     * @return 8字节并发版本
-     */
-    private byte[] decodeVersion(String value) {
-        try {
-            byte[] version = Func.decodeBase64(value);
-            if (version.length != Long.BYTES) {
-                throw new InvalidRequestException("version 必须表示一个 8 字节的 SQL Server 行版本号");
-            }
-            return version;
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("version 必须是有效的 Base64 文本");
-        }
-    }
 }

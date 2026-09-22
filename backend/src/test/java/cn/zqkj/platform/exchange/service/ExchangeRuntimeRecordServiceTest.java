@@ -20,6 +20,35 @@ import static org.mockito.Mockito.when;
  * 验证交换运行记录写入的结果边界和最小数据规则。
  */
 class ExchangeRuntimeRecordServiceTest {
+    private static final jakarta.validation.ValidatorFactory VALIDATION_FACTORY =
+            jakarta.validation.Validation.buildDefaultValidatorFactory();
+
+    /** 释放测试使用的校验器工厂。 */
+    @org.junit.jupiter.api.AfterAll
+    static void closeValidationFactory() {
+        VALIDATION_FACTORY.close();
+    }
+
+    /** 内部写入也拒绝缺失字段、超长原文和负耗时，不靠 HTTP 校验或悄悄裁剪掩盖问题。 */
+    @Test
+    void validatesRawRuntimeFactsWithoutHttpController() {
+        ExchangeRecordMapper mapper = mock(ExchangeRecordMapper.class);
+        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(
+                mapper, VALIDATION_FACTORY.getValidator());
+        for (String requestId : java.util.Arrays.asList(null, " ", "R".repeat(64) + " ")) {
+            ExchangeRuntimeRecord invalid = new ExchangeRuntimeRecord(requestId, "100-003", "PLATFORM", "HIS",
+                    "ORG001", "batch-1", ExchangeResult.NO_RESPONSE, null, null, 100, null, "连接超时",
+                    LocalDateTime.parse("2026-09-21T00:00:00"), LocalDateTime.parse("2026-09-21T00:00:01"));
+            assertThrows(InvalidRequestException.class, () -> service.record(invalid));
+        }
+        ExchangeRuntimeRecord negativeDuration = new ExchangeRuntimeRecord("req-001", "100-003", "PLATFORM", "HIS",
+                "ORG001", "batch-1", ExchangeResult.NO_RESPONSE, null, null, -1, null, "连接超时",
+                LocalDateTime.parse("2026-09-21T00:00:00"), LocalDateTime.parse("2026-09-21T00:00:01"));
+        assertThrows(InvalidRequestException.class, () -> service.record(negativeDuration));
+        assertThrows(InvalidRequestException.class, () -> service.record(null));
+        org.mockito.Mockito.verifyNoInteractions(mapper);
+    }
+
 
     /**
      * 验证包含通信异常摘要且没有目标返回码的无响应记录能够保存。
@@ -29,7 +58,7 @@ class ExchangeRuntimeRecordServiceTest {
         ExchangeRecordMapper mapper = mock(ExchangeRecordMapper.class);
         ExchangeRuntimeRecord record = noResponseRecord(null, "连接超时");
         when(mapper.insertRuntimeRecord(record)).thenReturn(1);
-        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(mapper);
+        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(mapper, VALIDATION_FACTORY.getValidator());
 
         String requestId = service.record(record);
 
@@ -44,7 +73,7 @@ class ExchangeRuntimeRecordServiceTest {
     void rejectsNoResponseWithTargetResultCode() {
         ExchangeRecordMapper mapper = mock(ExchangeRecordMapper.class);
         ExchangeRuntimeRecord record = noResponseRecord("500", "连接中断");
-        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(mapper);
+        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(mapper, VALIDATION_FACTORY.getValidator());
 
         assertThrows(InvalidRequestException.class, () -> service.record(record));
         verify(mapper, never()).insertRuntimeRecord(record);
@@ -57,7 +86,7 @@ class ExchangeRuntimeRecordServiceTest {
     void rejectsNoResponseWithoutCommunicationSummary() {
         ExchangeRecordMapper mapper = mock(ExchangeRecordMapper.class);
         ExchangeRuntimeRecord record = noResponseRecord(null, " ");
-        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(mapper);
+        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(mapper, VALIDATION_FACTORY.getValidator());
 
         assertThrows(InvalidRequestException.class, () -> service.record(record));
         verify(mapper, never()).insertRuntimeRecord(record);
@@ -86,7 +115,7 @@ class ExchangeRuntimeRecordServiceTest {
                 source.processedAt(),
                 source.receivedAt()
         );
-        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(mapper);
+        ExchangeRuntimeRecordService service = new ExchangeRuntimeRecordServiceImpl(mapper, VALIDATION_FACTORY.getValidator());
 
         assertThrows(InvalidRequestException.class, () -> service.record(record));
         verify(mapper, never()).insertRuntimeRecord(record);

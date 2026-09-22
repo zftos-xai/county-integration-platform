@@ -62,7 +62,7 @@ const removedScopeNames = computed(() => (props.selected?.organizationScopeIds ?
           <label><span>登录名 <b>*</b></span><input v-model="form.loginName" :disabled="mode !== 'create'" maxlength="64" autocomplete="off" /></label>
           <label><span>用户姓名 <b>*</b></span><input v-model="form.displayName" :disabled="mode === 'view'" maxlength="100" autocomplete="off" /></label>
           <label><span>主要机构 <b>*</b></span><select v-model="form.primaryOrganizationId" :disabled="mode === 'view'"><option value="">请选择主要机构</option><option v-for="organization in enabledOrganizations" :key="organization.id" :value="String(organization.id)">{{ organization.organizationName }}（{{ organization.organizationCode }}）</option></select></label>
-          <label v-if="mode === 'create'"><span>一次性临时密码 <b>*</b></span><input v-model="form.temporaryPassword" type="password" maxlength="128" autocomplete="new-password" /><small>长度12—128位，不能包含登录名；创建后不再显示。</small></label>
+          <label v-if="mode === 'create'"><span>一次性临时密码 <b>*</b></span><input v-model="form.temporaryPassword" type="password" maxlength="128" autocomplete="new-password" /><small>至少9个字符且UTF-8编码不超过72字节，不能包含登录名；创建后不再显示。</small></label>
           <footer v-if="mode === 'create' || mode === 'edit'"><button class="work-quiet-button" type="button" @click="emit('close')">取消</button><button class="prototype-button" type="submit" :disabled="isSaving || isDetailLoading">{{ isSaving ? '正在保存…' : '保存基础信息' }}</button></footer>
         </form>
         <template v-if="selected">

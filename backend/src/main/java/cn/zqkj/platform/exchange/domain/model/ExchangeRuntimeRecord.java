@@ -1,6 +1,10 @@
 package cn.zqkj.platform.exchange.domain.model;
 
 import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 /**
  * 一次真实目标系统调用完成后的最小持久化事实。
@@ -27,19 +31,19 @@ import java.time.LocalDateTime;
  * @param processedAt 平台确认本次最终结果的 UTC 时间
  */
 public record ExchangeRuntimeRecord(
-        String requestId,
-        String interfaceCode,
-        String callerSystemCode,
-        String targetSystemCode,
-        String organizationCode,
-        String sourceRecordId,
-        ExchangeResult result,
-        String targetResultCode,
-        String resultMessage,
-        long durationMs,
-        String requestSummary,
-        String communicationErrorSummary,
-        LocalDateTime receivedAt,
-        LocalDateTime processedAt
+        @NotBlank @Size(max = 64) String requestId,
+        @NotBlank @Size(max = 64) String interfaceCode,
+        @NotBlank @Size(max = 64) String callerSystemCode,
+        @NotBlank @Size(max = 64) String targetSystemCode,
+        @NotBlank @Size(max = 64) String organizationCode,
+        @NotBlank @Size(max = 128) String sourceRecordId,
+        @NotNull ExchangeResult result,
+        @Size(max = 64) String targetResultCode,
+        @Size(max = 500) String resultMessage,
+        @PositiveOrZero long durationMs,
+        @Size(max = 500) String requestSummary,
+        @Size(max = 500) String communicationErrorSummary,
+        @NotNull LocalDateTime receivedAt,
+        @NotNull LocalDateTime processedAt
 ) {
 }

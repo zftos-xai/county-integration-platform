@@ -2,21 +2,20 @@ package cn.zqkj.platform.system.audit.service;
 
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditQuery;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import cn.zqkj.platform.system.audit.domain.vo.ManagementAuditEventVO;
-
 import java.util.List;
+import java.util.Set;
 
 /** 管理审计追加与授权查询边界。 */
 public interface ManagementAuditService {
 
     /**
-     * 追加一条不含敏感内容的管理操作成功事件。
+     * 在业务事务中追加管理操作结果，使结果保存与审计同成同败。
      *
-     * @param command 成功事件命令
+     * @param command 已完成操作的审计事实，结果只能为 SUCCESS 或 FAILURE
      * @return 新事件主键
      */
-    long recordSuccess(ManagementAuditCommand command);
+    long append(ManagementAuditCommand command);
 
     /**
      * 追加不包含密码和凭证的登录失败审计事件。
@@ -39,9 +38,9 @@ public interface ManagementAuditService {
     /**
      * 查询当前操作人机构范围内可见的管理审计事件。
      *
-     * @param actor 查询用户
+     * @param organizationCodes 获准访问的机构范围
      * @param query 查询条件
      * @return 可见事件
      */
-    List<ManagementAuditEventVO> findVisible(AccessActor actor, ManagementAuditQuery query);
+    List<ManagementAuditEventVO> findVisible(Set<String> organizationCodes, ManagementAuditQuery query);
 }

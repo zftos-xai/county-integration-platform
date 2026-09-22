@@ -1,27 +1,28 @@
 package cn.zqkj.platform.system.identity.service;
-import cn.zqkj.platform.system.identity.service.impl.UserAdministrationServiceImpl;
-import cn.zqkj.platform.system.audit.service.ManagementAuditService;
-import cn.zqkj.platform.system.organization.service.OrganizationService;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.common.exception.ResourceNotFoundException;
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
+import cn.zqkj.platform.system.audit.service.ManagementAuditService;
 import cn.zqkj.platform.system.identity.domain.dto.CreateUserCommand;
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import cn.zqkj.platform.system.identity.domain.model.ManagedUserSummary;
-import cn.zqkj.platform.system.identity.domain.vo.ManagedUserVO;
-import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.identity.domain.model.RoleSummary;
+import cn.zqkj.platform.system.identity.domain.model.UserOrganizationAssignment;
+import cn.zqkj.platform.system.identity.domain.model.UserRoleAssignment;
+import cn.zqkj.platform.system.identity.domain.vo.ManagedUserVO;
 import cn.zqkj.platform.system.identity.mapper.AccessMapper;
-import org.mockito.ArgumentCaptor;
-import org.junit.jupiter.api.Test;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.crypto.password.PasswordEncoder;
-
+import cn.zqkj.platform.system.identity.service.impl.UserAdministrationServiceImpl;
+import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
+import cn.zqkj.platform.system.organization.service.OrganizationService;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,21 +40,40 @@ import static org.mockito.Mockito.when;
  */
 class UserAdministrationServiceTest {
 
+    /** 用户列表只读取授权机构，并以两次批量关系查询代替逐用户补查。 */
+    @Test
+    void listsVisibleUsersWithBulkAssignments() {
+        AccessMapper mapper = mock(AccessMapper.class);
+        when(mapper.findUsers(List.of("ORG001"))).thenReturn(List.of(
+                user(1L, "ORG001", true), user(2L, "ORG001", true)));
+        when(mapper.findUserRoles(List.of("ORG001"))).thenReturn(List.of(
+                new UserRoleAssignment(1L, 5L), new UserRoleAssignment(2L, 6L)));
+        when(mapper.findUserOrganizations(List.of("ORG001"))).thenReturn(List.of(
+                new UserOrganizationAssignment(1L, 10L), new UserOrganizationAssignment(2L, 10L)));
+
+        List<ManagedUserVO> users = service(mapper, mock(OrganizationService.class)).findAll(actor());
+
+        assertEquals(List.of(5L), users.get(0).roleIds());
+        assertEquals(List.of(6L), users.get(1).roleIds());
+        verify(mapper, never()).findUserRoleIds(anyLong());
+        verify(mapper, never()).findUserOrganizationIds(anyLong());
+    }
+
     /** 验证跨机构用户详情被服务端拒绝。 */
     @Test
     void rejectsUserOutsideActorScope() {
         AccessMapper mapper = mock(AccessMapper.class);
-        when(mapper.findUser(2L)).thenReturn(java.util.Optional.of(user(2L, "ORG002", true)));
+        when(mapper.findUser(2L, List.of("ORG001"))).thenReturn(Optional.empty());
         UserAdministrationService service = service(mapper, mock(OrganizationService.class));
 
-        assertThrows(AccessDeniedException.class, () -> service.get(2L, actor()));
+        assertThrows(ResourceNotFoundException.class, () -> service.get(2L, actor()));
     }
 
     /** 验证不能停用最后一个启用的平台管理员。 */
     @Test
     void protectsLastPlatformAdministrator() {
         AccessMapper mapper = mock(AccessMapper.class);
-        when(mapper.findUser(1L)).thenReturn(java.util.Optional.of(user(1L, "ORG001", true)));
+        when(mapper.findUser(1L, List.of("ORG001"))).thenReturn(Optional.of(user(1L, "ORG001", true)));
         when(mapper.isEnabledPlatformAdministrator(1L)).thenReturn(true);
         when(mapper.countOtherEnabledPlatformAdministrators(1L)).thenReturn(0);
         UserAdministrationService service = service(mapper, mock(OrganizationService.class));
@@ -69,10 +89,10 @@ class UserAdministrationServiceTest {
         AccessMapper mapper = mock(AccessMapper.class);
         OrganizationService organizationService = mock(OrganizationService.class);
         PasswordEncoder encoder = mock(PasswordEncoder.class);
-        when(organizationService.get(10L)).thenReturn(organization(10L, "ORG001"));
+        when(organizationService.getVisible(10L, List.of("ORG001"))).thenReturn(organization(10L, "ORG001"));
         when(encoder.encode("Temporary!123")).thenReturn("hash");
         when(mapper.createUser(any(), eq("hash"), eq("admin"))).thenReturn(2L);
-        when(mapper.findUser(2L)).thenReturn(java.util.Optional.of(user(2L, "ORG001", true)));
+        when(mapper.findUser(2L, List.of("ORG001"))).thenReturn(Optional.of(user(2L, "ORG001", true)));
         when(mapper.findUserRoleIds(2L)).thenReturn(List.of());
         when(mapper.findUserOrganizationIds(2L)).thenReturn(List.of(10L));
         UserAdministrationService service = new UserAdministrationServiceImpl(
@@ -94,7 +114,7 @@ class UserAdministrationServiceTest {
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         ManagementAuditService auditService = mock(ManagementAuditService.class);
         String temporaryPassword = "Temporary!456";
-        when(mapper.findUser(2L)).thenReturn(Optional.of(user(2L, "ORG001", true)));
+        when(mapper.findUser(2L, List.of("ORG001"))).thenReturn(Optional.of(user(2L, "ORG001", true)));
         when(encoder.encode(temporaryPassword)).thenReturn("password-hash");
         when(mapper.resetPassword(2L, "password-hash", "admin")).thenReturn(1);
         UserAdministrationService service = new UserAdministrationServiceImpl(
@@ -104,7 +124,7 @@ class UserAdministrationServiceTest {
         service.resetPassword(2L, temporaryPassword, actor());
 
         ArgumentCaptor<ManagementAuditCommand> captor = ArgumentCaptor.forClass(ManagementAuditCommand.class);
-        verify(auditService).recordSuccess(captor.capture());
+        verify(auditService).append(captor.capture());
         assertEquals("USER_PASSWORD_RESET", captor.getValue().actionCode());
         assertFalse(captor.getValue().changeSummary().contains(temporaryPassword));
         assertFalse(captor.getValue().changeSummary().contains("password-hash"));
@@ -114,7 +134,7 @@ class UserAdministrationServiceTest {
     @Test
     void requiresPrimaryOrganizationInScope() {
         AccessMapper mapper = mock(AccessMapper.class);
-        when(mapper.findUser(2L)).thenReturn(java.util.Optional.of(user(2L, "ORG001", true)));
+        when(mapper.findUser(2L, List.of("ORG001"))).thenReturn(Optional.of(user(2L, "ORG001", true)));
         UserAdministrationService service = service(mapper, mock(OrganizationService.class));
 
         assertThrows(InvalidRequestException.class,
@@ -125,7 +145,7 @@ class UserAdministrationServiceTest {
     @Test
     void protectsLastPlatformAdministratorRole() {
         AccessMapper mapper = mock(AccessMapper.class);
-        when(mapper.findUser(1L)).thenReturn(java.util.Optional.of(user(1L, "ORG001", true)));
+        when(mapper.findUser(1L, List.of("ORG001"))).thenReturn(Optional.of(user(1L, "ORG001", true)));
         when(mapper.findRoles()).thenReturn(List.of(new RoleSummary(
                 9L, "PLATFORM_ADMIN", "Platform Administrator", true, true,
                 LocalDateTime.now(), LocalDateTime.now(), version()

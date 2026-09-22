@@ -1,19 +1,16 @@
 package cn.zqkj.platform.system.organization.controller;
 
 import cn.zqkj.platform.common.core.ApiResponse;
-import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
-import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.utils.Func;
-import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
-import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationRequest;
+import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.system.organization.domain.dto.ChangeOrganizationEnabledRequest;
-import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
+import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
 import cn.zqkj.platform.system.organization.domain.dto.UpdateOrganizationCommand;
-import cn.zqkj.platform.system.organization.domain.dto.UpdateOrganizationRequest;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
+import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.service.OrganizationAdministrationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,8 +25,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * 提供平台机构档案、层级和启停管理API。
@@ -63,7 +58,7 @@ public class OrganizationController {
             @RequestParam(required = false) Boolean enabled,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.findAll(enabled, actor(principal)));
+        return ApiResponse.success(service.findAll(enabled, principal.accessActor()));
     }
 
     /**
@@ -79,7 +74,7 @@ public class OrganizationController {
             @PathVariable @Positive long id,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.get(id, actor(principal)));
+        return ApiResponse.success(service.get(id, principal.accessActor()));
     }
 
     /**
@@ -93,18 +88,10 @@ public class OrganizationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('organization:write')")
     public ApiResponse<OrganizationVO> create(
-            @Valid @RequestBody CreateOrganizationRequest request,
+            @Valid @RequestBody CreateOrganizationCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        CreateOrganizationCommand command = new CreateOrganizationCommand(
-                request.organizationCode(),
-                request.organizationName(),
-                request.organizationType(),
-                request.parentId(),
-                Func.toUtc(request.validFrom()),
-                Func.toUtc(request.validTo())
-        );
-        return ApiResponse.success(service.create(command, actor(principal)));
+        return ApiResponse.success(service.create(request, principal.accessActor()));
     }
 
     /**
@@ -119,18 +106,10 @@ public class OrganizationController {
     @PreAuthorize("hasAuthority('organization:write')")
     public ApiResponse<OrganizationVO> update(
             @PathVariable @Positive long id,
-            @Valid @RequestBody UpdateOrganizationRequest request,
+            @Valid @RequestBody UpdateOrganizationCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        UpdateOrganizationCommand command = new UpdateOrganizationCommand(
-                request.organizationName(),
-                request.organizationType(),
-                request.parentId(),
-                Func.toUtc(request.validFrom()),
-                Func.toUtc(request.validTo()),
-                decodeVersion(request.version())
-        );
-        return ApiResponse.success(service.update(id, command, actor(principal)));
+        return ApiResponse.success(service.update(id, request, principal.accessActor()));
     }
 
     /**
@@ -151,36 +130,9 @@ public class OrganizationController {
         return ApiResponse.success(service.setEnabled(
                 id,
                 request.enabled(),
-                decodeVersion(request.version()),
-                actor(principal)
+                Func.decodeRowVersion(request.version()),
+                principal.accessActor()
         ));
     }
 
-    /**
-     * 将当前登录主体转换为携带机构范围的服务层操作人。
-     *
-     * @param principal 当前用户
-     * @return 应用服务操作人信息
-     */
-    private AccessActor actor(PlatformUserPrincipal principal) {
-        return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
-    }
-
-    /**
-     * 解析Base64编码的SQL Server并发版本。
-     *
-     * @param value Base64编码版本
-     * @return 8字节并发版本
-     */
-    private byte[] decodeVersion(String value) {
-        try {
-            byte[] version = Func.decodeBase64(value);
-            if (version.length != Long.BYTES) {
-                throw new InvalidRequestException("version 必须表示一个 8 字节的 SQL Server 行版本号");
-            }
-            return version;
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("version 必须是有效的 Base64 文本");
-        }
-    }
 }

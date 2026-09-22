@@ -1,8 +1,9 @@
 package cn.zqkj.platform.system.configuration.service.impl;
 
 import cn.zqkj.platform.common.exception.ResourceConflictException;
-import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointAuthentication;
+import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpoint;
+import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointAuthentication;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointRuntimeConfiguration;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointScope;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
@@ -10,14 +11,13 @@ import cn.zqkj.platform.system.configuration.mapper.ConfigurationMapper;
 import cn.zqkj.platform.system.configuration.service.ExternalEndpointResolutionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 使用配置域Mapper实现外部服务地址只读解析，避免其他业务域直接访问配置表。
@@ -71,7 +71,7 @@ public class ExternalEndpointResolutionServiceImpl implements ExternalEndpointRe
     }
 
     /**
-     * {@inheritDoc}
+     * 解析已验证且启用的机构端点及其认证信息。
      *
      * <p>只解析已启用且验证通过的端点；解密后的认证信息仅存在于返回的运行时对象中，不写日志或数据库明文。</p>
      */
@@ -90,7 +90,7 @@ public class ExternalEndpointResolutionServiceImpl implements ExternalEndpointRe
     }
 
     /**
-     * {@inheritDoc}
+     * 解析机构已保存的端点及认证信息，供启用前验证使用。
      *
      * <p>用于启用前验证，可解析已配置端点；仍要求地址和受支持的凭证引用完整可用。</p>
      */
@@ -106,7 +106,7 @@ public class ExternalEndpointResolutionServiceImpl implements ExternalEndpointRe
     }
 
     /**
-     * {@inheritDoc}
+     * 列出获准机构中端点与认证信息均可解析的可用环境。
      *
      * <p>先按机构权限取得候选范围，再过滤掉无法完整解析地址或认证信息的配置。</p>
      */
@@ -156,14 +156,14 @@ public class ExternalEndpointResolutionServiceImpl implements ExternalEndpointRe
             throw new ResourceConflictException("外部系统认证信息存储格式无效");
         }
         String value = environmentReader.apply(variableName);
-        if (value == null || value.isBlank()) {
+        if (Func.isBlank(value)) {
             throw new ResourceConflictException("当前机构的外部系统认证信息不可用");
         }
         try {
             ExternalEndpointAuthentication authentication = objectMapper.readValue(
                     value, ExternalEndpointAuthentication.class);
-            if (isBlank(authentication.vendorCode()) && isBlank(authentication.username())
-                    && isBlank(authentication.password()) && isBlank(authentication.authorizationCode())) {
+            if (Func.isBlank(authentication.vendorCode()) && Func.isBlank(authentication.username())
+                    && Func.isBlank(authentication.password()) && Func.isBlank(authentication.authorizationCode())) {
                 throw new ResourceConflictException("当前机构的外部系统认证信息格式无效");
             }
             return authentication;
@@ -172,13 +172,4 @@ public class ExternalEndpointResolutionServiceImpl implements ExternalEndpointRe
         }
     }
 
-    /**
-     * 判断认证字段是否缺失或仅包含空白。
-     *
-     * @param value 认证字段
-     * @return 是否为空
-     */
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
 }

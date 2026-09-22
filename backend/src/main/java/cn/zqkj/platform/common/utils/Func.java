@@ -9,7 +9,6 @@ import cn.zqkj.platform.common.utils.identifier.IdUtils;
 import cn.zqkj.platform.common.utils.math.ArithmeticUtils;
 import cn.zqkj.platform.common.utils.text.TextUtils;
 import cn.zqkj.platform.common.utils.validation.ValidationUtils;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -71,6 +70,18 @@ public final class Func {
      */
     public static String trimToNull(String value) {
         return TextUtils.trimToNull(value);
+    }
+
+    /**
+     * 判断可选文本裁剪后是否超过字段长度上限。
+     *
+     * @param value 可选文本
+     * @param maximumLength 允许的最大长度，不得为负数
+     * @return 裁剪后超长时为true；空值或空白文本为false
+     * @throws IllegalArgumentException 最大长度为负数时抛出
+     */
+    public static boolean exceedsTrimmedLength(String value, int maximumLength) {
+        return TextUtils.exceedsTrimmedLength(value, maximumLength);
     }
 
     /**
@@ -459,6 +470,17 @@ public final class Func {
      */
     public static byte[] decodeBase64(String value) {
         return EncodingUtils.decodeBase64(value);
+    }
+
+    /**
+     * 解析请求中的 SQL Server 行版本，拒绝无效 Base64 或非八字节版本。
+     *
+     * @param value 客户端最近读取的 Base64 行版本
+     * @return 用于条件更新的八字节版本
+     * @throws cn.zqkj.platform.common.exception.InvalidRequestException 编码或长度不合法时抛出
+     */
+    public static byte[] decodeRowVersion(String value) {
+        return ValidationUtils.decodeRowVersion(value);
     }
 
     /**

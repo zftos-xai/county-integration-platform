@@ -35,6 +35,83 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class SoapPhisClientTest {
 
+    /** 持续滴流不能通过不断收到少量正文绕过整次调用期限。 */
+    @Test
+    void timesOutDespiteContinuousBodyTrickle() throws Exception {
+        var stop = new java.util.concurrent.CountDownLatch(1);
+        var bytesSent = new java.util.concurrent.atomic.AtomicInteger();
+        HttpServer server = startServer(exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(200, 0);
+            do {
+                exchange.getResponseBody().write(' ');
+                exchange.getResponseBody().flush();
+                bytesSent.incrementAndGet();
+            } while (!stop.await(30, java.util.concurrent.TimeUnit.MILLISECONDS));
+            exchange.close();
+        });
+        try {
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(3), () ->
+                    assertThrows(PhisCommunicationException.class, () -> client().queryHospitalDirectory(
+                            PhisInvocationContext.create(serviceUri(server), 100, 800, "SYNTHETIC-AUTH"), query())));
+            assertTrue(bytesSent.get() > 1);
+        } finally {
+            stop.countDown();
+            server.stop(0);
+        }
+    }
+
+    /** 中断必须传回调用方并保留中断标志，不继续等待外部正文。 */
+    @Test
+    void preservesInterruptionAndCancelsPendingExchange() throws Exception {
+        HttpServer server = startServer(exchange -> send(exchange, 200, soapResponse("{}")));
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(PhisCommunicationException.class, () -> client().queryHospitalDirectory(context(server), query()));
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+            server.stop(0);
+        }
+    }
+
+    /** 响应头到达但正文不结束时，整个调用仍必须在配置时限内返回。 */
+    @Test
+    void timesOutWhileWaitingForResponseBody() throws Exception {
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var headersSent = new java.util.concurrent.CountDownLatch(1);
+        HttpServer server = startServer(exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(200, 0);
+            exchange.getResponseBody().write('<');
+            exchange.getResponseBody().flush();
+            headersSent.countDown();
+            release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            exchange.close();
+        });
+        try {
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(3), () -> {
+                assertThrows(PhisCommunicationException.class, () -> client().queryHospitalDirectory(
+                        PhisInvocationContext.create(serviceUri(server), 100, 800, "SYNTHETIC-AUTH"), query()));
+                assertEquals(0, headersSent.getCount());
+            });
+        } finally {
+            release.countDown();
+            server.stop(0);
+        }
+    }
+
+    /** 超大正文在读取阶段被拒绝，不能无限占用内存。 */
+    @Test
+    void rejectsOversizedResponseBody() throws Exception {
+        HttpServer server = startServer(exchange -> send(exchange, 200, "x".repeat(16 * 1024 * 1024 + 1)));
+        try {
+            assertThrows(PhisProtocolException.class, () -> client().queryHospitalDirectory(context(server), query()));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /** 验证100-005数量查询只接受单条非负整数，并发送与分页数据一致的范围条件。 */
     @Test
     void queriesMedicalDirectoryDeclaredCount() throws Exception {

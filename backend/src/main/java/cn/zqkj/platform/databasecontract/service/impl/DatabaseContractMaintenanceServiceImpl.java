@@ -20,18 +20,18 @@ import cn.zqkj.platform.framework.database.DatabaseContractRepairPlanner;
 import cn.zqkj.platform.framework.database.DatabaseContractRepairSql;
 import cn.zqkj.platform.framework.database.DatabaseContractViolation;
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import cn.zqkj.platform.system.audit.service.ManagementAuditService;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
-
+import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 实现数据库契约方案创建、双人审批、事务DDL、复验和执行前取消。 */
 @Service
@@ -70,7 +70,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
     }
 
     /**
-     * {@inheritDoc}
+     * 检查实际数据库结构与工程数据库契约的差异。
      *
      * <p>直接读取当前数据库结构并与代码契约比较，不创建维护方案，也不执行DDL。</p>
      */
@@ -80,7 +80,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
     }
 
     /**
-     * {@inheritDoc}
+     * 读取最近的数据库维护方案，不执行结构扫描。
      *
      * <p>按最近操作时间读取方案摘要，不触发实时数据库扫描。</p>
      */
@@ -91,7 +91,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
     }
 
     /**
-     * {@inheritDoc}
+     * 读取维护方案及创建时冻结的差异项。
      *
      * <p>读取方案及其冻结的差异项，保证审批人看到的是创建时的执行内容。</p>
      */
@@ -102,7 +102,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
     }
 
     /**
-     * {@inheritDoc}
+     * 依据实时结构差异创建待审批的数据库维护方案。
      *
      * <p>基于实时扫描结果冻结所选差异及DDL预览；已消失、重复或不可识别的差异不会进入方案。</p>
      */
@@ -122,7 +122,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
             throw new InvalidRequestException("方案不能重复选择同一项差异");
         }
         int executableCount = (int) selected.stream().filter(DatabaseContractIssueVO::executable).count();
-        String planNo = "DBC-" + Func.simpleUuid().substring(0, 20).toUpperCase(java.util.Locale.ROOT);
+        String planNo = "DBC-" + Func.simpleUuid().substring(0, 20).toUpperCase(Locale.ROOT);
         long planId = mapper.insertPlan(planNo, selected.size(), executableCount,
                 request.summary().trim(), actor.loginName());
         for (DatabaseContractIssueVO issue : selected) {
@@ -137,7 +137,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
     }
 
     /**
-     * {@inheritDoc}
+     * 由非创建人批准可安全自动执行的维护方案。
      *
      * <p>强制创建人与审批人分离，且只有全部差异均可安全自动执行时才允许批准。</p>
      */
@@ -159,7 +159,7 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
     }
 
     /**
-     * {@inheritDoc}
+     * 重新确认差异后执行获批方案，并在同一事务内验证数据库结果。
      *
      * <p>执行前重新扫描并逐项核对冻结差异，在单个事务内执行受控DDL和复验；失败时记录安全摘要。</p>
      */
@@ -172,13 +172,16 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
         try {
             transactionTemplate.executeWithoutResult(status -> executeTransaction(id, version, actor, current));
         } catch (RuntimeException exception) {
-            mapper.markFailed(id, failureSummary(exception));
+            // 执行事务回滚后，只有发起执行时的同一版本仍处于已批准状态，才可记录本次失败。
+            if (mapper.markFailed(id, version, failureSummary(exception)) != 1) {
+                throw new ResourceConflictException("方案状态或版本已经变化，请重新读取");
+            }
         }
         return getPlan(id);
     }
 
     /**
-     * {@inheritDoc}
+     * 按行版本取消尚未执行的维护方案。
      *
      * <p>仅能取消尚未开始执行且行版本未变化的方案，并在同一事务追加审计。</p>
      */
@@ -222,8 +225,18 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
         mapper.markItemsExecuted(id);
         Map<String, DatabaseContractIssueVO> remaining = issueMap(inspectionService.inspect());
         boolean passed = true;
+        for (DatabaseContractIssueVO issue : remaining.values()) {
+            DatabaseContractIssueVO previous = liveIssues.get(issue.issueKey());
+            if (previous == null || !java.util.Objects.equals(previous.expected(), issue.expected())
+                    || !java.util.Objects.equals(previous.actual(), issue.actual())) {
+                passed = false;
+            }
+        }
         for (DatabaseContractPlanItemSnapshot item : items) {
-            boolean remains = remaining.containsKey(issueKey(item.violationCode(), item.objectName()));
+            boolean remains = false;
+            for (DatabaseContractIssueVO issue : remaining.values()) {
+                if (issue.objectName().equals(item.objectName())) remains = true;
+            }
             mapper.markItemVerification(item.id(), remains ? "REMAINS" : "PASSED");
             passed &= !remains;
         }
@@ -335,8 +348,8 @@ public class DatabaseContractMaintenanceServiceImpl implements DatabaseContractM
      * @param summary 摘要
      */
     private void audit(AccessActor actor, String action, String planNo, String summary) {
-        auditService.recordSuccess(new ManagementAuditCommand(
-                actor, null, null, null, action, "DATABASE_CONTRACT_PLAN", planNo,
+        auditService.append(new ManagementAuditCommand(
+                actor.userId(), actor.loginName(), null, null, action, "DATABASE_CONTRACT_PLAN", planNo,
                 "SUCCESS", summary, auditService.currentRequestId()));
     }
 

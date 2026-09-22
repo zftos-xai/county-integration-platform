@@ -1,22 +1,19 @@
 package cn.zqkj.platform.system.identity.controller;
 
-import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.common.core.ApiResponse;
-import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.utils.Func;
-import cn.zqkj.platform.system.identity.domain.model.AccessActor;
+import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.system.identity.domain.dto.ChangeEnabledRequest;
 import cn.zqkj.platform.system.identity.domain.dto.CreateUserCommand;
-import cn.zqkj.platform.system.identity.domain.dto.CreateUserRequest;
 import cn.zqkj.platform.system.identity.domain.dto.ReplaceOrganizationIdsRequest;
 import cn.zqkj.platform.system.identity.domain.dto.ReplaceRoleIdsRequest;
 import cn.zqkj.platform.system.identity.domain.dto.ResetPasswordRequest;
-import cn.zqkj.platform.system.identity.domain.vo.ManagedUserVO;
 import cn.zqkj.platform.system.identity.domain.dto.UpdateUserCommand;
-import cn.zqkj.platform.system.identity.domain.dto.UpdateUserRequest;
+import cn.zqkj.platform.system.identity.domain.vo.ManagedUserVO;
 import cn.zqkj.platform.system.identity.service.UserAdministrationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,8 +27,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * 提供平台用户生命周期、角色和机构范围管理API。
@@ -55,7 +50,7 @@ public class UserAdministrationController {
     /**
      * 查询当前调用方可见的平台用户列表。
      *
-     * <p>需要 {@code identity:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code identity:read} 功能权限。</p>
      *
      * @param principal 当前用户
      * @return 机构范围内用户
@@ -63,13 +58,13 @@ public class UserAdministrationController {
     @GetMapping
     @PreAuthorize("hasAuthority('identity:read')")
     public ApiResponse<List<ManagedUserVO>> findAll(@AuthenticationPrincipal PlatformUserPrincipal principal) {
-        return ApiResponse.success(service.findAll(actor(principal)));
+        return ApiResponse.success(service.findAll(principal.accessActor()));
     }
 
     /**
      * 按主键读取平台用户；不存在时由调用边界按约定处理。
      *
-     * <p>需要 {@code identity:read} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code identity:read} 功能权限。</p>
      *
      * @param userId 用户主键
      * @param principal 当前用户
@@ -81,13 +76,13 @@ public class UserAdministrationController {
             @PathVariable @Positive long userId,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.get(userId, actor(principal)));
+        return ApiResponse.success(service.get(userId, principal.accessActor()));
     }
 
     /**
      * 创建平台用户并返回最新视图。
      *
-     * <p>需要 {@code identity:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code identity:write} 功能权限。</p>
      *
      * @param request 创建请求
      * @param principal 当前用户
@@ -97,18 +92,16 @@ public class UserAdministrationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('identity:write')")
     public ApiResponse<ManagedUserVO> create(
-            @Valid @RequestBody CreateUserRequest request,
+            @Valid @RequestBody CreateUserCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.create(new CreateUserCommand(
-                request.loginName(), request.displayName(), request.primaryOrganizationId(), request.temporaryPassword()
-        ), actor(principal)));
+        return ApiResponse.success(service.create(request, principal.accessActor()));
     }
 
     /**
      * 按并发版本更新平台用户并返回最新视图。
      *
-     * <p>需要 {@code identity:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code identity:write} 功能权限。</p>
      *
      * @param userId 用户主键
      * @param request 修改请求
@@ -119,18 +112,16 @@ public class UserAdministrationController {
     @PreAuthorize("hasAuthority('identity:write')")
     public ApiResponse<ManagedUserVO> update(
             @PathVariable @Positive long userId,
-            @Valid @RequestBody UpdateUserRequest request,
+            @Valid @RequestBody UpdateUserCommand request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.update(userId, new UpdateUserCommand(
-                request.displayName(), request.primaryOrganizationId(), decodeVersion(request.version())
-        ), actor(principal)));
+        return ApiResponse.success(service.update(userId, request, principal.accessActor()));
     }
 
     /**
      * 按并发版本修改平台用户的启用状态。
      *
-     * <p>需要 {@code identity:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code identity:write} 功能权限。</p>
      *
      * @param userId 用户主键
      * @param request 启停请求
@@ -145,14 +136,14 @@ public class UserAdministrationController {
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.setEnabled(
-                userId, request.enabled(), decodeVersion(request.version()), actor(principal)
+                userId, request.enabled(), Func.decodeRowVersion(request.version()), principal.accessActor()
         ));
     }
 
     /**
      * 重置用户密码并要求其下次登录后修改密码。
      *
-     * <p>需要 {@code identity:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code identity:write} 功能权限。</p>
      *
      * @param userId 用户主键
      * @param request 重置请求
@@ -166,14 +157,14 @@ public class UserAdministrationController {
             @Valid @RequestBody ResetPasswordRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        service.resetPassword(userId, request.temporaryPassword(), actor(principal));
+        service.resetPassword(userId, request.temporaryPassword(), principal.accessActor());
         return ApiResponse.success(null);
     }
 
     /**
      * 整体替换用户角色集合。
      *
-     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:write} 功能权限。</p>
      *
      * @param userId 用户主键
      * @param request 角色请求
@@ -187,13 +178,13 @@ public class UserAdministrationController {
             @Valid @RequestBody ReplaceRoleIdsRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        return ApiResponse.success(service.replaceRoles(userId, request.roleIds(), actor(principal)));
+        return ApiResponse.success(service.replaceRoles(userId, request.roleIds(), principal.accessActor()));
     }
 
     /**
      * 整体替换用户的机构数据范围。
      *
-     * <p>需要 {@code access:write} 功能权限；资源范围和业务规则仍由服务层校验。</p>
+     * <p>需要 {@code access:write} 功能权限。</p>
      *
      * @param userId 用户主键
      * @param request 范围请求
@@ -208,35 +199,8 @@ public class UserAdministrationController {
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.replaceOrganizations(
-                userId, request.organizationIds(), actor(principal)
+                userId, request.organizationIds(), principal.accessActor()
         ));
     }
 
-    /**
-     * 将当前登录主体转换为携带机构范围的服务层操作人。
-     *
-     * @param principal 当前用户
-     * @return 应用服务操作人信息
-     */
-    private AccessActor actor(PlatformUserPrincipal principal) {
-        return new AccessActor(principal.userId(), principal.getUsername(), principal.organizationCodes());
-    }
-
-    /**
-     * 解码并校验客户端提交的SQL Server行版本。
-     *
-     * @param value Base64版本
-     * @return 8字节并发版本
-     */
-    private byte[] decodeVersion(String value) {
-        try {
-            byte[] version = Func.decodeBase64(value);
-            if (version.length != Long.BYTES) {
-                throw new InvalidRequestException("version 必须表示一个 8 字节的 SQL Server 行版本号");
-            }
-            return version;
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidRequestException("version 必须是有效的 Base64 文本");
-        }
-    }
 }

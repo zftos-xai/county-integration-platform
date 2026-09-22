@@ -1,5 +1,7 @@
 package cn.zqkj.platform.system.identity.domain.dto;
 
+import cn.zqkj.platform.framework.security.validation.PasswordSize;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -11,6 +13,6 @@ import jakarta.validation.constraints.Size;
  */
 public record ChangePasswordRequest(
         @NotBlank @Size(max = 128) String currentPassword,
-        @NotBlank @Size(min = 9, max = 128) String newPassword
+        @NotBlank @PasswordSize String newPassword
 ) {
 }

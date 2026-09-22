@@ -2,24 +2,26 @@ package cn.zqkj.platform.system.configuration.mapper;
 
 import cn.zqkj.platform.system.configuration.domain.dto.CreateDictionaryItemCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.CreateDictionaryTypeCommand;
+import cn.zqkj.platform.system.configuration.domain.dto.CreateExternalEndpointRequest;
+import cn.zqkj.platform.system.configuration.domain.dto.CreateExternalSystemRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryItemCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeCommand;
+import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalEndpointRequest;
+import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalSystemRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpsertParameterCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.ExternalEndpointCommand;
-import cn.zqkj.platform.system.configuration.domain.dto.ExternalSystemCommand;
 import cn.zqkj.platform.system.configuration.domain.model.DictionaryItem;
 import cn.zqkj.platform.system.configuration.domain.model.DictionaryType;
-import cn.zqkj.platform.system.configuration.domain.model.ParameterValue;
+import cn.zqkj.platform.system.configuration.domain.model.EncryptedExternalEndpointCredential;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpoint;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointCredential;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointScope;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalSystem;
-import cn.zqkj.platform.system.configuration.domain.model.EncryptedExternalEndpointCredential;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-
+import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
+import cn.zqkj.platform.system.configuration.domain.model.ParameterValue;
 import java.util.List;
 import java.util.Optional;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 读写代码注册参数值和平台系统字典的MyBatis Mapper。
@@ -28,22 +30,25 @@ import java.util.Optional;
 public interface ConfigurationMapper {
 
     /**
-     * 按参数键、环境和机构范围稳定排序查询全部参数值。
+     * 按参数键和环境查询全局及获准机构的参数值。
      *
-     * @return 按参数键和适用范围稳定排序的全部参数值
+     * @param organizationCodes 调用人获准访问的机构代码；空列表仅返回全局参数
+     * @return 按参数键和适用范围稳定排序的可见参数值
      */
-    List<ParameterValue> findParameterValues();
+    List<ParameterValue> findParameterValues(@Param("organizationCodes") List<String> organizationCodes);
 
     /**
      * 查询匹配按适用范围保存的值；不存在时为空。
      *
      * @param key 参数键
-     * @param command 适用范围命令
+     * @param environment 端点使用环境
+     * @param organizationId 可选平台机构主键
      * @return 匹配按适用范围保存的值；不存在时为空
      */
     Optional<ParameterValue> findParameterValue(
             @Param("key") String key,
-            @Param("command") UpsertParameterCommand command
+            @Param("environment") ParameterEnvironment environment,
+            @Param("organizationId") Long organizationId
     );
 
     /**
@@ -265,7 +270,7 @@ public interface ConfigurationMapper {
      * @param actor 操作人
      * @return 新主键
      */
-    long createExternalSystem(@Param("command") ExternalSystemCommand command, @Param("actor") String actor);
+    long createExternalSystem(@Param("command") CreateExternalSystemRequest command, @Param("actor") String actor);
 
     /**
      * 使用行版本更新外部系统登记信息。
@@ -276,24 +281,28 @@ public interface ConfigurationMapper {
      * @return 修改行数
      */
     int updateExternalSystem(@Param("systemId") long systemId,
-                             @Param("command") ExternalSystemCommand command,
+                             @Param("command") UpdateExternalSystemRequest command,
                              @Param("actor") String actor);
 
     /**
      * 查询稳定排序服务地址。
      *
      * @param systemId 系统主键
-     * @return 稳定排序服务地址
+     * @param organizationCodes 调用人获准访问的机构代码；空列表仅返回全局端点
+     * @return 范围内稳定排序的服务地址
      */
-    List<ExternalEndpoint> findExternalEndpoints(long systemId);
+    List<ExternalEndpoint> findExternalEndpoints(@Param("systemId") long systemId,
+                                                  @Param("organizationCodes") List<String> organizationCodes);
 
     /**
      * 查询服务地址。
      *
      * @param endpointId 主键
+     * @param organizationCodes 获准机构代码；全局端点不受机构筛选限制
      * @return 服务地址
      */
-    Optional<ExternalEndpoint> findExternalEndpoint(long endpointId);
+    Optional<ExternalEndpoint> findExternalEndpoint(@Param("endpointId") long endpointId,
+                                                    @Param("organizationCodes") List<String> organizationCodes);
 
     /**
      * 查询当前机构在指定环境下启用的服务地址；不存在时为空。
@@ -305,7 +314,7 @@ public interface ConfigurationMapper {
      */
     Optional<ExternalEndpoint> findEnabledExternalEndpoint(
             @Param("systemCode") String systemCode,
-            @Param("environment") cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment environment,
+            @Param("environment") ParameterEnvironment environment,
             @Param("organizationId") long organizationId
     );
 
@@ -319,7 +328,7 @@ public interface ConfigurationMapper {
      */
     Optional<ExternalEndpoint> findConfiguredExternalEndpoint(
             @Param("systemCode") String systemCode,
-            @Param("environment") cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment environment,
+            @Param("environment") ParameterEnvironment environment,
             @Param("organizationId") long organizationId
     );
 
@@ -340,12 +349,14 @@ public interface ConfigurationMapper {
      *
      * @param systemId 系统主键
      * @param excludedEndpointId 修改时排除的当前配置主键
-     * @param command 适用范围命令
+     * @param environment 配置使用环境
+     * @param organizationId 可选机构主键；为空时只匹配全局配置
      * @return 是否存在
      */
     boolean externalEndpointScopeExists(@Param("systemId") long systemId,
                                         @Param("excludedEndpointId") Long excludedEndpointId,
-                                        @Param("command") ExternalEndpointCommand command);
+                                        @Param("environment") ParameterEnvironment environment,
+                                        @Param("organizationId") Long organizationId);
 
     /**
      * 创建尚未投入业务运行的外部系统端点。
@@ -356,7 +367,7 @@ public interface ConfigurationMapper {
      * @return 新主键
      */
     long createExternalEndpoint(@Param("systemId") long systemId,
-                                @Param("command") ExternalEndpointCommand command,
+                                @Param("command") CreateExternalEndpointRequest command,
                                 @Param("actor") String actor);
 
     /**
@@ -368,7 +379,7 @@ public interface ConfigurationMapper {
      * @return 修改行数
      */
     int updateExternalEndpoint(@Param("endpointId") long endpointId,
-                               @Param("command") ExternalEndpointCommand command,
+                               @Param("command") UpdateExternalEndpointRequest command,
                                @Param("actor") String actor);
 
     /**
@@ -378,12 +389,14 @@ public interface ConfigurationMapper {
      * @param sourceOrganizationId HIS返回机构ID
      * @param sourceOrganizationName HIS返回机构名称
      * @param actor 操作人
+     * @param expectedVersion 本次校验开始前读取的配置版本
      * @return 更新行数
      */
     int markExternalEndpointVerified(
             @Param("endpointId") long endpointId,
             @Param("sourceOrganizationId") String sourceOrganizationId,
             @Param("sourceOrganizationName") String sourceOrganizationName,
+            @Param("expectedVersion") byte[] expectedVersion,
             @Param("actor") String actor
     );
 
@@ -394,12 +407,14 @@ public interface ConfigurationMapper {
      * @param verificationStatus 失败或结果未知状态
      * @param failureSummary 不包含地址、凭证和报文的提示
      * @param actor 操作人
+     * @param expectedVersion 本次校验开始前读取的配置版本
      * @return 更新行数
      */
     int markExternalEndpointVerificationFailed(
             @Param("endpointId") long endpointId,
             @Param("verificationStatus") String verificationStatus,
             @Param("failureSummary") String failureSummary,
+            @Param("expectedVersion") byte[] expectedVersion,
             @Param("actor") String actor
     );
 

@@ -1,6 +1,7 @@
 package cn.zqkj.platform.system.organization.domain.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 /**
@@ -10,7 +11,7 @@ import jakarta.validation.constraints.Pattern;
  * @param version Base64编码的SQL Server并发版本
  */
 public record ChangeOrganizationEnabledRequest(
-        boolean enabled,
+        @NotNull Boolean enabled,
         @NotBlank @Pattern(regexp = "[A-Za-z0-9+/]{11}=") String version
 ) {
 }

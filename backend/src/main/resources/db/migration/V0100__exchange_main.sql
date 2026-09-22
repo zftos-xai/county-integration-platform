@@ -17,7 +17,7 @@ CREATE TABLE exch_exchange_record (
     target_system_code NVARCHAR(64) NOT NULL, -- 目标系统代码：实际目标系统标识
     organization_code NVARCHAR(64) NOT NULL, -- 机构代码：平台统一机构代码及机构数据范围
     source_record_id NVARCHAR(128) NOT NULL, -- 来源业务记录编号：不包含患者正文的业务记录引用
-    exchange_result NVARCHAR(16) NOT NULL, -- 交换结果：最终结果：SUCCESS、FAILURE或NO_RESPONSE
+    exchange_result NVARCHAR(16) NOT NULL, -- 交换结果：成功、明确失败、无响应或响应不可解析
     result_code NVARCHAR(64) NULL, -- 结果代码：目标系统返回码；无响应或请求发出前失败时为空
     result_message NVARCHAR(500) NULL, -- 结果说明：不包含完整医疗正文的必要结果说明
     duration_ms BIGINT NOT NULL, -- 处理耗时（毫秒）：从调用开始至确认最终结果的耗时毫秒数
@@ -28,7 +28,7 @@ CREATE TABLE exch_exchange_record (
     created_at DATETIME2(3) NOT NULL CONSTRAINT df_exch_record_created DEFAULT SYSUTCDATETIME(), -- 创建时间：运行记录写入平台库的UTC时间
     row_version ROWVERSION, -- 并发版本：SQL Server并发校验版本，不表示业务版本
     CONSTRAINT uq_exch_record_request UNIQUE (request_id), -- 防止同一请求编号重复形成运行记录
-    CONSTRAINT ck_exch_record_result CHECK (exchange_result IN ('SUCCESS', 'FAILURE', 'NO_RESPONSE')), -- 限定PRD确认的三类最终结果
+    CONSTRAINT ck_exch_record_result CHECK (exchange_result IN ('SUCCESS', 'FAILURE', 'NO_RESPONSE', 'INVALID_RESPONSE')), -- 区分已收到但不可解析的响应
     CONSTRAINT ck_exch_record_duration CHECK (duration_ms >= 0), -- 禁止保存负数调用耗时
     CONSTRAINT ck_exch_record_time CHECK (processed_at >= received_at) -- 禁止完成时间早于开始时间
 );
@@ -72,7 +72,7 @@ VALUES
     (N'COLUMN', N'exch_exchange_record', N'row_version', N'并发版本'),
     (N'CONSTRAINT', N'exch_exchange_record', N'pk_exch_exchange_record', N'保证每条交换运行记录具有唯一的平台内部主键。'),
     (N'CONSTRAINT', N'exch_exchange_record', N'uq_exch_record_request', N'保证请求编号唯一，防止同一请求重复形成运行记录。'),
-    (N'CONSTRAINT', N'exch_exchange_record', N'ck_exch_record_result', N'将最终交换结果限定为SUCCESS、FAILURE或NO_RESPONSE。'),
+    (N'CONSTRAINT', N'exch_exchange_record', N'ck_exch_record_result', N'区分成功、明确失败、无响应和已收到但无法解析的响应。'),
     (N'CONSTRAINT', N'exch_exchange_record', N'ck_exch_record_duration', N'禁止保存负数调用耗时。'),
     (N'CONSTRAINT', N'exch_exchange_record', N'ck_exch_record_time', N'禁止处理完成时间早于接收时间。'),
     (N'CONSTRAINT', N'exch_exchange_record', N'df_exch_record_created', N'未显式提供时，以SQL Server当前UTC时间作为运行记录写入时间。'),

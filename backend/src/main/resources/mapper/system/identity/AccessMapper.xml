@@ -93,16 +93,36 @@
         SELECT <include refid="userColumns"/>
         FROM sys_user AS users
         INNER JOIN org_organization AS organizations ON organizations.id = users.primary_organization_id
+        <!-- 空机构范围必须查不到任何用户，不在Java内存中做授权过滤。 -->
+        <choose>
+            <when test="organizationCodes != null and !organizationCodes.isEmpty()">
+                WHERE organizations.organization_code IN
+                <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </when>
+            <otherwise>WHERE 1 = 0</otherwise>
+        </choose>
         <!-- 按登录名及内部主键稳定排序 -->
         ORDER BY users.login_name, users.id
     </select>
 
     <select id="findUser" resultMap="userSummary">
         SELECT <include refid="userColumns"/>
-        FROM sys_user AS users
+        <!-- 在管理事务内固定用户主机构，防止范围判定后被并发转移机构。 -->
+        FROM sys_user AS users WITH (UPDLOCK, HOLDLOCK)
         INNER JOIN org_organization AS organizations ON organizations.id = users.primary_organization_id
-        <!-- 按平台用户内部主键精确查询 -->
+        <!-- 主键与获准机构范围同时匹配，范围外按不存在处理。 -->
         WHERE users.id = #{userId}
+        <choose>
+            <when test="organizationCodes != null and !organizationCodes.isEmpty()">
+                AND organizations.organization_code IN
+                <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </when>
+            <otherwise>AND 1 = 0</otherwise>
+        </choose>
     </select>
 
     <select id="userLoginExists" resultType="boolean">
@@ -166,9 +186,63 @@
         SELECT role_id FROM sys_user_role WHERE user_id = #{userId} ORDER BY role_id
     </select>
 
+    <resultMap id="userRoleAssignment" type="cn.zqkj.platform.system.identity.domain.model.UserRoleAssignment">
+        <constructor>
+            <!-- 被授予角色的平台用户主键 -->
+            <idArg column="user_id" javaType="_long"/>
+            <!-- 已授予角色主键 -->
+            <idArg column="role_id" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findUserRoles" resultMap="userRoleAssignment">
+        <!-- 与用户列表使用相同的机构范围，避免大列表触及SQL Server参数上限。 -->
+        SELECT assignments.user_id, assignments.role_id
+        FROM sys_user_role AS assignments
+        INNER JOIN sys_user AS users ON users.id = assignments.user_id
+        INNER JOIN org_organization AS organizations ON organizations.id = users.primary_organization_id
+        <choose>
+            <when test="organizationCodes != null and !organizationCodes.isEmpty()">
+                WHERE organizations.organization_code IN
+                <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </when>
+            <otherwise>WHERE 1 = 0</otherwise>
+        </choose>
+        ORDER BY assignments.user_id, assignments.role_id
+    </select>
+
     <select id="findUserOrganizationIds" resultType="long">
         <!-- 用户已获授权的机构范围主键，按机构主键稳定排序 -->
         SELECT organization_id FROM sys_user_organization_scope WHERE user_id = #{userId} ORDER BY organization_id
+    </select>
+
+    <resultMap id="userOrganizationAssignment" type="cn.zqkj.platform.system.identity.domain.model.UserOrganizationAssignment">
+        <constructor>
+            <!-- 获得机构范围的平台用户主键 -->
+            <idArg column="user_id" javaType="_long"/>
+            <!-- 已授权机构主键 -->
+            <idArg column="organization_id" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findUserOrganizations" resultMap="userOrganizationAssignment">
+        <!-- 与用户列表使用相同的机构范围，空范围不读取授权数据。 -->
+        SELECT assignments.user_id, assignments.organization_id
+        FROM sys_user_organization_scope AS assignments
+        INNER JOIN sys_user AS users ON users.id = assignments.user_id
+        INNER JOIN org_organization AS organizations ON organizations.id = users.primary_organization_id
+        <choose>
+            <when test="organizationCodes != null and !organizationCodes.isEmpty()">
+                WHERE organizations.organization_code IN
+                <foreach collection="organizationCodes" item="code" open="(" separator="," close=")">
+                    #{code}
+                </foreach>
+            </when>
+            <otherwise>WHERE 1 = 0</otherwise>
+        </choose>
+        ORDER BY assignments.user_id, assignments.organization_id
     </select>
 
     <select id="isEnabledPlatformAdministrator" resultType="boolean">
@@ -291,6 +365,21 @@
     <select id="findRolePermissionCodes" resultType="java.lang.String">
         <!-- 角色已获授权的功能权限代码，按代码稳定排序 -->
         SELECT permission_code FROM sys_role_permission WHERE role_id = #{roleId} ORDER BY permission_code
+    </select>
+
+    <resultMap id="rolePermissionAssignment" type="cn.zqkj.platform.system.identity.domain.model.RolePermissionAssignment">
+        <constructor>
+            <!-- 被授予功能权限的平台角色主键 -->
+            <idArg column="role_id" javaType="_long"/>
+            <!-- 已授予的稳定功能权限代码 -->
+            <idArg column="permission_code" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findRolePermissions" resultMap="rolePermissionAssignment">
+        <!-- 角色列表为平台范围，一次读取全部角色的功能权限关系。 -->
+        SELECT role_id, permission_code FROM sys_role_permission
+        ORDER BY role_id, permission_code
     </select>
 
     <update id="replaceRolePermissions">

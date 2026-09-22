@@ -1,12 +1,11 @@
 package cn.zqkj.platform.system.organization.mapper;
 
 import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
-import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.domain.dto.UpdateOrganizationCommand;
+import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
+import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-
-import java.util.List;
 
 /**
  * 使用MyBatis读写平台机构表。
@@ -15,12 +14,27 @@ import java.util.List;
 public interface OrganizationMapper {
 
     /**
+     * 在当前事务内串行化机构树修改，防止两个合法父链检查合并成环。
+     * @return 非负值表示取得锁；负值表示超时或锁申请失败
+     */
+    int lockHierarchy();
+
+    /**
      * 按主键读取机构。
      *
      * @param id 机构主键
      * @return 机构记录；不存在时为空
      */
     OrganizationVO findById(long id);
+
+    /**
+     * 按机构主键和获准范围读取档案；空范围不匹配任何机构。
+     * @param id 机构主键
+     * @param organizationCodes 获准访问的机构代码
+     * @return 范围内机构；不存在或不可见时为空
+     */
+    OrganizationVO findVisibleById(@Param("id") long id,
+                                    @Param("organizationCodes") List<String> organizationCodes);
 
     /**
      * 统计指定编码的机构数量。
@@ -37,6 +51,16 @@ public interface OrganizationMapper {
      * @return 机构列表
      */
     List<OrganizationVO> findAll(@Param("enabled") Boolean enabled);
+
+    /**
+     * 在SQL中限制机构范围；空范围不返回记录。
+     *
+     * @param enabled 可选启用状态
+     * @param organizationCodes 调用人获准访问的机构代码
+     * @return 范围内稳定排序的机构列表
+     */
+    List<OrganizationVO> findVisible(@Param("enabled") Boolean enabled,
+                                     @Param("organizationCodes") List<String> organizationCodes);
 
     /**
      * 新建机构并回填主键。
