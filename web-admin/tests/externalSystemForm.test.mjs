@@ -75,13 +75,23 @@ test('接口地址兼容ASMX操作地址并拒绝其他查询参数', () => {
   assert.match(validateExternalEndpointForm(form, null, true), /HIS 用户名和 HIS 密码/)
 })
 
-test('外部系统页按机构展示接口配置并保持列表内容单行省略', async () => {
+test('外部系统页将机构编码、环境状态、地址及数据来源拆列并保持记录单行', async () => {
   const source = await readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8')
   assert.match(source, /机构接口配置表使用的稳定分组键/)
-  assert.match(source, /<th>机构<\/th><th>生产环境<\/th><th>测试环境<\/th><th>接入信息<\/th>/)
+  assert.match(source, /<th>机构<\/th><th>机构编码<\/th><th>生产状态<\/th><th>生产接口地址<\/th><th>测试状态<\/th><th>测试接口地址<\/th>/)
+  assert.match(source, /<th>接入信息<\/th><th>数据来源<\/th><th>最后更新<\/th>/)
+  assert.match(source, /<td><span class="single-line" :title="group\.organizationCode">\{\{ group\.organizationCode \}\}<\/span><\/td>/)
+  assert.match(source, /<td><span class="single-line" :title="primaryEndpoint\(group\)\?\.sourceOrganizationName \?\? '—'">/)
   assert.match(source, /\.single-line \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
   assert.match(source, /displayServiceUrl\(group\.endpoints\.PRODUCTION\)/)
   assert.match(source, /await loadEndpoints\(system\)/)
+})
+
+test('机构接口字段都在主列表展示，不保留重复的展开详情', async () => {
+  const source = await readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8')
+  assert.doesNotMatch(source, /endpoint-detail|expandedOrganizationKey|toggleOrganization|<ChevronDown|<ChevronRight/)
+  assert.match(source, /<tr v-for="group in pagedRows" :key="group\.key" class="organization-row">/)
+  assert.match(source, /@click="openGroupEndpointEdit\(group\)"/)
 })
 
 test('外部系统页按数据阶段收敛空状态操作', async () => {
@@ -95,8 +105,21 @@ test('外部系统页按数据阶段收敛空状态操作', async () => {
 test('基层HIS新增接口配置只提供基层机构并默认选中首个可用机构', async () => {
   const source = await readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8')
   assert.match(source, /item\.enabled && item\.organizationType === 'PRIMARY_CARE'/)
-  assert.match(source, /emptyExternalEndpointForm\(endpointOrganizationOptions\.value\[0\]\?\.id \?\? null\)/)
+  assert.match(source, /emptyExternalEndpointForm\(organizationId \?\? endpointOrganizationOptions\.value\[0\]\?\.id \?\? null\)/)
   assert.match(source, /:organizations="endpointOrganizationOptions"/)
+})
+
+test('机构接口搜索包含未建配置的可见机构并支持查询与重置', async () => {
+  const source = await readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8')
+  assert.match(source, /if \(selectedSystem\.value\?\.systemCode === 'PRIMARY_HIS'\) \{\s*for \(const organization of endpointOrganizationOptions\.value\)/)
+  assert.match(source, /latestEndpoint: null/)
+  assert.match(source, /@click="openEndpointCreate\(group\.organizationId\)"/)
+  assert.match(source, /仅看配置缺项/)
+  assert.match(source, /<form class="matrix-filters" @submit\.prevent="applyFilters">/)
+  assert.match(source, /type="submit"><Search :size="14" \/>查询<\/button>/)
+  assert.match(source, /@click="resetFilters">重置<\/button>/)
+  assert.match(source, /appliedFilters\.value = \{ query: '', endpointStatus: 'all', onlyIncomplete: false \}/)
+  assert.match(source, /显示 \{\{ filteredEndpointGroups\.length \}\} \/ \{\{ endpointGroups\.length \}\} 个机构/)
 })
 
 test('外部系统与机构接口配置抽屉使用完整字段和固定操作区', async () => {

@@ -168,7 +168,7 @@ const drawerTitle = computed(() => ({ dictionary: '数据字典', user: '用户�
     </section>
     <template v-if="section === 'parameters'">
       <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input disabled aria-label="搜索已注册参数" placeholder="没有可搜索的已注册参数" /></label><select disabled aria-label="环境筛选"><option>全部环境</option></select><select disabled aria-label="机构范围筛选"><option>全部机构范围</option></select><span>0 项参数</span></div>
-      <section class="prototype-section work-table-section"><div class="prototype-table-wrap"><table class="work-table"><thead><tr><th>参数键 / 名称</th><th>值类型</th><th>作用范围</th><th>当前值</th><th>状态</th><th>最后修改</th><th>操作</th></tr></thead></table><div class="admin-empty"><Info :size="22" /><strong>暂无可维护参数</strong><span>平台版本提供可配置参数后，本页将显示对应参数及其适用范围。</span></div></div><AdminPagination :total="0" :page="1" :page-size="10" /></section>
+      <section class="prototype-section work-table-section action-column-table"><div class="prototype-table-wrap"><table class="work-table"><thead><tr><th>参数键 / 名称</th><th>值类型</th><th>作用范围</th><th>当前值</th><th>状态</th><th>最后修改</th><th>操作</th></tr></thead></table><div class="admin-empty"><Info :size="22" /><strong>暂无可维护参数</strong><span>平台版本提供可配置参数后，本页将显示对应参数及其适用范围。</span></div></div><AdminPagination :total="0" :page="1" :page-size="10" /></section>
       <section class="admin-rule-card"><header><ShieldCheck :size="18" /><strong>参数维护范围</strong></header><dl><div><dt>可查看</dt><dd>平台已提供的参数及当前取值</dd></div><div><dt>可修改</dt><dd>参数在全局、环境或机构范围内的取值</dd></div><div><dt>不可操作</dt><dd>自行新增或删除参数项</dd></div></dl></section>
     </template>
 

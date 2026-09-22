@@ -99,6 +99,26 @@ function scopeSummary(user: ManagedUser) {
   return `${names.slice(0, 2).join('、')}等 ${names.length} 个机构`
 }
 
+function scopeCountLabel(user: ManagedUser) {
+  const count = user.organizationScopeIds.length
+  return count === 0 ? '未授权' : count === 1 ? '仅 1 家机构' : `${count} 家机构`
+}
+
+function roleSummary(user: ManagedUser) {
+  return user.roleIds.length
+    ? user.roleIds.map(id => roleById.value.get(id)?.roleName ?? `#${id}`).join('、')
+    : '未分配'
+}
+
+function loginRequirement(user: ManagedUser) {
+  const requirements = [
+    user.roleIds.length === 0 ? '未分配角色' : null,
+    user.mustChangePassword ? '下次登录需改密' : null,
+    !isPrimaryOrganizationAvailable(user) ? '主要机构已停用' : null,
+  ].filter((value): value is string => value !== null)
+  return requirements.length ? requirements.join('、') : '无需处理'
+}
+
 function captureEditorSnapshot() {
   editorSnapshot.value = currentEditorSnapshot()
 }
@@ -395,13 +415,13 @@ onBeforeUnmount(() => {
       <div v-else-if="!error && users.length === 0" class="page-state"><UserRound :size="30" /><strong>当前范围内暂无用户</strong></div>
       <div v-else-if="users.length" class="prototype-table-wrap">
         <table class="work-table user-table">
-          <thead><tr><th>用户</th><th>主要机构</th><th>角色</th><th>机构范围</th><th>登录要求</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
+          <thead><tr><th>用户</th><th>归属机构</th><th title="角色决定功能权限，数据范围单独授权">权限角色</th><th title="当前账号可访问的机构范围">数据范围</th><th>登录要求</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
           <tbody><tr v-for="user in pagedRows" :key="user.id">
-            <td><button class="work-row-link" type="button" @click="openUser(user)">{{ user.displayName }}</button><small>{{ user.loginName }}</small></td>
-            <td>{{ organizationById.get(user.primaryOrganizationId)?.organizationName ?? user.organizationCode }}<small>{{ user.organizationCode }}</small></td>
-            <td>{{ user.roleIds.length ? user.roleIds.map(id => roleById.get(id)?.roleName ?? `#${id}`).join('、') : '未分配' }}</td>
-            <td>{{ scopeSummary(user) }}<small v-if="!user.organizationScopeIds.includes(user.primaryOrganizationId)" class="attention-text">未包含主要机构</small></td>
-            <td class="user-attention"><span v-if="user.roleIds.length === 0" class="prototype-tag warning">未分配角色</span><span v-if="user.mustChangePassword" class="prototype-tag warning">下次登录需改密</span><span v-if="!isPrimaryOrganizationAvailable(user)" class="prototype-tag danger">主要机构已停用</span><span v-if="user.roleIds.length && !user.mustChangePassword && isPrimaryOrganizationAvailable(user)">无需处理</span></td>
+            <td><div class="user-inline-identity"><button class="work-row-link" type="button" :title="user.displayName" @click="openUser(user)">{{ user.displayName }}</button><span :title="user.loginName">{{ user.loginName }}</span></div></td>
+            <td><span class="user-cell-text" :title="`${organizationById.get(user.primaryOrganizationId)?.organizationName ?? user.organizationCode} · ${user.organizationCode}`">{{ organizationById.get(user.primaryOrganizationId)?.organizationName ?? user.organizationCode }}</span></td>
+            <td><span class="user-cell-text" :title="roleSummary(user)">{{ roleSummary(user) }}</span></td>
+            <td><span class="user-cell-text" :class="{ 'attention-text': !user.organizationScopeIds.includes(user.primaryOrganizationId) }" :title="scopeSummary(user)">{{ scopeCountLabel(user) }}<span v-if="!user.organizationScopeIds.includes(user.primaryOrganizationId)"> · 未含归属机构</span></span></td>
+            <td><span class="user-cell-text" :class="{ 'attention-text': loginRequirement(user) !== '无需处理' }" :title="loginRequirement(user)">{{ loginRequirement(user) }}</span></td>
             <td><span class="prototype-tag" :class="user.enabled ? 'success' : 'neutral'">{{ user.enabled ? '正常使用' : '已注销' }}</span></td>
             <td>{{ formatTime(user.updatedAt) }}</td>
             <td class="user-actions"><button v-if="canWrite" class="prototype-icon" type="button" aria-label="修改用户" title="修改" @click="openUser(user, true)"><Pencil :size="15" /></button><button v-if="canWrite" class="status-action" :class="{ confirm: confirmStatusId === user.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === user.id && user.enabled ? user.id === authState.user?.userId ? '注销后当前账号会立即退出登录' : '注销后该用户将不能登录，历史记录继续保留' : ''" @blur="confirmStatusId = null" @click="changeStatus(user)">{{ statusSavingId === user.id ? '处理中…' : confirmStatusId === user.id ? user.enabled ? '确认注销' : '确认恢复' : user.enabled ? '注销账号' : '恢复使用' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看用户详情" title="查看详情" @click="openUser(user)"><ChevronRight :size="16" /></button></td>
@@ -445,11 +465,22 @@ onBeforeUnmount(() => {
 .user-page { color: #263341; }
 .user-panel { min-height: 390px; --action-column-width: 140px; }
 .page-state { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55766d; }
-.user-table { min-width: 1120px; }
-.user-table td small { display: block; margin-top: 3px; color: #7c8993; font-size: 10px; }
+.user-table { min-width: 1120px; table-layout: fixed; }
+.user-table th:nth-child(1) { width: 12%; }
+.user-table th:nth-child(2) { width: 19%; }
+.user-table th:nth-child(3) { width: 13%; }
+.user-table th:nth-child(4) { width: 15%; }
+.user-table th:nth-child(5) { width: 13%; }
+.user-table th:nth-child(6) { width: 9%; }
+.user-table th:nth-child(7) { width: 11%; }
+.user-table td { height: 52px; overflow: hidden; white-space: nowrap; }
+.user-inline-identity { min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; }
+.user-inline-identity .work-row-link { flex: none; max-width: 65%; overflow: hidden; text-overflow: ellipsis; }
+.user-inline-identity > span { min-width: 0; overflow: hidden; color: #7c8993; font-size: 11px; text-overflow: ellipsis; }
+.user-cell-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-table .attention-text { color: #a45437; }
-.user-attention { display: flex; flex-wrap: wrap; gap: 4px; }
-.user-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.user-actions { text-align: right; white-space: nowrap; }
+.user-actions > button + button { margin-left: 6px; }
 .status-action { min-height: 32px; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 5px; background: white; color: #53636b; font-size: 11px; white-space: nowrap; }
 .status-action.confirm { border-color: #a94b42; background: #a94b42; color: white; }
 .feedback { min-height: 46px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 10px; font-size: 12px; }

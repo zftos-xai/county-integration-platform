@@ -91,6 +91,36 @@ test('窄屏导航使用完整抽屉并把关闭按钮固定在品牌区内部',
   assert.match(styles, /\.prototype-close \{[^}]*position:\s*absolute;[^}]*right:\s*18px;[^}]*transform:\s*translateY\(-50%\)/)
 })
 
+test('侧栏账号区展示真实角色与主机构名称，长名称保持在侧栏内', async () => {
+  const layout = await readFile('web-admin/src/layout/AppLayout.vue', 'utf8')
+  const styles = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8')
+  const session = await readFile('web-admin/src/api/session.ts', 'utf8')
+
+  assert.match(layout, /authState\.user\?\.roleNames\.join\('、'\)/)
+  assert.match(layout, /\{\{ authState\.user\?\.organizationName \}\}/)
+  assert.match(layout, /authState\.user\?\.loginName/)
+  assert.match(session, /isStringArray\(value\.roleNames\)/)
+  assert.match(session, /typeof value\.organizationName === 'string'/)
+  assert.match(styles, /\.prototype-user \{[^}]*width: 100%;[^}]*min-width: 0;/)
+  assert.match(styles, /\.prototype-user > span:last-child \{[^}]*flex: 1;[^}]*min-width: 0;[^}]*overflow: hidden;/)
+  assert.match(styles, /\.prototype-user small \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
+  assert.match(styles, /\.prototype-sidebar-foot \{[^}]*min-height: 72px;[^}]*padding: 9px 16px;/)
+})
+
+test('用户列表将真实角色与机构范围分列并保持单行', async () => {
+  const source = await readFile('web-admin/src/views/system/user/UserView.vue', 'utf8')
+
+  assert.match(source, /<th title="角色决定功能权限，数据范围单独授权">权限角色<\/th>/)
+  assert.match(source, /<th title="当前账号可访问的机构范围">数据范围<\/th>/)
+  assert.match(source, /function roleSummary\(user: ManagedUser\)[\s\S]*roleById\.value\.get\(id\)\?\.roleName/)
+  assert.match(source, /\{\{ scopeCountLabel\(user\) \}\}/)
+  assert.match(source, /\.user-table \{[^}]*table-layout: fixed;/)
+  assert.match(source, /\.user-table td \{[^}]*white-space: nowrap;/)
+  assert.match(source, /\.user-cell-text \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
+  assert.doesNotMatch(source, /<small>\{\{ user\.loginName \}\}<\/small>/)
+  assert.doesNotMatch(source, /<small>\{\{ user\.organizationCode \}\}<\/small>/)
+})
+
 test('正式列表统一提供分页并在最小桌面宽度固定操作列', async () => {
   const listFiles = [
     'web-admin/src/views/system/user/UserView.vue',
@@ -116,9 +146,47 @@ test('正式列表的操作列保持紧凑且危险操作使用统一按钮样�
   assert.match(styles, /max-width:\s*var\(--action-column-width, 128px\)/)
   assert.match(styles, /\.work-danger-button \{[^}]*border:\s*1px solid #e2c0ba/)
   assert.match(dictionary, /grid-template-columns:\s*clamp\(270px, 22vw, 330px\) minmax\(0, 1fr\)/)
-  assert.match(dictionary, /--action-column-width:\s*112px/)
+  assert.match(dictionary, /--action-column-width:\s*132px/)
   assert.match(organization, /--action-column-width:\s*142px/)
   assert.doesNotMatch(organization, /确认撤销（/)
+})
+
+test('正式列表的操作列表头可见并与行内操作保持右对齐', async () => {
+  const directoryStyles = await readFile('web-admin/src/views/master-data/directory/directory-records.css', 'utf8')
+  const sharedStyles = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8')
+  const batch = await readFile('web-admin/src/views/master-data/batch/MasterDataBatchView.vue', 'utf8')
+  const external = await readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8')
+  const medical = await readFile('web-admin/src/views/master-data/directory/MedicalDirectoryView.vue', 'utf8')
+  const hospital = await readFile('web-admin/src/views/master-data/directory/HospitalDirectoryView.vue', 'utf8')
+
+  for (const file of [
+    'web-admin/src/views/configuration/dictionary/DictionaryView.vue',
+    'web-admin/src/views/system/user/UserView.vue',
+    'web-admin/src/views/system/role/RoleView.vue',
+    'web-admin/src/views/system/organization/OrganizationView.vue',
+  ]) {
+    const source = await readFile(file, 'utf8')
+    assert.match(source, /<th>操作<\/th>/, `${file} 应显示操作列表头`)
+  }
+  assert.match(medical, /<th scope="col">操作<\/th>/)
+  assert.match(hospital, /<th>操作<\/th>/)
+  assert.doesNotMatch(medical + hospital, /visually-hidden">操作/)
+  assert.match(sharedStyles, /\.action-column-table th:last-child, \.action-column-table td:last-child\s*\{[^}]*text-align: right/s)
+  assert.match(sharedStyles, /\.action-column-table td:last-child > \.prototype-icon,[\s\S]*?display: inline-grid; vertical-align: middle;/)
+  assert.match(directoryStyles, /\.directory-table th:last-child,\.directory-table \.directory-actions\s*\{ text-align:right; \}/)
+  assert.match(batch, /\.batch-table-section th:nth-child\(5\)\s*\{[^}]*text-align: right;/s)
+  assert.match(external, /\.matrix-table th:last-child,\.matrix-table td:last-child\s*\{ text-align: right; \}/)
+  const parameter = await readFile('web-admin/src/views/configuration/parameter/ParameterView.vue', 'utf8')
+  assert.match(parameter, /\.parameter-actions\s*\{[^}]*justify-content: flex-end;/)
+  for (const file of [
+    'web-admin/src/views/configuration/dictionary/DictionaryView.vue',
+    'web-admin/src/views/system/user/UserView.vue',
+    'web-admin/src/views/system/role/RoleView.vue',
+    'web-admin/src/views/system/organization/OrganizationView.vue',
+  ]) {
+    const source = await readFile(file, 'utf8')
+    assert.doesNotMatch(source, /\.(?:dictionary-row-actions|user-actions|role-actions|row-actions)\s*\{\s*display:\s*flex/, `${file} 不应把单元格改成 flex`)
+  }
 })
 
 test('弹窗卸载后再恢复触发控件焦点', async () => {

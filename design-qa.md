@@ -61,6 +61,55 @@ final result: passed
 
 ---
 
+# ICD10 平台公共目录原型 Design QA（2026-09-22）
+
+- Source visual truth: `/Users/vliudbe/.codex/generated_images/01a0c7a9-9212-7b20-97b9-3a0c21ef5b98/exec-7b8d11a5-2a0f-4df2-b615-5ab6ae444dea.png`（第二版，1487 × 1058 像素）。
+- Implementation route: `http://127.0.0.1:5173/master-data/directory/icd10`。
+- Implementation evidence: Chrome 浏览器在当前运行中捕获的桌面原型截图（约 1692 × 792 CSS 像素，DPR 1）；浏览器接口只提供内联截图，没有可持久化的本地截图路径。
+- State: 已登录桌面管理端；无版本来源下的西医诊断默认目录、以及中医诊断类别切换、关键词“感冒”查询和同步原型抽屉。
+- Normalization: 比较同一桌面管理端壳层；源图按 1440 × 1024 设计，浏览器捕获为较矮的桌面视口，因此仅比较可见内容区的结构、密度、文字层级和交互状态，不将底部裁切当作视觉缺陷。
+
+## Full-view comparison evidence
+
+- 无版本模式的“疾病类别”左侧上下文轨道已替代机构选择；页面未出现机构名称、机构代码、机构筛选或虚构的版本切换。
+- 用户要求的顶部融合已落实：既有应用壳层继续提供面包屑、页面标题和说明；“平台公共目录”作为标题同行标记，不另造第二个页面头。正文从合成原型提示、类别版本轨道和同步摘要开始。
+- 同步摘要、搜索条和紧凑表格维持选中视觉稿的白底、浅灰工作区、低饱和绿色主操作和高密度目录阅读节奏。
+
+## Focused region comparison evidence
+
+- 标题区：原视觉稿在内容区内显示标题；为与现有管理端融合，标题上移至统一顶部栏。这是有意调整，避免双标题，并保留“平台公共目录”紧邻标题。
+- 类别轨道：点击“中医诊断”后，摘要数从 12,583 改为 5,208，并展示 4 条中医合成记录；无版本字段不进入主表。
+- 查询：输入“感冒”并提交后，表格与记录数同时收敛为一条匹配记录。
+- 同步操作：抽屉明确显示“目录归属：平台公共目录”和“机构归属：不适用”，确认操作仅提示原型反馈，不创建真实批次或外部调用。
+
+## Findings and iteration history
+
+- Iteration 1 [P2]：公共目录标记初次显示在标题下方并横向拉伸，无法融入现有顶部层级。已将标题与标记包装为同行标题区；复验后标记紧邻标题且说明文本仍单独成行。
+- Iteration 2 [P1]：中医类别切换后没有合成目录记录，容易被误读为数据为空。已补齐中医 2022 版和 2019 版合成记录，并让底部展示数量随筛选结果变化；浏览器复验通过。
+- Iteration 3 [P1]：ICD-10 原型原先使用独立地址，未落在现有“数据目录”的一级页签位置。已将地址收敛为 `/master-data/directory/icd10`，并在“综合目录、三大目录”后添加选中态 `ICD-10` 页签；浏览器在桌面管理端截图中复验通过。
+- Iteration 4 [P1]：接口资料只将诊断版本列为可选请求条件，单条响应不返回版本；原型却硬编码多个版本轨道和表格列。已删除版本选择与版本列，摘要只标记“来源未提供诊断版本”，同步详情保存“诊断版本：来源未提供”。浏览器复验了中医类别切换及同步抽屉，均未出现机构或版本筛选。
+- Remaining P0/P1/P2: 无。
+
+## Required fidelity surfaces
+
+- Fonts and typography: passed；沿用现有 Microsoft YaHei / Segoe UI 中文管理端字体、标题层级和 11–14px 高密度表格节奏。
+- Spacing and layout rhythm: passed；统一顶部不重复，正文采用 244px 上下文轨道和单一目录工作区，桌面视口无页面级横向溢出。
+- Colors and visual tokens: passed；复用白色表面、浅灰画布和既有低饱和绿色主操作/成功状态。
+- Image quality and asset fidelity: passed；视觉稿没有非标准栅格资产；页面复用项目已有图标组件，无替代性占位图。
+- Copy and content: passed；明确“平台公共目录”“机构归属：不适用”和原型不可写入边界，不将合成数据包装成联调事实。
+
+## Interaction and browser verification
+
+- 验证顶层 `综合目录｜三大目录｜ICD-10` 页签排列；仅前两个机构目录页签保留机构查询参数，ICD-10 页签不携带机构上下文。
+- 验证西医/中医类别切换与无版本目录上下文更新。
+- 验证关键词搜索及结果数同步变化。
+- 验证“新建同步”抽屉、机构归属不适用说明和确认后仅产生原型反馈。
+- `npm run typecheck --workspace web-admin` 通过；`node --test web-admin/tests/icd10DirectoryPrototype.test.mjs web-admin/tests/directoryLayout.test.mjs` 13 项通过；`git diff --check` 通过；浏览器控制台无 error/warn。
+
+final result: passed
+
+---
+
 # 基础数据开发前业务形态复验
 
 ## 复验结果

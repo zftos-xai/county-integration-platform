@@ -1,7 +1,7 @@
 <!-- 外部系统管理页面：使用真实API维护系统身份及按环境、机构隔离的接口配置。 -->
 <script setup lang="ts">
 import {
-  AlertCircle, ChevronDown, ChevronRight, Circle, KeyRound, LoaderCircle, Pencil,
+  AlertCircle, Circle, KeyRound, LoaderCircle, Pencil,
   Plus, RefreshCw, Search, ServerCog, Settings2,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -17,7 +17,7 @@ import AdminPagination from '@/components/AdminPagination.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
 import { authState, hasPermission } from '@/store/modules/auth'
-import { environmentLabel, formatLocalDateTime } from '@/utils/managementDisplay'
+import { formatLocalDateTime } from '@/utils/managementDisplay'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
 import ExternalEndpointEditorDrawer from './components/ExternalEndpointEditorDrawer.vue'
 import ExternalSystemEditorDrawer from './components/ExternalSystemEditorDrawer.vue'
@@ -41,7 +41,9 @@ const endpointEditorOpen = ref(false)
 const query = ref('')
 const endpointStatus = ref<'all' | 'ready' | 'attention'>('all')
 const onlyIncomplete = ref(false)
-const expandedOrganizationKey = ref<string | null>(null)
+const appliedFilters = ref<{ query: string; endpointStatus: 'all' | 'ready' | 'attention'; onlyIncomplete: boolean }>({
+  query: '', endpointStatus: 'all', onlyIncomplete: false,
+})
 const isLoading = ref(true)
 const isEndpointLoading = ref(false)
 const isRefreshing = ref(false)
@@ -73,7 +75,7 @@ type EndpointGroup = {
   organizationCode: string
   organizationName: string
   endpoints: Partial<Record<ParameterEnvironment, ExternalEndpoint>>
-  latestEndpoint: ExternalEndpoint
+  latestEndpoint: ExternalEndpoint | null
 }
 
 const selectedSystemId = computed({
@@ -85,12 +87,26 @@ const selectedSystemId = computed({
 })
 const endpointGroups = computed<EndpointGroup[]>(() => {
   const groups = new Map<string, EndpointGroup>()
+  // 基层 HIS 按机构配置；其他系统可能使用全局接口，不能将所有机构误判为缺项。
+  if (selectedSystem.value?.systemCode === 'PRIMARY_HIS') {
+    for (const organization of endpointOrganizationOptions.value) {
+      const key = `ORG-${organization.id}`
+      groups.set(key, {
+        key,
+        organizationId: organization.id,
+        organizationCode: organization.organizationCode,
+        organizationName: organization.organizationName,
+        endpoints: {},
+        latestEndpoint: null,
+      })
+    }
+  }
   endpoints.value.forEach(endpoint => {
     const key = endpointGroupKey(endpoint)
     const existing = groups.get(key)
     if (existing) {
       existing.endpoints[endpoint.environment] = endpoint
-      if (endpoint.updatedAt > existing.latestEndpoint.updatedAt) existing.latestEndpoint = endpoint
+      if (!existing.latestEndpoint || endpoint.updatedAt > existing.latestEndpoint.updatedAt) existing.latestEndpoint = endpoint
       return
     }
     groups.set(key, {
@@ -105,18 +121,35 @@ const endpointGroups = computed<EndpointGroup[]>(() => {
   return [...groups.values()].sort((left, right) => left.organizationName.localeCompare(right.organizationName, 'zh-CN'))
 })
 const filteredEndpointGroups = computed(() => {
-  const keyword = query.value.trim().toLocaleLowerCase('zh-CN')
+  const keyword = appliedFilters.value.query.toLocaleLowerCase('zh-CN')
   return endpointGroups.value.filter(group => {
     const configured = Object.values(group.endpoints)
-    if (endpointStatus.value === 'ready' && !configured.some(endpoint => endpoint.verificationStatus === 'VERIFIED')) return false
-    if (endpointStatus.value === 'attention' && configured.every(endpoint => endpoint.verificationStatus === 'VERIFIED')) return false
-    if (onlyIncomplete.value && group.endpoints.PRODUCTION && group.endpoints.TEST
+    if (appliedFilters.value.endpointStatus === 'ready' && !configured.some(endpoint => endpoint.verificationStatus === 'VERIFIED')) return false
+    if (appliedFilters.value.endpointStatus === 'attention' && configured.some(endpoint => endpoint.verificationStatus === 'VERIFIED')) return false
+    if (appliedFilters.value.onlyIncomplete && group.endpoints.PRODUCTION && group.endpoints.TEST
       && configured.every(endpoint => endpoint.credentialConfigured)) return false
     return !keyword || [group.organizationName, group.organizationCode]
       .some(value => value.toLocaleLowerCase('zh-CN').includes(keyword))
   })
 })
 const { page, pageSize, pagedRows } = useClientPagination(filteredEndpointGroups)
+
+/** 按当前输入条件查询机构接口列表。 */
+function applyFilters() {
+  appliedFilters.value = {
+    query: query.value.trim(), endpointStatus: endpointStatus.value, onlyIncomplete: onlyIncomplete.value,
+  }
+  page.value = 1
+}
+
+/** 恢复机构接口列表的默认筛选条件。 */
+function resetFilters() {
+  query.value = ''
+  endpointStatus.value = 'all'
+  onlyIncomplete.value = false
+  appliedFilters.value = { query: '', endpointStatus: 'all', onlyIncomplete: false }
+  page.value = 1
+}
 
 /** 将未知错误转换为页面可展示的API错误。 */
 function asApiError(caught: unknown, message: string) {
@@ -166,10 +199,6 @@ async function loadEndpoints(system: ExternalSystem, parentSignal?: AbortSignal)
     const rows = await listExternalEndpoints(system.id, current.signal)
     if (!mounted || current.signal.aborted || selectedSystem.value?.id !== system.id) return
     endpoints.value = rows
-    const keys = new Set(rows.map(endpointGroupKey))
-    if (!expandedOrganizationKey.value || !keys.has(expandedOrganizationKey.value)) {
-      expandedOrganizationKey.value = rows[0] ? endpointGroupKey(rows[0]) : null
-    }
   } catch (caught) {
     const apiError = asApiError(caught, '无法读取机构接口配置')
     if (apiError.code !== 'REQUEST_ABORTED' && !await handleUnauthorized(apiError)) error.value = apiError
@@ -181,7 +210,7 @@ async function loadEndpoints(system: ExternalSystem, parentSignal?: AbortSignal)
 
 /** 选择系统并读取其机构接口配置。 */
 async function selectSystem(system: ExternalSystem) {
-  selectedSystem.value = system; endpoints.value = []; expandedOrganizationKey.value = null; error.value = null
+  selectedSystem.value = system; endpoints.value = []; error.value = null
   await loadEndpoints(system)
 }
 
@@ -199,9 +228,9 @@ function openSystemEdit(system: ExternalSystem) {
 }
 
 /** 打开新增机构接口配置抽屉。 */
-function openEndpointCreate() {
+function openEndpointCreate(organizationId?: number | null) {
   if (!selectedSystem.value) return
-  endpointForm.value = emptyExternalEndpointForm(endpointOrganizationOptions.value[0]?.id ?? null)
+  endpointForm.value = emptyExternalEndpointForm(organizationId ?? endpointOrganizationOptions.value[0]?.id ?? null)
   selectedEndpoint.value = null; operationError.value = null; formError.value = ''
   editorSnapshot.value = endpointFormState(endpointForm.value); endpointEditorOpen.value = true
 }
@@ -319,9 +348,10 @@ function primaryEndpoint(group: EndpointGroup) {
   return group.endpoints.PRODUCTION ?? group.endpoints.TEST ?? group.endpoints.DEVELOPMENT ?? group.latestEndpoint
 }
 
-/** 切换机构接口配置的展开详情。 */
-function toggleOrganization(group: EndpointGroup) {
-  expandedOrganizationKey.value = expandedOrganizationKey.value === group.key ? null : group.key
+/** 编辑机构已有的接口配置；未配置机构只提供新增入口。 */
+function openGroupEndpointEdit(group: EndpointGroup) {
+  const endpoint = primaryEndpoint(group)
+  if (endpoint) openEndpointEdit(endpoint)
 }
 
 /** 返回一条接口配置的简短状态文案。 */
@@ -367,39 +397,44 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
         <div class="context-actions">
           <button v-if="canWrite && selectedSystem" class="work-quiet-button context-edit" type="button" @click="openSystemEdit(selectedSystem)"><Settings2 :size="15" />系统资料</button>
           <button v-if="canWrite" class="work-quiet-button" type="button" @click="openSystemCreate"><Plus :size="15" />新增系统</button>
-          <button v-if="canWrite && selectedSystem" class="prototype-button" type="button" :disabled="!selectedSystem.enabled" @click="openEndpointCreate"><Plus :size="15" />新增机构接口配置</button>
+          <button v-if="canWrite && selectedSystem" class="prototype-button" type="button" :disabled="!selectedSystem.enabled" @click="openEndpointCreate()"><Plus :size="15" />新增机构接口配置</button>
         </div>
       </section>
 
       <section class="prototype-section connection-matrix">
         <div v-if="endpointGroups.length" class="matrix-toolbar">
-          <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="搜索机构名称或编码" aria-label="搜索机构接口配置" /></label>
-          <label class="incomplete-filter"><input v-model="onlyIncomplete" type="checkbox" />仅看缺失配置</label>
-          <select v-model="endpointStatus" aria-label="接口配置状态"><option value="all">全部状态</option><option value="ready">可用于同步</option><option value="attention">需要处理</option></select>
-          <span class="matrix-count">共 {{ filteredEndpointGroups.length }} 个机构</span>
-          <button class="prototype-icon" type="button" aria-label="刷新接口配置" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="16" :class="{ spinning: isRefreshing }" /></button>
+          <form class="matrix-filters" @submit.prevent="applyFilters">
+            <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="搜索机构名称或编码" aria-label="搜索机构名称或编码" /></label>
+            <label class="status-filter"><span>同步状态</span><select v-model="endpointStatus"><option value="all">全部</option><option value="ready">有可用环境</option><option value="attention">无可用环境</option></select></label>
+            <label class="incomplete-filter"><input v-model="onlyIncomplete" type="checkbox" />仅看配置缺项</label>
+            <button class="prototype-button filter-submit" type="submit"><Search :size="14" />查询</button>
+            <button class="work-quiet-button filter-reset" type="button" @click="resetFilters">重置</button>
+          </form>
+          <div class="matrix-toolbar-result">
+            <span class="matrix-count">显示 {{ filteredEndpointGroups.length }} / {{ endpointGroups.length }} 个机构</span>
+            <button class="prototype-icon" type="button" aria-label="刷新接口配置" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="16" :class="{ spinning: isRefreshing }" /></button>
+          </div>
         </div>
 
         <div v-if="isEndpointLoading" class="page-state"><LoaderCircle class="spinning" :size="28" /><strong>正在加载机构接口配置</strong></div>
-        <div v-else-if="selectedSystem && endpointGroups.length === 0" class="endpoint-empty"><ServerCog :size="32" aria-hidden="true" /><h2>还没有机构接口配置</h2><p>请先为 {{ selectedSystem.systemName }} 添加一家机构的接口配置。</p><button v-if="canWrite && selectedSystem.enabled" class="prototype-button" type="button" @click="openEndpointCreate"><Plus :size="15" />新增机构接口配置</button></div>
+        <div v-else-if="selectedSystem && endpointGroups.length === 0" class="endpoint-empty"><ServerCog :size="32" aria-hidden="true" /><h2>还没有可展示的机构</h2><p>当前没有可见的机构或接口配置；请检查机构数据范围，或先为 {{ selectedSystem.systemName }} 添加接口配置。</p><button v-if="canWrite && selectedSystem.enabled" class="prototype-button" type="button" @click="openEndpointCreate()"><Plus :size="15" />新增机构接口配置</button></div>
         <div v-else class="prototype-table-wrap matrix-table-wrap">
         <table class="work-table matrix-table">
-          <colgroup><col class="org-column" /><col class="environment-column" /><col class="environment-column" /><col class="credential-column" /><col class="updated-column" /><col class="action-column" /></colgroup>
-          <thead><tr><th>机构</th><th>生产环境</th><th>测试环境</th><th>接入信息</th><th>最后更新</th><th>操作</th></tr></thead>
+          <colgroup><col class="org-column" /><col class="org-code-column" /><col class="state-column" /><col class="url-column" /><col class="state-column" /><col class="url-column" /><col class="credential-column" /><col class="source-column" /><col class="updated-column" /><col class="action-column" /></colgroup>
+          <thead><tr><th>机构</th><th>机构编码</th><th>生产状态</th><th>生产接口地址</th><th>测试状态</th><th>测试接口地址</th><th>接入信息</th><th>数据来源</th><th>最后更新</th><th>操作</th></tr></thead>
           <tbody>
-            <template v-for="group in pagedRows" :key="group.key">
-              <tr class="organization-row" :class="{ expanded: expandedOrganizationKey === group.key }">
-                <td><button class="organization-toggle" type="button" :aria-expanded="expandedOrganizationKey === group.key" @click="toggleOrganization(group)"><ChevronDown v-if="expandedOrganizationKey === group.key" :size="16" /><ChevronRight v-else :size="16" /><span class="single-line" :title="group.organizationName"><strong>{{ group.organizationName }}</strong><small>{{ group.organizationCode }}</small></span></button></td>
-                <td><div class="environment-cell" :class="{ missing: !group.endpoints.PRODUCTION, attention: group.endpoints.PRODUCTION && group.endpoints.PRODUCTION.verificationStatus !== 'VERIFIED' }"><span class="state-line"><Circle :size="8" fill="currentColor" />{{ endpointState(group.endpoints.PRODUCTION) }}</span><small class="single-line" :title="displayServiceUrl(group.endpoints.PRODUCTION)">{{ displayServiceUrl(group.endpoints.PRODUCTION) }}</small></div></td>
-                <td><div class="environment-cell" :class="{ missing: !group.endpoints.TEST, attention: group.endpoints.TEST && group.endpoints.TEST.verificationStatus !== 'VERIFIED' }"><span class="state-line"><Circle :size="8" fill="currentColor" />{{ endpointState(group.endpoints.TEST) }}</span><small class="single-line" :title="displayServiceUrl(group.endpoints.TEST)">{{ displayServiceUrl(group.endpoints.TEST) }}</small></div></td>
-                <td><span class="credential-status" :class="{ missing: !primaryEndpoint(group).credentialConfigured }"><KeyRound :size="14" />{{ primaryEndpoint(group).credentialConfigured ? '已配置' : '未配置' }}</span></td>
-                <td><span class="single-line" :title="formatLocalDateTime(group.latestEndpoint.updatedAt)">{{ formatLocalDateTime(group.latestEndpoint.updatedAt) }}</span></td>
-                <td><button v-if="canWrite" class="table-action" type="button" @click="openEndpointEdit(primaryEndpoint(group))"><Pencil :size="13" />编辑</button></td>
+              <tr v-for="group in pagedRows" :key="group.key" class="organization-row">
+                <td><strong class="single-line" :title="group.organizationName">{{ group.organizationName }}</strong></td>
+                <td><span class="single-line" :title="group.organizationCode">{{ group.organizationCode }}</span></td>
+                <td><span class="environment-cell state-line" :class="{ missing: !group.endpoints.PRODUCTION, attention: group.endpoints.PRODUCTION && group.endpoints.PRODUCTION.verificationStatus !== 'VERIFIED' }"><Circle :size="8" fill="currentColor" />{{ endpointState(group.endpoints.PRODUCTION) }}</span></td>
+                <td><span class="single-line endpoint-url" :title="displayServiceUrl(group.endpoints.PRODUCTION)">{{ displayServiceUrl(group.endpoints.PRODUCTION) }}</span></td>
+                <td><span class="environment-cell state-line" :class="{ missing: !group.endpoints.TEST, attention: group.endpoints.TEST && group.endpoints.TEST.verificationStatus !== 'VERIFIED' }"><Circle :size="8" fill="currentColor" />{{ endpointState(group.endpoints.TEST) }}</span></td>
+                <td><span class="single-line endpoint-url" :title="displayServiceUrl(group.endpoints.TEST)">{{ displayServiceUrl(group.endpoints.TEST) }}</span></td>
+                <td><span class="credential-status" :class="{ missing: !primaryEndpoint(group)?.credentialConfigured }"><KeyRound :size="14" />{{ primaryEndpoint(group)?.credentialConfigured ? '已配置' : '未配置' }}</span></td>
+                <td><span class="single-line" :title="primaryEndpoint(group)?.sourceOrganizationName ?? '—'">{{ primaryEndpoint(group)?.sourceOrganizationName ?? '—' }}</span></td>
+                <td><span class="single-line" :title="group.latestEndpoint ? formatLocalDateTime(group.latestEndpoint.updatedAt) : '—'">{{ group.latestEndpoint ? formatLocalDateTime(group.latestEndpoint.updatedAt) : '—' }}</span></td>
+                <td><button v-if="canWrite && primaryEndpoint(group)" class="table-action" type="button" @click="openGroupEndpointEdit(group)"><Pencil :size="13" />编辑</button><button v-else-if="canWrite && group.organizationId && selectedSystem?.enabled" class="table-action" type="button" @click="openEndpointCreate(group.organizationId)"><Plus :size="13" />新增配置</button></td>
               </tr>
-              <tr v-if="expandedOrganizationKey === group.key" class="endpoint-detail-row">
-                <td colspan="6"><div class="endpoint-detail"><div><span>运行环境</span><strong>{{ environmentLabel(primaryEndpoint(group).environment) }}</strong></div><div class="detail-url"><span>接口地址</span><strong class="single-line" :title="displayServiceUrl(primaryEndpoint(group))">{{ displayServiceUrl(primaryEndpoint(group)) }}</strong></div><div><span>数据来源</span><strong>{{ primaryEndpoint(group).sourceOrganizationName ?? '尚未确认' }}</strong></div><div><span>接入信息</span><strong>{{ primaryEndpoint(group).credentialConfigured ? '已填写' : '未填写' }}</strong></div><div><span>自动校验</span><strong>{{ endpointState(primaryEndpoint(group)) }}</strong><small v-if="primaryEndpoint(group).verificationFailureSummary">{{ primaryEndpoint(group).verificationFailureSummary }}</small></div><button v-if="canWrite" class="work-quiet-button" type="button" @click="openEndpointEdit(primaryEndpoint(group))"><Pencil :size="14" />编辑配置</button></div></td>
-              </tr>
-            </template>
           </tbody>
         </table>
         <div v-if="filteredEndpointGroups.length === 0" class="prototype-empty">没有符合当前条件的机构接口配置</div>
@@ -428,34 +463,30 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .context-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .context-edit { border-color: #7dafaa; color: #176f63; }
 .connection-matrix { min-height: 520px; }
-.matrix-toolbar { min-height: 64px; padding: 12px 14px; border-bottom: 1px solid #e6ebed; display: flex; align-items: center; gap: 10px; }
-.matrix-toolbar .prototype-search { width: min(330px, 36vw); }
-.matrix-toolbar select { min-height: 36px; margin-left: auto; padding: 0 34px 0 11px; border: 1px solid #ced8dc; border-radius: 4px; background: white; color: #455b65; }
+.matrix-toolbar { min-height: 64px; padding: 12px 14px; border-bottom: 1px solid #e6ebed; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.matrix-filters,.matrix-toolbar-result { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.matrix-filters { flex-wrap: wrap; }
+.matrix-toolbar-result { flex: none; margin-left: auto; }
+.matrix-toolbar .prototype-search { width: min(360px, 32vw); }
+.status-filter { display: inline-flex; align-items: center; gap: 8px; color: #4b6069; font-size: 12px; white-space: nowrap; }
+.status-filter select { min-height: 36px; padding: 0 32px 0 11px; border: 1px solid #ced8dc; border-radius: 4px; background: white; color: #455b65; }
 .incomplete-filter { display: inline-flex; align-items: center; gap: 7px; color: #4b6069; font-size: 12px; white-space: nowrap; }
 .incomplete-filter input { width: 15px; height: 15px; accent-color: #147467; }
+.filter-submit,.filter-reset { min-height: 36px; white-space: nowrap; }
 .matrix-count { color: #718189; font-size: 11px; white-space: nowrap; }
 .matrix-table-wrap { overflow-x: auto; }
-.matrix-table { min-width: 1080px; table-layout: fixed; }
-.matrix-table .org-column { width: 23%; }.matrix-table .environment-column { width: 20%; }.matrix-table .credential-column { width: 13%; }.matrix-table .updated-column { width: 15%; }.matrix-table .action-column { width: 9%; }
+.matrix-table { min-width: 1830px; table-layout: fixed; }
+.matrix-table .org-column { width: 210px; }.matrix-table .org-code-column { width: 255px; }.matrix-table .state-column { width: 110px; }.matrix-table .url-column { width: 260px; }.matrix-table .credential-column { width: 105px; }.matrix-table .source-column { width: 230px; }.matrix-table .updated-column { width: 150px; }.matrix-table .action-column { width: 80px; }
 .matrix-table th,.matrix-table td { overflow: hidden; }
-.matrix-table td { height: 72px; padding-top: 10px; padding-bottom: 10px; white-space: nowrap; }
-.matrix-table td:last-child { text-align: left; }
-.organization-row.expanded td { background: #f1faf7; border-bottom-color: #cfe7df; }
-.organization-toggle { width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: #1d343d; display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer; }
-.organization-toggle > span { min-width: 0; }
-.organization-toggle strong { display: block; overflow: hidden; text-overflow: ellipsis; }
-.organization-toggle small,.environment-cell small { display: block; margin-top: 5px; color: #70828b; font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.matrix-table td { height: 50px; padding-top: 8px; padding-bottom: 8px; white-space: nowrap; }
+.matrix-table th:last-child,.matrix-table td:last-child { text-align: right; }
 .environment-cell { min-width: 0; color: #16824f; }
 .environment-cell.missing,.environment-cell.attention { color: #7d8b91; }
-.state-line { display: flex; align-items: center; gap: 7px; font-weight: 650; }
+.state-line { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; }
+.endpoint-url { color: #70828b; font-size: 11px; }
 .credential-status { display: inline-flex; align-items: center; gap: 6px; color: #17765e; font-weight: 650; }
 .credential-status.missing { color: #bb613e; }
 .table-action { padding: 4px 0; border: 0; background: transparent; color: #147467; display: inline-flex; align-items: center; gap: 5px; font-weight: 650; white-space: nowrap; }
-.endpoint-detail-row td { height: auto; padding: 0 14px 12px; background: #f1faf7; }
-.endpoint-detail { min-width: 980px; padding: 14px; border: 1px solid #d8e7e2; border-radius: 5px; background: white; display: grid; grid-template-columns: 100px minmax(240px, 1.5fr) minmax(170px, 1fr) 150px 165px auto; align-items: end; gap: 16px; }
-.endpoint-detail > div { min-width: 0; display: grid; gap: 5px; }
-.endpoint-detail span { color: #718189; font-size: 10px; white-space: nowrap; }
-.endpoint-detail strong { color: #324851; font-size: 11px; font-weight: 600; }
 .single-line { min-width: 0; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page-state { min-height: 390px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; color: #33745c; text-align: center; }
 .page-state span { max-width: 420px; color: #75828c; font-size: 11px; line-height: 1.6; }
@@ -463,5 +494,5 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .spinning { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media(max-width:1100px){.system-context{grid-template-columns:minmax(260px,1fr) auto}.system-context>strong,.system-state{display:none}.context-actions{grid-column:auto;justify-content:flex-end}.matrix-toolbar .prototype-search{width:min(280px,32vw)}}
-@media(max-width:700px){.first-system-empty,.endpoint-empty{min-height:300px;padding:42px 20px}.system-context{grid-template-columns:1fr}.context-actions{grid-column:auto;align-items:stretch;flex-direction:column}.matrix-toolbar{align-items:stretch;flex-direction:column}.matrix-toolbar .prototype-search{width:100%}.matrix-toolbar select{margin-left:0}.matrix-count{margin-left:0}.matrix-toolbar .prototype-icon{align-self:flex-end}}
+@media(max-width:700px){.first-system-empty,.endpoint-empty{min-height:300px;padding:42px 20px}.system-context{grid-template-columns:1fr}.context-actions{grid-column:auto;align-items:stretch;flex-direction:column}.matrix-toolbar{align-items:stretch;flex-direction:column}.matrix-filters{gap:10px}.matrix-toolbar .prototype-search{width:100%}.matrix-toolbar-result{width:100%;margin-left:0;justify-content:space-between}}
 </style>

@@ -423,7 +423,8 @@ code { padding: 3px 6px; border-radius: 3px; background: #eef2f5; color: #3d5267
 .record-link strong { font-size: 13px; }
 .record-link small { color: #75818d; }
 .compact-time { color: #687580; line-height: 1.65; white-space: nowrap; }
-.row-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.row-actions { text-align: right; white-space: nowrap; }
+.row-actions > button + button { margin-left: 6px; }
 .status-action { min-height: 34px; padding: 0 10px; border: 1px solid #ccd5dd; background: white; color: #52606d; white-space: nowrap; }
 .status-action.confirm { border-color: #a54b34; background: #a54b34; color: white; }
 .page-state { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55718b; }

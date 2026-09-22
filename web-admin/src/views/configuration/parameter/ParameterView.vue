@@ -261,7 +261,7 @@ onBeforeUnmount(() => { mounted = false; controller?.abort() })
 .parameter-summary { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 8px; }.parameter-summary span { padding: 8px 11px; border: 1px solid #dce4e6; border-radius: 5px; background: white; color: #62717a; font-size: 11px; }.parameter-summary strong { margin-right: 3px; color: #263b42; font-size: 15px; }.parameter-summary .warning { border-color: #e6cf9d; background: #fff9e9; color: #7b5c1f; }
 .parameter-panel { --action-column-width: 156px; }
 .parameter-table { min-width: 1080px; }.parameter-table td small { display: block; margin-top: 3px; color: #78868e; font-size: 10px; }
-.parameter-actions { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.parameter-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
 .feedback { min-height: 46px; margin-bottom: 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 9px; font-size: 12px; }
 .feedback span { flex: 1; }.feedback button { border: 0; background: transparent; }.feedback.success { border-color: #bfddce; background: #ecf7f0; color: #226c49; }.feedback.danger { border-color: #e1c0b7; background: #fbf1ee; color: #8d432e; }
 .page-state { min-height: 330px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; color: #33745c; text-align: center; }.page-state span { max-width: 520px; color: #75828c; font-size: 12px; line-height: 1.6; }.muted { color: #7b8b92; }.spinning { animation: spin .8s linear infinite; }@keyframes spin { to { transform: rotate(360deg); } }

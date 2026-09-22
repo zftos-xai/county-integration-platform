@@ -172,7 +172,7 @@ function directionTone(direction: Direction) {
         </section>
 
         <div class="contract-grid">
-          <section class="prototype-section contract-list">
+          <section class="prototype-section contract-list action-column-table">
             <div class="prototype-section-head">
               <div><h3>差异清单</h3><small>先选择对象，再查看依据和处理边界</small></div>
               <span>{{ filteredIssues.length }} 项</span>

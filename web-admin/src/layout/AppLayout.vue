@@ -37,6 +37,9 @@ type NavigationGroup = {
 const route = useRoute();
 const router = useRouter();
 const isMobileOpen = ref(false);
+// 角色名称只用于辨认账号；菜单与操作仍只依据服务端权限代码。
+const currentRoleNames = computed(() => authState.user?.roleNames.join('、') || '未分配角色');
+const authorizedOrganizationCount = computed(() => authState.user?.organizationCodes.length ?? 0);
 
 const navigationGroups: NavigationGroup[] = [
   {
@@ -157,6 +160,10 @@ const pageContext = computed(() => {
       section: '基础数据',
       description: '按机构查看当前有效的医院综合目录、药品、诊疗和耗材目录',
     },
+    '/master-data/directory/icd10': {
+      section: '基础数据',
+      description: '按机构查看当前有效目录，并查看按来源类别管理的平台公共 ICD-10 诊断目录',
+    },
     '/interfaces': {
       section: '业务接口处理',
       description: '维护业务接口、版本与运行边界',
@@ -262,10 +269,14 @@ async function logout() {
           <span class="prototype-avatar">{{
             authState.user?.displayName?.slice(0, 1) || '用'
           }}</span>
-          <span
-            ><strong>{{ authState.user?.displayName }}</strong
-            ><small>{{ authState.user?.organizationCode }}</small></span
-          >
+          <span class="prototype-user-copy">
+            <span class="prototype-user-name">
+              <strong :title="authState.user?.displayName">{{ authState.user?.displayName }}</strong>
+              <span :title="authState.user?.loginName">{{ authState.user?.loginName }}</span>
+            </span>
+            <small class="prototype-user-role" :title="`角色：${currentRoleNames}；授权机构：${authorizedOrganizationCount} 家`">{{ currentRoleNames }} · {{ authorizedOrganizationCount }} 家机构</small>
+            <small :title="`${authState.user?.organizationName}（${authState.user?.organizationCode}）`">{{ authState.user?.organizationName }}</small>
+          </span>
         </div>
       </div>
     </aside>
@@ -275,7 +286,7 @@ async function logout() {
       @click="isMobileOpen = false"
     />
 
-    <main class="prototype-main" :class="{ 'directory-page': route.path.startsWith('/master-data/directory') }">
+    <main class="prototype-main" :class="{ 'directory-page': route.path.startsWith('/master-data/directory'), 'batch-detail-page': route.path.startsWith('/master-data/batches/') }">
       <header class="prototype-topbar">
         <button
           class="prototype-icon prototype-menu"
@@ -292,7 +303,10 @@ async function logout() {
             ><span aria-hidden="true">/</span
             ><strong>{{ route.meta.title }}</strong>
           </nav>
-          <h1>{{ route.meta.title }}</h1>
+          <div class="prototype-page-title">
+            <h1>{{ route.meta.title }}</h1>
+            <span v-if="route.meta.catalogScope === 'PUBLIC'" class="public-catalog-badge">平台公共目录</span>
+          </div>
           <p>{{ pageContext.description }}</p>
         </div>
       </header>

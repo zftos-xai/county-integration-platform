@@ -346,7 +346,8 @@ onBeforeUnmount(() => {
 .page-state { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55766d; }
 .role-table { min-width: 850px; }
 .role-table td small { display: block; margin-top: 3px; color: #7c8993; font-size: 10px; }
-.role-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.role-actions { text-align: right; white-space: nowrap; }
+.role-actions > button + button { margin-left: 6px; }
 .status-action { min-height: 32px; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 5px; background: white; color: #53636b; font-size: 11px; white-space: nowrap; }
 .status-action.confirm { border-color: #a94b42; background: #a94b42; color: white; }
 .feedback { min-height: 46px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 10px; font-size: 12px; }

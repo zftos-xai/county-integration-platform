@@ -6,6 +6,8 @@ const DashboardView = () => import('@/views/dashboard/DashboardView.vue');
 const OrganizationsView = () =>
   import('@/views/system/organization/OrganizationView.vue');
 const PrototypeView = () => import('@/views/prototype/PrototypeView.vue');
+const Icd10DirectoryPrototypeView = () =>
+  import('@/views/prototype/Icd10DirectoryPrototypeView.vue');
 const DatabaseContractPrototypeView = () =>
   import('@/views/prototype/DatabaseContractPrototypeView.vue');
 const DatabaseContractMaintenanceView = () =>
@@ -150,6 +152,17 @@ const router = createRouter({
             title: '数据目录',
             public: false,
             requiredPermission: 'master-data:read',
+          },
+        },
+        {
+          path: 'master-data/directory/icd10',
+          component: Icd10DirectoryPrototypeView,
+          meta: {
+            title: '数据目录',
+            public: false,
+            requiredPermission: 'master-data:read',
+            prototypeOnly: true,
+            catalogScope: 'PUBLIC',
           },
         },
         {
