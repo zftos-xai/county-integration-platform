@@ -403,7 +403,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
       </section>
 
       <section class="prototype-section connection-matrix action-column-table">
-        <ListQueryToolbar v-if="endpointGroups.length" :summary="`显示 ${filteredEndpointGroups.length} / ${endpointGroups.length} 个机构`" :refreshing="isRefreshing" @query="applyFilters" @reset="resetFilters" @refresh="loadPage(true)">
+        <ListQueryToolbar v-if="endpointGroups.length" :refreshing="isRefreshing" @query="applyFilters" @reset="resetFilters" @refresh="loadPage(true)">
             <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="搜索机构名称或编码" aria-label="搜索机构名称或编码" /></label>
             <label class="status-filter"><span>同步状态</span><select v-model="endpointStatus"><option value="all">全部</option><option value="ready">有可用环境</option><option value="attention">无可用环境</option></select></label>
             <label class="incomplete-filter"><input v-model="onlyIncomplete" type="checkbox" />仅看配置缺项</label>

@@ -346,7 +346,7 @@ onBeforeUnmount(() => {
       <button class="text-button" type="button" :disabled="isRefreshing" @click="loadOrganizations(true)"><RefreshCw :size="15" />重试</button>
     </div>
 
-    <ListQueryToolbar :summary="`${filtered.length} / ${organizations.length} 个机构`" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadOrganizations(true)">
+    <ListQueryToolbar :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadOrganizations(true)">
       <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="机构名称、编码或类型" aria-label="搜索机构" /></label>
       <label class="status-field"><span class="visually-hidden">有效状态</span><select v-model="statusFilter" aria-label="机构有效状态"><option value="all">全部有效状态</option><option value="attention">只看需要处理</option><option value="active">正常使用</option><option value="future">尚未生效</option><option value="expired">已过期</option><option value="disabled">已撤销</option></select></label>
       <select v-model="typeFilter" aria-label="机构类型"><option value="all">全部机构类型</option><option v-for="type in organizationTypes" :key="type" :value="type">{{ organizationTypeLabel(type) }}（{{ type }}）</option></select>

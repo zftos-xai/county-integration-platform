@@ -117,7 +117,7 @@ test('机构接口搜索包含未建配置的可见机构并支持查询与重�
   assert.match(source, /仅看配置缺项/)
   assert.match(source, /@query="applyFilters" @reset="resetFilters" @refresh="loadPage\(true\)"/)
   assert.match(source, /appliedFilters\.value = \{ query: '', endpointStatus: 'all', onlyIncomplete: false \}/)
-  assert.match(source, /:summary="`显示 \$\{filteredEndpointGroups\.length\} \/ \$\{endpointGroups\.length\} 个机构`"/)
+  assert.doesNotMatch(source, /:summary=/)
 })
 
 test('外部系统与机构接口配置抽屉使用完整字段和固定操作区', async () => {

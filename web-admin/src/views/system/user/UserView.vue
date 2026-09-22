@@ -413,7 +413,7 @@ onBeforeUnmount(() => {
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
 
-    <ListQueryToolbar :summary="`${filtered.length} / ${users.length} 个用户`" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
+    <ListQueryToolbar :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
       <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="姓名、登录名或机构编码" aria-label="搜索用户" /></label>
       <select v-model="statusFilter" aria-label="用户状态"><option value="all">全部状态</option><option value="enabled">正常使用</option><option value="disabled">已注销</option></select>
       <select v-model="organizationFilter" aria-label="主要机构"><option value="all">全部主要机构</option><option v-for="organization in organizations" :key="organization.id" :value="String(organization.id)">{{ organization.organizationName }}</option></select>

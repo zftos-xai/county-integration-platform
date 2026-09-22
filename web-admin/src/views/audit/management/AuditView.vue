@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="content audit-page">
     <div class="audit-readonly-note" role="note"><ClipboardList :size="18" /><span><strong>操作记录只供查询</strong><small>记录由系统自动生成，不能在本页面新增、修改或删除；需要处理业务数据时请打开对应业务对象。医院尚未确定具体保留年限前，系统不会自动清理这些记录；确定期限后须经审批实施归档或清理。</small></span></div>
-    <ListQueryToolbar class="audit-filters" :summary="`已读取 ${events.length} 条记录`" :refreshing="isLoading" @query="submitFilters" @reset="clearFilters" @refresh="loadEvents()">
+    <ListQueryToolbar class="audit-filters" :refreshing="isLoading" @query="submitFilters" @reset="clearFilters" @refresh="loadEvents()">
       <label class="prototype-search"><Search :size="16" /><input v-model="actorLogin" maxlength="128" autocomplete="off" placeholder="操作人登录名" aria-label="操作人登录名" /></label>
       <label class="audit-field"><span>操作</span><select v-model="actionCode" aria-label="操作类型"><option value="">全部操作</option><option v-for="([code, label]) in actionOptions" :key="code" :value="code">{{ label }}</option></select></label>
       <label class="audit-field"><span>操作对象</span><select v-model="targetType" aria-label="操作对象"><option value="">全部对象</option><option v-for="([code, label]) in targetOptions" :key="code" :value="code">{{ label }}</option></select></label>

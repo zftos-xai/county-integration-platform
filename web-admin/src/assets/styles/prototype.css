@@ -343,12 +343,12 @@
 .work-table-section { border-top: 0; border-radius: 0 0 5px 5px; }
 .standard-list-toolbar { min-height: 58px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 9px; border: 1px solid var(--line); border-bottom: 0; border-radius: 5px 5px 0 0; background: white; box-shadow: 0 1px 2px #263b420a; }
 .standard-list-toolbar__filters { min-width: min(100%, 260px); flex: 1 1 420px; display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
-.standard-list-toolbar__commands, .standard-list-toolbar__summary { display: flex; align-items: center; gap: 8px; }
-.standard-list-toolbar__summary { margin-left: auto; color: #718087; font-size: 11px; white-space: nowrap; }
+.standard-list-toolbar__commands, .standard-list-toolbar__utility { display: flex; align-items: center; gap: 8px; }
+.standard-list-toolbar__utility { margin-left: auto; white-space: nowrap; }
 .standard-list-toolbar .prototype-search { flex: 1 1 260px; max-width: 420px; }
 .standard-list-toolbar select { height: 36px; max-width: 190px; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 4px; outline-color: var(--accent); background: white; color: #455b63; font-size: 12px; }
-@media (max-width: 860px) { .standard-list-toolbar__commands { order: 3; } .standard-list-toolbar__summary { margin-left: 0; } }
-@media (max-width: 560px) { .standard-list-toolbar, .standard-list-toolbar__filters, .standard-list-toolbar__commands, .standard-list-toolbar__summary { align-items: stretch; } .standard-list-toolbar__filters { flex-basis: 100%; } .standard-list-toolbar .prototype-search { max-width: none; } .standard-list-toolbar__summary { width: 100%; justify-content: space-between; } }
+@media (max-width: 860px) { .standard-list-toolbar__commands { order: 3; } .standard-list-toolbar__utility { margin-left: 0; } }
+@media (max-width: 560px) { .standard-list-toolbar, .standard-list-toolbar__filters, .standard-list-toolbar__commands, .standard-list-toolbar__utility { align-items: stretch; } .standard-list-toolbar__filters { flex-basis: 100%; } .standard-list-toolbar .prototype-search { max-width: none; } .standard-list-toolbar__utility { width: 100%; justify-content: flex-end; } }
 .prototype-empty { padding: 30px; color: #7b8b92; text-align: center; font-size: 12px; }
 .work-drawer-backdrop { position: fixed; inset: 0; z-index: 35; background: #172b3180; backdrop-filter: blur(1px); }
 .work-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(620px, 100vw); display: flex; flex-direction: column; background: white; box-shadow: -18px 0 44px #172a2e38; }

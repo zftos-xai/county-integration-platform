@@ -689,7 +689,6 @@ onBeforeUnmount(() => {
     />
     <ListQueryToolbar
       class="batch-toolbar"
-      :summary="!isLoading && !error ? `共 ${total} 个批次` : ''"
       :refreshing="isRefreshing"
       @query="applyFilters"
       @reset="clearFilters"

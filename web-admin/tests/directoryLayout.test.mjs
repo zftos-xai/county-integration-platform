@@ -49,12 +49,10 @@ async function mountLayout(t, { query = {}, codes = ['ORG-A', 'ORG-B'], organiza
     '@/utils/request': { ApiClientError },
     '@/components/ListQueryToolbar.vue': {
       default: {
-        props: ['summary'],
         emits: ['query', 'reset', 'refresh'],
         setup(props, { emit, slots }) {
           return () => Vue.h('form', { onSubmit: event => { event.preventDefault(); emit('query') } }, [
             slots.default?.(),
-            Vue.h('span', props.summary),
             Vue.h('button', { type: 'button', onClick: () => emit('reset') }, '重置'),
             Vue.h('button', { type: 'button', onClick: () => emit('refresh') }, '刷新'),
           ])
@@ -126,11 +124,11 @@ test('数据目录页头和页签去除通用导航内边距造成的多余留�
   assert.match(source, /\.dataset-nav\s*\{[^}]*padding:\s*0;/s)
 })
 
-test('类型页签已说明目录种类，不再重复标题说明；刷新仍在查询区可用', async t => {
+test('类型页签已说明目录种类，结果数不在查询区重复展示；刷新仍在查询区可用', async t => {
   const { root, events } = await mountLayout(t, { isEmpty: false, total: 46, counts: { DEPARTMENT: 46 } })
   assert.doesNotMatch(text(root), /当前医院综合目录 · 科室|来自最近一次成功同步|查看不会重新调用 HIS/)
   assert.equal(descendants(root).filter(item => item.type === 'h3').length, 0)
-  assert.match(text(root), /共 46 条/)
+  assert.doesNotMatch(text(root), /共 46 条/)
   const refresh = descendants(root).find(item => item.type === 'button' && text(item) === '刷新')
   assert.ok(refresh)
   refresh.props.onClick()

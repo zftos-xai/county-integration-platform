@@ -149,7 +149,6 @@ onBeforeUnmount(() => request.abort())
       <section class="directory-panel">
         <ListQueryToolbar
           class="directory-toolbar"
-          :summary="`共 ${isLoading || error ? '—' : total} 条`"
           :refreshing="isRefreshing"
           :disabled="isBusy || !organizationCode"
           @query="emit('search')"

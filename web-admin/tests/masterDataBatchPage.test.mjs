@@ -189,7 +189,7 @@ test('同步来源读取失败不伪装成无可用机构，批次读取失败�
   assert.match(page, /canStart && !error && hasLoadedSyncSources && !hasSyncSource/);
   assert.match(page, /hasLoadedSyncSources && hasSyncSource && !hasSyncOption/);
   assert.match(page, /canStart && !error && !isSyncSourceLoading && syncSourceError/);
-  assert.match(page, /:summary="!isLoading && !error \? `共 \$\{total\} 个批次` : ''"/);
+  assert.doesNotMatch(page, /:summary=/);
   assert.match(page, /v-else-if="!error && batches\.length"/);
   assert.match(page, /同步批次读取失败/);
   assert.match(drawer, /v-else-if="sourceError"/);

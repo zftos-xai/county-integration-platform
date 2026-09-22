@@ -1,10 +1,8 @@
-<!-- 管理端列表的统一查询栏：页面提供筛选项和业务操作，组件固定查询、重置、统计和刷新位置。 -->
+<!-- 管理端列表的统一查询栏：页面提供筛选项和业务操作，组件固定查询、重置和刷新位置；结果数由分页栏唯一展示。 -->
 <script setup lang="ts">
 import { RefreshCw } from 'lucide-vue-next'
 
 withDefaults(defineProps<{
-  /** 当前结果的统计文本，由页面按自身数据语义提供。 */
-  summary: string
   /** 是否正在重新读取服务端数据。 */
   refreshing?: boolean
   /** 当前列表不可操作时同时禁用公共动作。 */
@@ -43,8 +41,7 @@ const emit = defineEmits<{
       <button v-if="showReset" class="work-quiet-button" type="button" :disabled="disabled" @click="emit('reset')">重置</button>
       <slot name="actions" />
     </div>
-    <div class="standard-list-toolbar__summary">
-      <span>{{ summary }}</span>
+    <div class="standard-list-toolbar__utility">
       <button v-if="showRefresh" class="work-quiet-button" type="button" :disabled="disabled || refreshing" @click="emit('refresh')">
         <RefreshCw :size="15" :class="{ spinning: refreshing }" />刷新
       </button>
