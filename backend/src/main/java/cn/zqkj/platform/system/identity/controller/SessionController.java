@@ -105,7 +105,7 @@ public class SessionController {
         context.setAuthentication(authentication);
         contextHolderStrategy.setContext(context);
         contextRepository.saveContext(context, servletRequest, servletResponse);
-        return ApiResponse.success(CurrentUserVO.from((PlatformUserPrincipal) authentication.getPrincipal()));
+        return ApiResponse.success(identityService.currentUser((PlatformUserPrincipal) authentication.getPrincipal()));
     }
 
     /**
@@ -116,7 +116,7 @@ public class SessionController {
      */
     @GetMapping("/current")
     public ApiResponse<CurrentUserVO> current(@AuthenticationPrincipal PlatformUserPrincipal principal) {
-        return ApiResponse.success(CurrentUserVO.from(principal));
+        return ApiResponse.success(identityService.currentUser(principal));
     }
 
     /**

@@ -3,11 +3,21 @@ package cn.zqkj.platform.system.identity.service;
 import cn.zqkj.platform.system.bootstrap.domain.dto.BootstrapCommand;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapResultVO;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapStatusVO;
+import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
+import cn.zqkj.platform.system.identity.domain.vo.CurrentUserVO;
 
 /**
  * 定义平台初始化、身份验证辅助和密码管理服务。
  */
 public interface IdentityService {
+
+    /**
+     * 汇总已认证会话的账号、实际角色和主机构展示信息，不重新计算授权范围。
+     *
+     * @param principal 服务端认证取得的当前登录用户
+     * @return 不含凭证的当前用户视图；机构资料不可用时查询失败
+     */
+    CurrentUserVO currentUser(PlatformUserPrincipal principal);
 
     /**
      * 查询平台是否仍允许执行一次性安全引导。

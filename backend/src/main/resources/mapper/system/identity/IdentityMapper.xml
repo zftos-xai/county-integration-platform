@@ -101,6 +101,22 @@
         ORDER BY organizations.organization_code
     </select>
 
+    <select id="findEnabledRoleNames" resultType="java.lang.String">
+        <!-- 仅展示用户当前获授且已启用的角色；不作为功能权限判定依据 -->
+        SELECT roles.role_name
+        FROM sys_user_role AS user_roles
+        INNER JOIN sys_role AS roles ON roles.id = user_roles.role_id
+        WHERE user_roles.user_id = #{userId} AND roles.is_enabled = 1
+        ORDER BY roles.role_code
+    </select>
+
+    <select id="findOrganizationName" resultType="java.lang.String">
+        <!-- 会话主归属机构的名称，不沿机构树推导额外数据范围 -->
+        SELECT organization_name
+        FROM org_organization
+        WHERE id = #{organizationId}
+    </select>
+
     <update id="upsertPermission">
         <!-- 权限代码是后端注册权限的稳定唯一标识 -->
         IF EXISTS (SELECT 1 FROM sys_permission WHERE permission_code = #{permissionCode})

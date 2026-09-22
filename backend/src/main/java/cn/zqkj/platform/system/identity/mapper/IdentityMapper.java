@@ -60,6 +60,22 @@ public interface IdentityMapper {
     List<String> findOrganizationCodes(long userId);
 
     /**
+     * 查询当前用户已启用角色的展示名称，不据此扩大会话权限。
+     *
+     * @param userId 已认证用户主键
+     * @return 按角色代码稳定排序的名称；未分配启用角色时为空列表
+     */
+    List<String> findEnabledRoleNames(long userId);
+
+    /**
+     * 查询当前用户主归属机构的名称，仅供会话身份展示。
+     *
+     * @param organizationId 已认证会话中的主机构主键
+     * @return 机构名称；机构不存在时为空
+     */
+    String findOrganizationName(long organizationId);
+
+    /**
      * 按权限代码新增或更新代码注册的功能权限。
      *
      * @param permissionCode 权限代码

@@ -8,6 +8,8 @@ export type CurrentUser = {
   displayName: string
   primaryOrganizationId: number
   organizationCode: string
+  organizationName: string
+  roleNames: string[]
   mustChangePassword: boolean
   permissions: string[]
   organizationCodes: string[]
@@ -21,6 +23,8 @@ export function isCurrentUser(value: unknown): value is CurrentUser {
     && typeof value.displayName === 'string'
     && typeof value.primaryOrganizationId === 'number'
     && typeof value.organizationCode === 'string'
+    && typeof value.organizationName === 'string'
+    && isStringArray(value.roleNames)
     && typeof value.mustChangePassword === 'boolean'
     && isStringArray(value.permissions)
     && isStringArray(value.organizationCodes)

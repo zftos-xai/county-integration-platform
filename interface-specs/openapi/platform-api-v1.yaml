@@ -896,13 +896,18 @@ components:
         data: { $ref: '#/components/schemas/CurrentUser' }
     CurrentUser:
       type: object
-      required: [userId, loginName, displayName, primaryOrganizationId, organizationCode, mustChangePassword, permissions, organizationCodes]
+      required: [userId, loginName, displayName, primaryOrganizationId, organizationCode, organizationName, roleNames, mustChangePassword, permissions, organizationCodes]
       properties:
         userId: { type: integer, format: int64 }
         loginName: { type: string }
         displayName: { type: string }
         primaryOrganizationId: { type: integer, format: int64 }
         organizationCode: { type: string }
+        organizationName: { type: string, description: 主归属机构名称，仅供展示 }
+        roleNames:
+          type: array
+          description: 当前已启用角色名称，仅供展示；实际权限以会话权限代码为准
+          items: { type: string }
         mustChangePassword: { type: boolean }
         permissions:
           type: array

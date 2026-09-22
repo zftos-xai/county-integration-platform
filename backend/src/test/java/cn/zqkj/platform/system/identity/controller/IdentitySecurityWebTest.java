@@ -8,6 +8,7 @@ import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapStatusVO;
 import cn.zqkj.platform.system.bootstrap.controller.BootstrapController;
 import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import cn.zqkj.platform.system.identity.service.IdentityService;
+import cn.zqkj.platform.system.identity.domain.vo.CurrentUserVO;
 import cn.zqkj.platform.system.audit.service.ManagementAuditService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -129,6 +130,8 @@ class IdentitySecurityWebTest {
                 30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true,
                 List.of(new SimpleGrantedAuthority("password:change")), new byte[8]);
         when(userDetailsService.loadUserByUsername("admin")).thenReturn(principal);
+        when(identityService.currentUser(any(PlatformUserPrincipal.class))).thenAnswer(invocation ->
+                CurrentUserVO.from(invocation.getArgument(0), "County Hospital", List.of("平台管理员")));
         when(identityMapper.findById(30L)).thenReturn(
                 new cn.zqkj.platform.system.identity.domain.model.UserAccount(
                         30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true, new byte[8]
@@ -141,6 +144,8 @@ class IdentitySecurityWebTest {
                         .content("{\"loginName\":\"admin\",\"password\":\"Initial!Pass123\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.loginName").value("admin"))
+                .andExpect(jsonPath("$.data.organizationName").value("County Hospital"))
+                .andExpect(jsonPath("$.data.roleNames[0]").value("平台管理员"))
                 .andExpect(jsonPath("$.data.mustChangePassword").value(true))
                 .andReturn();
 
@@ -171,6 +176,8 @@ class IdentitySecurityWebTest {
                 30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true,
                 List.of(new SimpleGrantedAuthority("password:change")), new byte[8]);
         when(userDetailsService.loadUserByUsername("admin")).thenReturn(principal);
+        when(identityService.currentUser(any(PlatformUserPrincipal.class))).thenAnswer(invocation ->
+                CurrentUserVO.from(invocation.getArgument(0), "County Hospital", List.of("平台管理员")));
         when(identityMapper.findById(30L)).thenReturn(
                 new cn.zqkj.platform.system.identity.domain.model.UserAccount(
                         30L, "admin", "Administrator", passwordHash, 10L, "ORG001", true, true, new byte[8]

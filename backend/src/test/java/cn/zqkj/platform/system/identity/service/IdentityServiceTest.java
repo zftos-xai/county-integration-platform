@@ -2,6 +2,7 @@ package cn.zqkj.platform.system.identity.service;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.system.bootstrap.domain.dto.BootstrapCommand;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapResultVO;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapStatusVO;
@@ -11,6 +12,7 @@ import cn.zqkj.platform.system.identity.service.impl.IdentityServiceImpl;
 import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.service.OrganizationService;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,6 +33,25 @@ import static org.mockito.Mockito.when;
 class IdentityServiceTest {
 
     private static final String BOOTSTRAP_SECRET = "0123456789abcdef0123456789abcdef";
+
+    /** 已认证账号只显示数据库中的角色与主机构名称，不推导额外机构权限。 */
+    @Test
+    void displaysAssignedRoleAndPrimaryOrganizationWithoutChangingSessionScope() {
+        IdentityMapper mapper = mock(IdentityMapper.class);
+        when(mapper.findOrganizationName(10L)).thenReturn("县人民医院");
+        when(mapper.findEnabledRoleNames(30L)).thenReturn(List.of("平台管理员"));
+        IdentityService service = new IdentityServiceImpl(
+                mapper, mock(OrganizationService.class), mock(PasswordEncoder.class), BOOTSTRAP_SECRET);
+        PlatformUserPrincipal principal = new PlatformUserPrincipal(
+                30L, "admin", "管理员", null, 10L, "ORG001", true, false,
+                List.of(), new byte[8]);
+
+        var currentUser = service.currentUser(principal);
+
+        assertEquals("县人民医院", currentUser.organizationName());
+        assertEquals(List.of("平台管理员"), currentUser.roleNames());
+        assertEquals(List.of(), currentUser.organizationCodes());
+    }
 
     /**
      * 验证平台尚无用户且启动密钥存在时可以完成完整初始关系创建。

@@ -2,10 +2,12 @@ package cn.zqkj.platform.system.identity.service.impl;
 
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
+import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.system.bootstrap.domain.dto.BootstrapCommand;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapResultVO;
 import cn.zqkj.platform.system.bootstrap.domain.vo.BootstrapStatusVO;
 import cn.zqkj.platform.system.identity.domain.model.UserAccount;
+import cn.zqkj.platform.system.identity.domain.vo.CurrentUserVO;
 import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import cn.zqkj.platform.system.identity.service.IdentityService;
 import cn.zqkj.platform.system.organization.domain.dto.CreateOrganizationCommand;
@@ -56,6 +58,20 @@ public class IdentityServiceImpl implements IdentityService {
         this.organizationService = organizationService;
         this.passwordEncoder = passwordEncoder;
         this.bootstrapSecret = bootstrapSecret == null ? "" : bootstrapSecret;
+    }
+
+    /**
+     * 读取会话用户的角色和主机构名称供界面辨认；实际功能权限仍取自认证主体。
+     *
+     * @param principal 服务端认证取得的当前登录用户
+     * @return 当前账号、角色和主归属机构摘要
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public CurrentUserVO currentUser(PlatformUserPrincipal principal) {
+        String organizationName = Optional.ofNullable(mapper.findOrganizationName(principal.primaryOrganizationId()))
+                .orElseThrow(() -> new IllegalStateException("Current user's primary organization is unavailable"));
+        return CurrentUserVO.from(principal, organizationName, mapper.findEnabledRoleNames(principal.userId()));
     }
 
     /**
