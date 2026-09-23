@@ -71,10 +71,11 @@ function checkDocumentedObjects(file, sql) {
   }
 
   // 增量迁移的字段和约束同样必须有数据库元数据说明。
-  const addedColumnsPattern = /ALTER\s+TABLE\s+(?:dbo\.)?([a-z][a-z0-9_]*)\s+ADD\s*\n([\s\S]*?);/gi
-  for (const match of file.includes('_patch_') ? sql.matchAll(addedColumnsPattern) : []) {
+  const addedColumnsPattern = /ALTER\s+TABLE\s+(?:dbo\.)?([a-z][a-z0-9_]*)\s+ADD\s*\n([\s\S]*?);([^\r\n]*)/gi
+  for (const match of sql.matchAll(addedColumnsPattern)) {
     const tableName = match[1].toLowerCase()
-    for (const rawLine of match[2].split(/\r?\n/)) {
+    // 分号后同一行的说明仍属于最后一个增量字段，不能截断后误报缺失。
+    for (const rawLine of `${match[2]}${match[3]}`.split(/\r?\n/)) {
       const line = rawLine.trim()
       const field = line.match(/^([a-z][a-z0-9_]*)\s+(?:N?VARCHAR|VARBINARY|BIGINT|INT|BIT|DATETIME2)\b/i)
       if (!field) continue
@@ -87,8 +88,8 @@ function checkDocumentedObjects(file, sql) {
     }
   }
 
-  const addedConstraintPattern = /ALTER\s+TABLE\s+(?:dbo\.)?([a-z][a-z0-9_]*)\s+WITH\s+CHECK\s+ADD\s+CONSTRAINT\s+([a-z][a-z0-9_]*)/gi
-  for (const match of file.includes('_patch_') ? sql.matchAll(addedConstraintPattern) : []) {
+  const addedConstraintPattern = /ALTER\s+TABLE\s+(?:dbo\.)?([a-z][a-z0-9_]*)\s+(?:WITH\s+CHECK\s+)?ADD\s+CONSTRAINT\s+([a-z][a-z0-9_]*)/gi
+  for (const match of sql.matchAll(addedConstraintPattern)) {
     createdObjects.push({ file, type: 'CONSTRAINT', table: match[1].toLowerCase(), object: match[2].toLowerCase() })
   }
 
@@ -117,7 +118,9 @@ function collectPersistedDescriptions(file, sql) {
     const description = match[5].trim()
     const key = `${type}:${table}:${object ?? ''}`
     if (!description) report(file, `${type} ${table}.${object ?? ''} 的MS_Description不能为空`)
-    if ((type === 'TABLE' || type === 'COLUMN') && !/^[\u3400-\u9fff（）]+$/.test(description)) {
+    const usesAllowedNameCharacters = /^[\u3400-\u9fffA-Za-z0-9（）·、，。-]+$/.test(description)
+    const containsChinese = /[\u3400-\u9fff]/.test(description)
+    if ((type === 'TABLE' || type === 'COLUMN') && (!usesAllowedNameCharacters || !containsChinese)) {
       report(file, `${type} ${table}.${object ?? ''} 的MS_Description必须是简洁中文名称`)
     }
     if (type === 'TABLE' && !/^[\u3400-\u9fff（）]+表$/.test(description)) {

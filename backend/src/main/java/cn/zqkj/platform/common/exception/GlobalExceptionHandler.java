@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -71,6 +72,27 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiError> handleAuthentication(AuthenticationException exception, HttpServletRequest request) {
         LOGGER.warn("Platform authentication failed");
         return response(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_FAILED", "登录名或密码错误", request);
+    }
+
+    /**
+     * 处理账号库不可用等认证依赖故障，避免将其误报为密码错误或写入登录失败审计。
+     *
+     * @param exception 原始认证依赖异常
+     * @param request 当前 HTTP 请求
+     * @return HTTP 503 错误响应
+     */
+    @ExceptionHandler(InternalAuthenticationServiceException.class)
+    ResponseEntity<ApiError> handleAuthenticationServiceUnavailable(
+            InternalAuthenticationServiceException exception,
+            HttpServletRequest request
+    ) {
+        LOGGER.error("Platform authentication service unavailable");
+        return response(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "AUTHENTICATION_SERVICE_UNAVAILABLE",
+                "登录服务暂不可用，请稍后重试",
+                request
+        );
     }
 
     /**

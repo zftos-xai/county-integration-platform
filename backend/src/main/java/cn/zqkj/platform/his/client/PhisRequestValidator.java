@@ -1,6 +1,8 @@
 package cn.zqkj.platform.his.client;
 
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
@@ -64,6 +66,39 @@ public final class PhisRequestValidator {
     }
 
     /**
+     * 校验100-006 ICD10分页查询。
+     *
+     * @param query 分页查询条件
+     * @throws PhisRequestException 范围、分页或字段长度不符合接口文档时抛出
+     */
+    public static void validate(Icd10Query query) {
+        if (query == null || query.rangeStart() == null || query.rangeEnd() == null) {
+            throw new PhisRequestException("必须提供ICD10查询时间范围");
+        }
+        if (query.startRow() < 1 || query.endRow() <= query.startRow()) {
+            throw new PhisRequestException("ICD10分页范围无效");
+        }
+        // 100-006的TEST端点实测结束行不包含，因此差值就是请求行数。
+        if (query.endRow() - query.startRow() > MAXIMUM_PAGE_SIZE) {
+            throw new PhisRequestException("ICD10单页不能超过" + MAXIMUM_PAGE_SIZE + "行");
+        }
+        validateIcd10Range(query.diseaseName(), query.rangeStart(), query.rangeEnd(), query.diagnosisVersion());
+    }
+
+    /**
+     * 校验100-007 ICD10声明行数查询。
+     *
+     * @param query 数量查询条件
+     * @throws PhisRequestException 范围或字段长度不符合接口文档时抛出
+     */
+    public static void validate(Icd10CountQuery query) {
+        if (query == null || query.rangeStart() == null || query.rangeEnd() == null) {
+            throw new PhisRequestException("必须提供ICD10查询时间范围");
+        }
+        validateIcd10Range(query.diseaseName(), query.rangeStart(), query.rangeEnd(), query.diagnosisVersion());
+    }
+
+    /**
      * 校验100-008医疗机构查询。
      *
      * @param query 医疗机构查询条件
@@ -88,6 +123,20 @@ public final class PhisRequestValidator {
         }
         validateOptionalLength("目录名称", directoryName, 20);
         validateOptionalLength("机构编码", sourceOrganizationCode, 50);
+    }
+
+    /** 校验100-006和100-007共用的名称、时间和可选版本条件。 */
+    private static void validateIcd10Range(
+            String diseaseName,
+            java.time.LocalDateTime rangeStart,
+            java.time.LocalDateTime rangeEnd,
+            String diagnosisVersion
+    ) {
+        if (rangeEnd.isBefore(rangeStart)) {
+            throw new PhisRequestException("ICD10查询结束时间不能早于开始时间");
+        }
+        validateOptionalLength("病种名称", diseaseName, 20);
+        validateOptionalLength("诊断版本", diagnosisVersion, 50);
     }
 
     /** 校验可选文本的裁剪后长度。 */

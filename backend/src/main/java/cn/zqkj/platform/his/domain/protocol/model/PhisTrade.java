@@ -149,6 +149,8 @@ public enum PhisTrade {
     private final String code;
     private final String displayName;
     private final String category;
+    private final String description;
+    private final boolean documentedInPublicSpecification;
 
     /**
      * 创建交易定义。
@@ -161,6 +163,9 @@ public enum PhisTrade {
         this.code = code;
         this.displayName = displayName;
         this.category = category;
+        this.documentedInPublicSpecification = !"外部平台扩展".equals(category)
+                && !"医防融合扩展".equals(category) && !"200-016".equals(code);
+        this.description = buildDescription(code, documentedInPublicSpecification);
     }
 
     /**
@@ -188,6 +193,78 @@ public enum PhisTrade {
      */
     public String category() {
         return category;
+    }
+
+    /**
+     * 返回管理端使用的接口说明；未收录交易明确说明其文档状态。
+     *
+     * @return 基于交易目录名称及公版文档收录状态的说明
+     */
+    public String description() {
+        return description;
+    }
+
+    /**
+     * 判断交易是否出现在项目内公版V1.0接口文档总表。
+     *
+     * @return 出现在公版接口总表时为true
+     */
+    public boolean documentedInPublicSpecification() {
+        return documentedInPublicSpecification;
+    }
+
+    private static String buildDescription(String code, boolean documented) {
+        if (!documented) {
+            return "公版接口文档未收录此交易；名称来自平台现有交易目录，接口定义与调用约束待确认。";
+        }
+        String description = switch (code) {
+            case "100-001" -> "检测接口客户端与HIS系统中心服务器是否连通。";
+            case "100-002" -> "验证医院用户登录医保报账客户端的安全性；用户名和密码由HIS系统统一分配。";
+            case "100-003" -> "获取HIS科室、医师、病区和床位基本信息。";
+            case "100-004" -> "获取HIS药品、诊疗和耗材三大目录基本信息。";
+            case "100-005" -> "获取HIS药品、诊疗和耗材三大目录行数。";
+            case "100-006" -> "获取HIS系统ICD-10基本信息。";
+            case "100-007" -> "获取HIS系统ICD-10数据行数。";
+            case "100-008" -> "获取HIS医疗机构详细信息。";
+            case "100-009" -> "执行HIS单点登录验证。";
+            case "200-001" -> "获取HIS挂号费用类型列表。";
+            case "200-002" -> "获取HIS机构支付方式列表。";
+            case "200-003" -> "获取HIS挂号模板。";
+            case "200-004" -> "获取HIS挂号模板下的科室。";
+            case "200-006" -> "获取HIS机构及人员排班信息。";
+            case "200-007" -> "向HIS保存挂号信息。";
+            case "200-008" -> "在HIS中为厂商撤销挂号。";
+            case "200-009" -> "获取HIS挂号记录。";
+            case "200-010" -> "获取HIS门诊费用清单。";
+            case "200-011" -> "执行HIS门诊收费。";
+            case "200-013" -> "获取HIS缴费清单明细。";
+            case "200-014" -> "退还通过APP或微信公众号收取的费用，文档说明为整笔退款。";
+            case "200-015" -> "获取基于接口交易的账单清单详细信息。";
+            case "300-001" -> "获取HIS住院病人基本信息。";
+            case "300-003" -> "接收双向转诊下转信息。";
+            case "400-001" -> "获取HIS住院病人信息。";
+            case "400-002" -> "获取HIS住院病人诊断信息。";
+            case "400-003" -> "向HIS回写病历数据。";
+            case "400-004" -> "获取HIS电子病历历史数据。";
+            case "400-005" -> "获取电子病历医生数据。";
+            case "400-006" -> "执行电子病历验证登录。";
+            case "400-008" -> "获取电子病历体温单。";
+            case "400-009" -> "获取电子病历护理单。";
+            case "400-010" -> "获取HIS手术信息。";
+            case "500-001", "600-001", "700-001" -> "获取指定机构下LIS和PACS检查/检验包及明细清单；公版文档对分类名称表述不一致，具体交易以交易码为准。";
+            case "500-002" -> "公版章节说明存在内容冲突（标题为按申请单号获取申请单，接口说明写为FHIR检查报告推送），需按HIS确认版本核实。";
+            case "500-003" -> "公版总表登记为回写报告；正文参数编号存在冲突，调用参数须以确认后的HIS版本为准。";
+            case "600-003" -> "回写检验报告；公版正文未提供更具体的接口说明。";
+            case "700-002" -> "通过申请单号获取申请单。";
+            case "700-003" -> "公版总表登记为回写心电报告；正文参数编号存在冲突，调用参数须以确认后的HIS版本为准。";
+            case "800-001" -> "获取HIS待接诊记录。";
+            case "800-002" -> "供药房排队叫号使用，获取门诊待发药及最近7天已发药列表。";
+            case "800-003" -> "获取待执行的检查检验列表。";
+            case "800-004" -> "患者签到时向HIS回写签到信息。";
+            case "900-001" -> "执行远程会诊结果回写。";
+            default -> "公版接口总表收录此交易；正文未提供可确认的接口说明，请以对应HIS版本核实。";
+        };
+        return description;
     }
 
     /**

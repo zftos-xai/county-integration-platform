@@ -3,6 +3,7 @@ package cn.zqkj.platform.system.configuration.service;
 import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.common.exception.ResourceNotFoundException;
+import cn.zqkj.platform.exchange.service.ExchangeRuntimeRecordService;
 import cn.zqkj.platform.his.domain.endpointverification.model.PhisEndpointVerificationResult;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
@@ -81,7 +82,7 @@ class ConfigurationServiceTest {
             when(mapper.findExternalEndpoint(9L, List.of("ORG001"))).thenReturn(Optional.of(endpoint));
             when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(new ExternalSystem(
                     1L, "PRIMARY_HIS", "基层HIS", null, true, null, null, version())));
-            when(verifier.verify(eq(10L), eq(ParameterEnvironment.TEST), any(), eq("ORG001"), any()))
+            when(verifier.verify(eq(9L), eq(10L), eq(ParameterEnvironment.TEST), any(), eq("ORG001"), any()))
                     .thenAnswer(invocation -> {
                         Mockito.verifyNoInteractions(manager);
                         return verified
@@ -415,7 +416,8 @@ class ConfigurationServiceTest {
                 .thenReturn(1);
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), mock(ManagementAuditService.class),
-                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService), transactions());
+                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
+                mock(ExchangeRuntimeRecordService.class)), transactions());
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -456,7 +458,8 @@ class ConfigurationServiceTest {
                 eq("HIS明确拒绝了100-003医院综合目录查询"), any(), eq("admin"))).thenReturn(1);
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), auditService,
-                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService), transactions());
+                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
+                mock(ExchangeRuntimeRecordService.class)), transactions());
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -498,7 +501,8 @@ class ConfigurationServiceTest {
                 .thenReturn(1);
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), mock(ManagementAuditService.class),
-                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService), transactions());
+                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
+                mock(ExchangeRuntimeRecordService.class)), transactions());
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -538,7 +542,8 @@ class ConfigurationServiceTest {
                 .thenReturn(1);
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), mock(ManagementAuditService.class),
-                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService), transactions());
+                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
+                mock(ExchangeRuntimeRecordService.class)), transactions());
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -578,7 +583,8 @@ class ConfigurationServiceTest {
                 .thenReturn(1);
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), mock(ManagementAuditService.class),
-                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService), transactions());
+                mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
+                mock(ExchangeRuntimeRecordService.class)), transactions());
 
         var result = service.verifyExternalEndpoint(9L, actor());
 

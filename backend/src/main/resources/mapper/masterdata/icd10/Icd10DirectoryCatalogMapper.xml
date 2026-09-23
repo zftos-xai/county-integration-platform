@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.masterdata.mapper.icd10.Icd10DirectoryCatalogMapper">
+    <resultMap id="icd10DirectoryRecord" type="cn.zqkj.platform.masterdata.domain.icd10.model.Icd10DirectoryRecord"><constructor>
+        <!-- 公共目录内部主键 --><idArg column="id" javaType="_long"/>
+        <!-- 来源诊断类别 --><arg column="diagnosis_category" javaType="cn.zqkj.platform.masterdata.domain.icd10.model.Icd10DiagnosisCategory"/>
+        <!-- HIS疾病编码 --><arg column="disease_code" javaType="java.lang.String"/>
+        <!-- HIS病种名称 --><arg column="disease_name" javaType="java.lang.String"/>
+        <!-- 可选助记码 --><arg column="mnemonic_code" javaType="java.lang.String"/>
+        <!-- 可选备注 --><arg column="remark" javaType="java.lang.String"/>
+        <!-- HIS创建时间原文 --><arg column="source_created_at" javaType="java.lang.String"/>
+        <!-- 可选来源疾病ID --><arg column="source_disease_id" javaType="java.lang.String"/>
+        <!-- 最近同步批次主键 --><arg column="latest_batch_id" javaType="_long"/>
+        <!-- 最近同步批次编号 --><arg column="latest_batch_no" javaType="java.lang.String"/>
+        <!-- 最近观察UTC时间 --><arg column="last_seen_at" javaType="java.time.LocalDateTime"/>
+    </constructor></resultMap>
+    <resultMap id="icd10DirectoryCount" type="cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10DirectoryCountVO"><constructor>
+        <!-- 来源诊断类别 --><arg column="diagnosis_category" javaType="cn.zqkj.platform.masterdata.domain.icd10.model.Icd10DiagnosisCategory"/>
+        <!-- 当前公共目录数量 --><arg column="total" javaType="_long"/>
+    </constructor></resultMap>
+    <sql id="conditions">
+        <!-- 公共目录固定限制为基层HIS来源；不引入机构范围条件。 -->
+        WHERE directory.source_system_code = 'PRIMARY_HIS'
+        <if test="query.diagnosisCategory != null">AND directory.diagnosis_category = #{query.diagnosisCategory.code}</if>
+        <if test="query.keyword != null">AND (directory.disease_code LIKE '%' + #{query.keyword} + '%' OR directory.disease_name LIKE '%' + #{query.keyword} + '%' OR directory.mnemonic_code LIKE '%' + #{query.keyword} + '%')</if>
+    </sql>
+    <select id="countPage" resultType="long"><!-- 统计当前筛选后的公共目录记录。 -->
+        SELECT COUNT(1) FROM md_icd10_diagnosis directory <include refid="conditions"/>
+    </select>
+    <select id="findPage" resultMap="icd10DirectoryRecord"><!-- 按类别、名称、编码稳定分页读取公共目录。 -->
+        SELECT directory.id, CASE directory.diagnosis_category WHEN N'0' THEN N'WESTERN' WHEN N'1' THEN N'TRADITIONAL' END AS diagnosis_category,
+               directory.disease_code, directory.disease_name,
+               directory.mnemonic_code, directory.remark, directory.source_created_at, directory.source_disease_id,
+               directory.latest_batch_id, batches.batch_no AS latest_batch_no, directory.last_seen_at
+        FROM md_icd10_diagnosis directory INNER JOIN md_sync_batch batches ON batches.id = directory.latest_batch_id
+        <include refid="conditions"/> ORDER BY directory.diagnosis_category, directory.disease_name, directory.disease_code, directory.id
+        OFFSET #{query.offset} ROWS FETCH NEXT #{query.pageSize} ROWS ONLY
+    </select>
+    <select id="countByCategory" resultMap="icd10DirectoryCount"><!-- 统计西医和中医的全部当前公共目录数量，不受关键词影响。 -->
+        SELECT CASE diagnosis_category WHEN N'0' THEN N'WESTERN' WHEN N'1' THEN N'TRADITIONAL' END AS diagnosis_category,
+               COUNT(1) AS total FROM md_icd10_diagnosis WHERE source_system_code = 'PRIMARY_HIS'
+        GROUP BY diagnosis_category ORDER BY diagnosis_category
+    </select>
+</mapper>

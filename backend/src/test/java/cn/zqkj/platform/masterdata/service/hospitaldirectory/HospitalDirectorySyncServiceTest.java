@@ -1,6 +1,8 @@
 package cn.zqkj.platform.masterdata.service.hospitaldirectory;
 
 import cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper;
+import cn.zqkj.platform.exchange.domain.model.ExchangeRuntimeRecord;
+import cn.zqkj.platform.exchange.service.ExchangeRuntimeRecordService;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO;
 import java.util.ArrayList;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchCounts;
@@ -51,6 +53,10 @@ class HospitalDirectorySyncServiceTest {
         verify(fixture.mapper()).finishCompleted(eq(25L), eq("COMPLETED_WITH_ERRORS"), any(), any(),
                 org.mockito.ArgumentMatchers.argThat(summary -> !summary.contains("SYNTHETIC")
                         && !summary.contains("internal.invalid") && !summary.contains("patient")), eq("admin"));
+        verify(fixture.exchangeRecords(), times(4)).record(org.mockito.ArgumentMatchers.argThat(record ->
+                !record.resultMessage().contains("SYNTHETIC")
+                        && !record.requestSummary().contains("SYNTHETIC")
+                        && !record.requestSummary().contains("internal.invalid")));
     }
 
     /** 当前目录写入与对应分项事实必须先于同一次事务提交。 */
@@ -222,8 +228,10 @@ class HospitalDirectorySyncServiceTest {
         when(mapper.countActiveByType(eq(10L), any(HospitalDirectoryType.class))).thenReturn(1L);
         when(mapper.finishCompleted(eq(25L), any(), any(), any(), any(), eq("admin"))).thenReturn(1);
         ManagementAuditService auditService = mock(ManagementAuditService.class);
+        ExchangeRuntimeRecordService exchangeRecords = mock(ExchangeRuntimeRecordService.class);
         return new Fixture(new HospitalDirectorySyncServiceImpl(mapper, phisService,
-                auditService, transactions, batchMapper), mapper, phisService, auditService, batchMapper, manager);
+                exchangeRecords, auditService, transactions, batchMapper), mapper, phisService, exchangeRecords,
+                auditService, batchMapper, manager);
     }
 
     /**
@@ -249,7 +257,8 @@ class HospitalDirectorySyncServiceTest {
      * @param phisService HIS调用边界
      */
     private record Fixture(HospitalDirectorySyncService service, HospitalDirectorySyncMapper mapper,
-                           PhisService phisService, ManagementAuditService auditService, MasterDataBatchMapper batchMapper,
+                           PhisService phisService, ExchangeRuntimeRecordService exchangeRecords,
+                           ManagementAuditService auditService, MasterDataBatchMapper batchMapper,
                            org.springframework.transaction.PlatformTransactionManager transactions) {
     }
 }

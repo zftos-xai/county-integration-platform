@@ -490,7 +490,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         String verificationStep = "100-008";
         try {
             PhisEndpointVerificationResult verification = phisEndpointVerificationService.verify(
-                    endpoint.organizationId(), endpoint.environment(), organizationName, endpoint.organizationCode(),
+                    endpointId, endpoint.organizationId(), endpoint.environment(), organizationName, endpoint.organizationCode(),
                     endpoint.sourceOrganizationId());
             if (!verification.verified()) {
                 return markEndpointVerificationFailure(endpoint, ExternalEndpointVerificationStatus.FAILED,

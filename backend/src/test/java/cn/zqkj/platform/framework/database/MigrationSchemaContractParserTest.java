@@ -41,6 +41,9 @@ class MigrationSchemaContractParserTest {
         assertTrue(columns.get("dbo.md_sync_batch.source_endpoint_id").nullable());
         assertEquals(8, columns.get("dbo.md_sync_batch.source_endpoint_version").maxLength());
         assertEquals(1000, columns.get("dbo.md_sync_batch.full_rule_evidence").maxLength());
+        assertEquals(128, columns.get("dbo.md_icd10_diagnosis.mnemonic_code").maxLength());
+        assertEquals(128, columns.get("dbo.md_icd10_diagnosis.disease_name").maxLength());
+        assertFalse(columns.get("dbo.md_icd10_diagnosis.source_record_key").nullable());
         assertTrue(columns.size() > 100, "应覆盖全部现有业务表字段，而不是只检查少量样例");
     }
 }

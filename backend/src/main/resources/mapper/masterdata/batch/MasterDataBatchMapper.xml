@@ -269,6 +269,15 @@
         ) THEN 1 ELSE 0 END
     </select>
 
+    <select id="findBoundEndpointOrganizationId" resultType="long">
+        <!-- 公共批次不保存机构归属，只根据冻结端点反查其配置所属机构以获取运行时凭证。 -->
+        SELECT endpoint.organization_id
+        FROM md_sync_batch batches
+        INNER JOIN sys_external_endpoint endpoint ON endpoint.id = batches.source_endpoint_id
+        INNER JOIN org_organization organizations ON organizations.id = endpoint.organization_id
+        WHERE batches.id = #{batchId} AND organizations.is_enabled = 1
+    </select>
+
     <update id="cancel">
         <!-- 只允许取消尚未执行且版本未变化的批次；历史记录保留用于审计，不做物理删除 -->
         UPDATE md_sync_batch

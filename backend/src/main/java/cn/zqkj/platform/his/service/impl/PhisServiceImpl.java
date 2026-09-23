@@ -7,6 +7,9 @@ import cn.zqkj.platform.his.client.PhisProtocolClient;
 import cn.zqkj.platform.his.client.PhisRequestValidator;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
+import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
@@ -118,6 +121,34 @@ public class PhisServiceImpl implements PhisService {
         return execute(organizationId, environment, PhisTrade.MEDICAL_DIRECTORY_COUNT,
                 EndpointRequirement.ENABLED, () -> PhisRequestValidator.validate(query), context ->
                         phisProtocolClient.countMedicalDirectory(context, query));
+    }
+
+    /**
+     * 通过获授权机构的已验证端点读取平台公共ICD10目录页。
+     *
+     * <p>端点机构只用于配置解析和审计，不参与来源请求字段，也不改变目录公共范围。</p>
+     */
+    @Override
+    public PhisResponse<List<Icd10Entry>> queryIcd10(
+            long endpointOrganizationId, ParameterEnvironment environment, Icd10Query query
+    ) {
+        return execute(endpointOrganizationId, environment, PhisTrade.ICD10_QUERY,
+                EndpointRequirement.ENABLED, () -> PhisRequestValidator.validate(query), context ->
+                        phisProtocolClient.queryIcd10(context, query));
+    }
+
+    /**
+     * 通过获授权机构的已验证端点读取平台公共ICD10目录声明行数。
+     *
+     * <p>该方法只执行一次100-007调用；通信异常保留为结果未知，不能自动重试。</p>
+     */
+    @Override
+    public PhisResponse<Long> countIcd10(
+            long endpointOrganizationId, ParameterEnvironment environment, Icd10CountQuery query
+    ) {
+        return execute(endpointOrganizationId, environment, PhisTrade.ICD10_COUNT,
+                EndpointRequirement.ENABLED, () -> PhisRequestValidator.validate(query), context ->
+                        phisProtocolClient.countIcd10(context, query));
     }
 
     /**

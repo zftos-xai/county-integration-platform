@@ -1,10 +1,13 @@
 package cn.zqkj.platform.his.service;
 
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
+import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
 import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
 import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
@@ -71,6 +74,38 @@ public interface PhisService {
      */
     PhisResponse<Long> countMedicalDirectory(
             long organizationId, ParameterEnvironment environment, MedicalDirectoryCountQuery query);
+
+    /**
+     * 分页查询平台公共ICD10目录的来源数据。
+     *
+     * <p>{@code endpointOrganizationId}仅用于解析获授权的调用端点，不能被解释为诊断目录记录的机构归属。</p>
+     *
+     * @param endpointOrganizationId 提供已验证HIS端点配置的机构主键
+     * @param environment 部署环境
+     * @param query 强类型分页查询条件
+     * @return 强类型ICD10目录响应
+     * @throws PhisConfigurationException 当前端点配置不可用时抛出
+     * @throws PhisRequestException 查询范围或分页条件不符合接口文档时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<List<Icd10Entry>> queryIcd10(
+            long endpointOrganizationId, ParameterEnvironment environment, Icd10Query query);
+
+    /**
+     * 查询平台公共ICD10目录在指定范围内的来源声明行数。
+     *
+     * @param endpointOrganizationId 提供已验证HIS端点配置的机构主键，不是目录归属
+     * @param environment 部署环境
+     * @param query 与100-006完全一致的查询范围
+     * @return 非负来源声明行数
+     * @throws PhisConfigurationException 当前端点配置不可用时抛出
+     * @throws PhisRequestException 查询范围不符合接口文档时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<Long> countIcd10(
+            long endpointOrganizationId, ParameterEnvironment environment, Icd10CountQuery query);
 
     /**
      * 使用已保存但尚未启用的机构配置验证100-003医院综合目录查询能力。

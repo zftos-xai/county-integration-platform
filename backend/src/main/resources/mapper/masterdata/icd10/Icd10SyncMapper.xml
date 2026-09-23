@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.zqkj.platform.masterdata.mapper.icd10.Icd10SyncMapper">
+    <resultMap id="icd10HisInvocation" type="cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10HisInvocationVO">
+        <constructor>
+            <!-- HIS调用事实内部主键 -->
+            <idArg column="id" javaType="_long"/>
+            <!-- 西医或中医诊断类别 -->
+            <arg column="diagnosis_category" javaType="cn.zqkj.platform.masterdata.domain.icd10.model.Icd10DiagnosisCategory"/>
+            <!-- 同类别内稳定调用顺序 -->
+            <arg column="invocation_sequence" javaType="_int"/>
+            <!-- 已登记HIS交易代码 -->
+            <arg column="trade_code" javaType="java.lang.String"/>
+            <!-- 100-006可选请求起始行 -->
+            <arg column="page_start" javaType="java.lang.Long"/>
+            <!-- 100-006可选请求结束行 -->
+            <arg column="page_end" javaType="java.lang.Long"/>
+            <!-- 不含凭证的请求摘要 -->
+            <arg column="request_summary" javaType="java.lang.String"/>
+            <!-- 已确认的调用终态 -->
+            <arg column="outcome_status" javaType="cn.zqkj.platform.exchange.domain.model.ExchangeResult"/>
+            <!-- HIS可选结果代码 -->
+            <arg column="result_code" javaType="java.lang.String"/>
+            <!-- 不含原始报文的响应摘要 -->
+            <arg column="response_summary" javaType="java.lang.String"/>
+            <!-- 可确认的返回或声明数量 -->
+            <arg column="returned_count" javaType="java.lang.Long"/>
+            <!-- 调用耗时毫秒数 -->
+            <arg column="duration_ms" javaType="_long"/>
+            <!-- 请求开始UTC时间 -->
+            <arg column="requested_at" javaType="java.time.LocalDateTime"/>
+            <!-- 调用完成UTC时间 -->
+            <arg column="completed_at" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insertHisInvocation">
+        <!-- 逐次保存已确认终态的调用事实；不写入完整SOAP报文、端点地址或认证信息。 -->
+        INSERT INTO md_icd10_his_invocation (
+            batch_id,             <!-- 所属公共ICD10同步批次主键 -->
+            diagnosis_category,   <!-- 本次西医或中医类别 -->
+            invocation_sequence,  <!-- 类别内稳定调用顺序 -->
+            trade_code,           <!-- HIS交易代码 -->
+            page_start,           <!-- 100-006起始行，数量查询为空 -->
+            page_end,             <!-- 100-006结束行，数量查询为空 -->
+            request_summary,      <!-- 脱敏请求参数摘要 -->
+            outcome_status,       <!-- 调用终态 -->
+            result_code,          <!-- 可选HIS结果代码 -->
+            response_summary,     <!-- 脱敏响应或错误摘要 -->
+            returned_count,       <!-- 可确认的返回或声明数量 -->
+            duration_ms,          <!-- 调用耗时毫秒 -->
+            requested_at,         <!-- 请求开始UTC时间 -->
+            completed_at          <!-- 终态确认UTC时间 -->
+        ) VALUES (
+            #{invocation.batchId}, #{invocation.diagnosisCategory.code}, #{invocation.invocationSequence},
+            #{invocation.tradeCode}, #{invocation.pageStart,jdbcType=BIGINT}, #{invocation.pageEnd,jdbcType=BIGINT},
+            #{invocation.requestSummary}, #{invocation.outcomeStatus}, #{invocation.resultCode,jdbcType=NVARCHAR},
+            #{invocation.responseSummary,jdbcType=NVARCHAR}, #{invocation.returnedCount,jdbcType=BIGINT},
+            #{invocation.durationMs}, #{invocation.requestedAt}, #{invocation.completedAt}
+        )
+    </insert>
+
+    <select id="countHisInvocations" resultType="long">
+        <!-- 历史批次未接入调用追踪时返回零，不据此推断HIS从未被调用。 -->
+        SELECT COUNT(1) FROM md_icd10_his_invocation WHERE batch_id = #{batchId}
+    </select>
+
+    <select id="findHisInvocations" resultMap="icd10HisInvocation">
+        <!-- 批次可见性已在服务层确认；按类别、调用顺序和主键稳定分页。 -->
+        SELECT id, diagnosis_category, invocation_sequence, trade_code, page_start, page_end,
+               request_summary, outcome_status, result_code, response_summary, returned_count,
+               duration_ms, requested_at, completed_at
+        FROM md_icd10_his_invocation
+        WHERE batch_id = #{batchId}
+        ORDER BY diagnosis_category ASC, invocation_sequence ASC, id ASC
+        OFFSET #{query.offset} ROWS FETCH NEXT #{query.pageSize} ROWS ONLY
+    </select>
+
+    <resultMap id="icd10SyncResult" type="cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10SyncResultVO">
+        <constructor>
+            <!-- 本次取得的西医或中医诊断类别 -->
+            <arg column="diagnosis_category" javaType="cn.zqkj.platform.masterdata.domain.icd10.model.Icd10DiagnosisCategory"/>
+            <!-- 当前类别可确认的同步结论 -->
+            <arg column="status" javaType="cn.zqkj.platform.masterdata.domain.icd10.model.Icd10SyncResultStatus"/>
+            <!-- 100-007声明数量 -->
+            <arg column="declared_count" javaType="java.lang.Long"/>
+            <!-- 100-006实际返回数量 -->
+            <arg column="returned_count" javaType="_long"/>
+            <!-- 批内完全重复数量 -->
+            <arg column="duplicate_count" javaType="_long"/>
+            <!-- 自动校验不通过数量 -->
+            <arg column="invalid_count" javaType="_long"/>
+            <!-- 同类别和来源稳定身份冲突数量 -->
+            <arg column="conflict_count" javaType="_long"/>
+            <!-- 新增公共目录数量 -->
+            <arg column="created_count" javaType="_long"/>
+            <!-- 更新公共目录数量 -->
+            <arg column="updated_count" javaType="_long"/>
+            <!-- 未变化公共目录数量 -->
+            <arg column="unchanged_count" javaType="_long"/>
+            <!-- 当前类别公共目录数量 -->
+            <arg column="active_count" javaType="java.lang.Long"/>
+            <!-- 未完成时的受控摘要 -->
+            <arg column="failure_summary" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="classifyDiagnosis" resultType="int">
+        <!-- 疾病类别和来源稳定身份是当前已确认的数据库业务键；0新增、1更新、2未变化。 -->
+        SELECT CASE
+            WHEN NOT EXISTS (SELECT 1 FROM md_icd10_diagnosis directory
+                WHERE directory.source_system_code = 'PRIMARY_HIS'
+                  AND directory.diagnosis_category = #{record.category.code}
+                  AND directory.source_record_key = #{record.sourceRecordKey}) THEN 0
+            WHEN EXISTS (SELECT 1 FROM md_icd10_diagnosis directory
+                WHERE directory.source_system_code = 'PRIMARY_HIS'
+                  AND directory.diagnosis_category = #{record.category.code}
+                  AND directory.source_record_key = #{record.sourceRecordKey}
+                  AND (directory.disease_name &lt;&gt; #{record.entry.diseaseName}
+                    OR directory.source_created_at &lt;&gt; #{record.entry.sourceCreatedAt}
+                    OR ISNULL(directory.mnemonic_code, '') &lt;&gt; ISNULL(#{record.entry.mnemonicCode,jdbcType=NVARCHAR}, '')
+                    OR ISNULL(directory.remark, '') &lt;&gt; ISNULL(#{record.entry.remark,jdbcType=NVARCHAR}, '')
+                    OR ISNULL(directory.source_disease_id, '') &lt;&gt; ISNULL(#{record.entry.sourceDiseaseId,jdbcType=NVARCHAR}, ''))) THEN 1
+            ELSE 2 END
+    </select>
+
+    <update id="updateDiagnosisDirect">
+        <!-- 覆盖当前公共诊断事实并记录最近观察批次；没有机构字段。 -->
+        UPDATE md_icd10_diagnosis
+        SET disease_name = #{record.entry.diseaseName}, mnemonic_code = #{record.entry.mnemonicCode,jdbcType=NVARCHAR},
+            remark = #{record.entry.remark,jdbcType=NVARCHAR}, source_created_at = #{record.entry.sourceCreatedAt},
+            source_disease_id = #{record.entry.sourceDiseaseId,jdbcType=NVARCHAR}, latest_batch_id = #{batchId},
+            last_seen_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+        WHERE source_system_code = 'PRIMARY_HIS' AND diagnosis_category = #{record.category.code}
+          AND source_record_key = #{record.sourceRecordKey}
+    </update>
+
+    <insert id="insertDiagnosisDirect">
+        <!-- 首次出现的公共诊断记录以来源稳定身份防重插入。 -->
+        INSERT INTO md_icd10_diagnosis (
+            source_system_code,      <!-- 来源系统稳定代码 -->
+            diagnosis_category,      <!-- 西医或中医来源类别 -->
+            source_record_key,       <!-- 来源稳定身份，优先疾病ID -->
+            disease_code,            <!-- HIS疾病或病种编码 -->
+            disease_name,            <!-- HIS病种名称 -->
+            mnemonic_code,           <!-- 可选助记码 -->
+            remark,                  <!-- 可选非敏感备注 -->
+            source_created_at,       <!-- HIS创建时间原文 -->
+            source_disease_id,       <!-- 可选来源疾病ID -->
+            first_seen_batch_id,     <!-- 首次完整观察批次 -->
+            latest_batch_id,         <!-- 最近完整观察批次 -->
+            first_seen_at,           <!-- 首次观察UTC时间 -->
+            last_seen_at             <!-- 最近观察UTC时间 -->
+        ) SELECT 'PRIMARY_HIS', #{record.category.code}, #{record.sourceRecordKey}, #{record.entry.diseaseCode}, #{record.entry.diseaseName},
+            #{record.entry.mnemonicCode,jdbcType=NVARCHAR}, #{record.entry.remark,jdbcType=NVARCHAR},
+            #{record.entry.sourceCreatedAt}, #{record.entry.sourceDiseaseId,jdbcType=NVARCHAR}, #{batchId}, #{batchId},
+            SYSUTCDATETIME(), SYSUTCDATETIME()
+        WHERE NOT EXISTS (SELECT 1 FROM md_icd10_diagnosis WITH (UPDLOCK, HOLDLOCK)
+            WHERE source_system_code = 'PRIMARY_HIS' AND diagnosis_category = #{record.category.code}
+              AND source_record_key = #{record.sourceRecordKey})
+    </insert>
+
+    <insert id="insertDiagnosesDirect">
+        <!-- 首次接入空类别时分批写入；单批由服务限制为200条，兼容SQL Server 2012参数上限。 -->
+        INSERT INTO md_icd10_diagnosis (
+            source_system_code,      <!-- 来源系统稳定代码 -->
+            diagnosis_category,      <!-- 西医或中医来源类别 -->
+            source_record_key,       <!-- 来源稳定身份，优先疾病ID -->
+            disease_code,            <!-- HIS疾病或病种编码 -->
+            disease_name,            <!-- HIS病种名称 -->
+            mnemonic_code,           <!-- 可选助记码 -->
+            remark,                  <!-- 可选非敏感备注 -->
+            source_created_at,       <!-- HIS创建时间原文 -->
+            source_disease_id,       <!-- 可选来源疾病ID -->
+            first_seen_batch_id,     <!-- 首次完整观察批次 -->
+            latest_batch_id,         <!-- 最近完整观察批次 -->
+            first_seen_at,           <!-- 首次观察UTC时间 -->
+            last_seen_at             <!-- 最近观察UTC时间 -->
+        )
+        SELECT 'PRIMARY_HIS', source.diagnosis_category, source.source_record_key, source.disease_code,
+               source.disease_name, source.mnemonic_code, source.remark, source.source_created_at,
+               source.source_disease_id, #{batchId}, #{batchId}, SYSUTCDATETIME(), SYSUTCDATETIME()
+        FROM (VALUES
+            <foreach collection="records" item="record" separator=",">
+                (#{record.category.code}, #{record.sourceRecordKey}, #{record.entry.diseaseCode},
+                 #{record.entry.diseaseName}, #{record.entry.mnemonicCode,jdbcType=NVARCHAR},
+                 #{record.entry.remark,jdbcType=NVARCHAR}, #{record.entry.sourceCreatedAt},
+                 #{record.entry.sourceDiseaseId,jdbcType=NVARCHAR})
+            </foreach>
+        ) AS source (
+            diagnosis_category, source_record_key, disease_code, disease_name, mnemonic_code, remark,
+            source_created_at, source_disease_id
+        )
+        WHERE NOT EXISTS (
+            SELECT 1 FROM md_icd10_diagnosis directory WITH (UPDLOCK, HOLDLOCK)
+            WHERE directory.source_system_code = 'PRIMARY_HIS'
+              AND directory.diagnosis_category = source.diagnosis_category
+              AND directory.source_record_key = source.source_record_key
+        )
+    </insert>
+
+    <select id="countActive" resultType="long">
+        <!-- 公共目录不按机构隔离。 -->
+        SELECT COUNT(1) FROM md_icd10_diagnosis WHERE source_system_code = 'PRIMARY_HIS'
+    </select>
+
+    <select id="countActiveByCategory" resultType="long">
+        <!-- 按来源协议诊断类别统计公共目录。 -->
+        SELECT COUNT(1) FROM md_icd10_diagnosis
+        WHERE source_system_code = 'PRIMARY_HIS' AND diagnosis_category = #{category.code}
+    </select>
+
+    <select id="findResults" resultMap="icd10SyncResult">
+        <!-- 仅读取本批次落库的分项事实，不重新访问HIS。 -->
+        SELECT CASE diagnosis_category WHEN N'0' THEN N'WESTERN' WHEN N'1' THEN N'TRADITIONAL' END AS diagnosis_category,
+               outcome_status AS status, declared_count, returned_count, duplicate_count, invalid_count,
+               conflict_count, created_count, updated_count, unchanged_count, active_count, failure_summary
+        FROM md_icd10_sync_result WHERE batch_id = #{batchId} ORDER BY diagnosis_category ASC
+    </select>
+
+    <update id="saveResult">
+        <!-- 同一批次和诊断类别仅保留一项最终事实。 -->
+        UPDATE md_icd10_sync_result
+        SET outcome_status = #{result.status}, declared_count = #{result.declaredCount,jdbcType=BIGINT},
+            returned_count = #{result.returnedCount}, duplicate_count = #{result.duplicateCount},
+            invalid_count = #{result.invalidCount}, conflict_count = #{result.conflictCount},
+            created_count = #{result.createdCount}, updated_count = #{result.updatedCount},
+            unchanged_count = #{result.unchangedCount}, active_count = #{result.activeCount,jdbcType=BIGINT},
+            failure_summary = #{result.failureSummary,jdbcType=NVARCHAR}, finished_at = SYSUTCDATETIME()
+        WHERE batch_id = #{batchId} AND diagnosis_category = #{result.diagnosisCategory.code};
+        IF @@ROWCOUNT = 0
+        BEGIN
+            INSERT INTO md_icd10_sync_result (
+                batch_id,             <!-- 所属公共同步批次 -->
+                diagnosis_category,   <!-- 西医或中医诊断类别 -->
+                outcome_status,       <!-- 当前类别处理结论 -->
+                declared_count,       <!-- 100-007声明数量 -->
+                returned_count,       <!-- 100-006实际返回数量 -->
+                duplicate_count,      <!-- 完全重复数量 -->
+                invalid_count,        <!-- 自动校验无效数量 -->
+                conflict_count,       <!-- 同类别来源身份冲突数量 -->
+                created_count,        <!-- 新增公共目录数量 -->
+                updated_count,        <!-- 更新公共目录数量 -->
+                unchanged_count,      <!-- 不变公共目录数量 -->
+                active_count,         <!-- 当前类别目录数量 -->
+                failure_summary,      <!-- 受控失败摘要 -->
+                finished_at           <!-- 当前结论完成UTC时间 -->
+            ) VALUES (
+                #{batchId}, #{result.diagnosisCategory.code}, #{result.status}, #{result.declaredCount,jdbcType=BIGINT},
+                #{result.returnedCount}, #{result.duplicateCount}, #{result.invalidCount}, #{result.conflictCount},
+                #{result.createdCount}, #{result.updatedCount}, #{result.unchangedCount}, #{result.activeCount,jdbcType=BIGINT},
+                #{result.failureSummary,jdbcType=NVARCHAR}, SYSUTCDATETIME()
+            );
+        END
+    </update>
+
+    <update id="finishCompleted">
+        <!-- 未完成类别不覆盖已完整成功的另一类别；当前目录无机构范围。 -->
+        UPDATE md_sync_batch
+        SET batch_status = #{status}, is_active = 0, declared_count = #{counts.declared,jdbcType=BIGINT},
+            returned_count = #{counts.returned}, duplicate_count = #{counts.duplicate}, invalid_count = #{counts.invalid},
+            conflict_count = #{counts.conflict}, created_count = #{counts.created}, updated_count = #{counts.updated},
+            unchanged_count = #{counts.unchanged}, source_missing_count = 0, active_count = #{counts.active,jdbcType=BIGINT},
+            completed_at = CASE WHEN #{status} = 'FAILED' THEN NULL ELSE SYSUTCDATETIME() END,
+            failure_code = #{failureCode,jdbcType=NVARCHAR}, failure_summary = #{failureSummary,jdbcType=NVARCHAR},
+            finished_at = SYSUTCDATETIME(), updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{batchId} AND batch_status IN ('FETCHING', 'RESULT_UNKNOWN')
+    </update>
+</mapper>

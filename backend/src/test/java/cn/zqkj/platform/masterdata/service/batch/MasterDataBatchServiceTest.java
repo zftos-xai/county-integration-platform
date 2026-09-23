@@ -13,9 +13,11 @@ import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
 import cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper;
 import cn.zqkj.platform.masterdata.mapper.hospitaldirectory.HospitalDirectorySyncMapper;
 import cn.zqkj.platform.masterdata.mapper.medicaldirectory.MedicalDirectorySyncMapper;
+import cn.zqkj.platform.masterdata.mapper.icd10.Icd10SyncMapper;
 import cn.zqkj.platform.masterdata.service.batch.impl.MasterDataBatchServiceImpl;
 import cn.zqkj.platform.masterdata.service.hospitaldirectory.HospitalDirectorySyncService;
 import cn.zqkj.platform.masterdata.service.medicaldirectory.MedicalDirectorySyncService;
+import cn.zqkj.platform.masterdata.service.icd10.Icd10SyncService;
 import cn.zqkj.platform.system.audit.service.ManagementAuditService;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpoint;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointAuthentication;
@@ -118,6 +120,34 @@ class MasterDataBatchServiceTest {
                 org.mockito.ArgumentMatchers.argThat(creation -> creation.mode() == MasterDataSyncMode.TIME_RANGE
                         && creation.organizationCode().equals(request.organizationCode())), org.mockito.ArgumentMatchers.eq(10L),
                 org.mockito.ArgumentMatchers.eq("ORG001"), org.mockito.ArgumentMatchers.eq("admin"));
+    }
+
+    /** 公共ICD10只绑定获授权调用端点，创建批次及当前目录均不获得机构归属。 */
+    @Test
+    void createsPublicIcd10BatchWithoutOrganizationOwnership() {
+        MasterDataBatchMapper mapper = mock(MasterDataBatchMapper.class);
+        Icd10SyncMapper icd10Mapper = mock(Icd10SyncMapper.class);
+        Icd10SyncService icd10Sync = mock(Icd10SyncService.class);
+        MasterDataBatchService service = new MasterDataBatchServiceImpl(mapper,
+                mock(HospitalDirectorySyncMapper.class), mock(MedicalDirectorySyncMapper.class), icd10Mapper,
+                mock(ManagementAuditService.class), availableEndpointService(), mock(HospitalDirectorySyncService.class),
+                mock(MedicalDirectorySyncService.class), icd10Sync, mock(TransactionTemplate.class));
+        when(mapper.findEnabledOrganizationId("ORG001")).thenReturn(10L);
+        when(mapper.create(any(), any(), any(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), any())).thenReturn(25L);
+        when(mapper.findById(25L)).thenReturn(snapshot());
+
+        service.start(new StartMasterDataBatchRequest("ICD10-REQUEST-202609220001", null, "ORG001",
+                ParameterEnvironment.PRODUCTION, MasterDataCategory.ICD10_DIAGNOSIS, MasterDataSyncMode.TIME_RANGE,
+                java.time.OffsetDateTime.parse("2026-09-01T09:00:00+08:00"),
+                java.time.OffsetDateTime.parse("2026-09-22T09:00:00+08:00")), actor());
+
+        verify(mapper).create(any(), org.mockito.ArgumentMatchers.eq("PRIMARY_HIS"),
+                org.mockito.ArgumentMatchers.argThat(creation -> creation.organizationCode() == null
+                        && creation.category() == MasterDataCategory.ICD10_DIAGNOSIS),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("admin"));
+        verifyNoInteractions(icd10Mapper, icd10Sync);
     }
 
     /** 不存在、越权或尚未执行的批次不能进入恢复收尾。 */

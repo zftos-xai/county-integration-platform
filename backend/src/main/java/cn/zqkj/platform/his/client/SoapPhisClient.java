@@ -3,6 +3,9 @@ package cn.zqkj.platform.his.client;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryRole;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
+import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
@@ -17,10 +20,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayOutputStream;
+import java.net.ConnectException;
 import java.nio.ByteBuffer;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
@@ -31,6 +37,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
@@ -141,6 +148,36 @@ public class SoapPhisClient implements PhisProtocolClient {
     }
 
     /**
+     * 调用100-006读取指定范围的一页ICD10诊断目录。
+     *
+     * <p>接口文档没有定义机构编码字段；诊断版本只在调用方明确提供时写入请求。</p>
+     */
+    @Override
+    public PhisResponse<List<Icd10Entry>> queryIcd10(PhisInvocationContext context, Icd10Query query) {
+        PhisRequestValidator.validate(query);
+        ObjectNode parameters = icd10RangeParameters(query.diseaseName(), query.rangeStart().format(HIS_DATE_TIME),
+                query.rangeEnd().format(HIS_DATE_TIME), query.diagnosisCategory() == null
+                        ? null : query.diagnosisCategory().code(), query.diagnosisVersion());
+        parameters.put("开始行数", query.startRow());
+        parameters.put("结束行数", query.endRow());
+        return invoke(context, PhisTrade.ICD10_QUERY, parameters, this::mapIcd10Entries);
+    }
+
+    /**
+     * 调用100-007读取与100-006同范围的ICD10声明行数。
+     *
+     * <p>调用方负责确保100-006与100-007使用相同条件；本方法不补造来源未提供的版本字段。</p>
+     */
+    @Override
+    public PhisResponse<Long> countIcd10(PhisInvocationContext context, Icd10CountQuery query) {
+        PhisRequestValidator.validate(query);
+        ObjectNode parameters = icd10RangeParameters(query.diseaseName(), query.rangeStart().format(HIS_DATE_TIME),
+                query.rangeEnd().format(HIS_DATE_TIME), query.diagnosisCategory() == null
+                        ? null : query.diagnosisCategory().code(), query.diagnosisVersion());
+        return invoke(context, PhisTrade.ICD10_COUNT, parameters, this::mapIcd10DeclaredCount);
+    }
+
+    /**
      * 构建100-004与100-005必须共用的查询范围参数。
      *
      * @return 100-004与100-005必须保持一致的范围参数
@@ -156,6 +193,19 @@ public class SoapPhisClient implements PhisProtocolClient {
         parameters.put("开始时间", rangeStart);
         parameters.put("结束时间", rangeEnd);
         putOptionalText(parameters, "机构编码", sourceOrganizationCode);
+        return parameters;
+    }
+
+    /** 构建100-006与100-007必须共用的ICD10范围参数。 */
+    private ObjectNode icd10RangeParameters(
+            String diseaseName, String rangeStart, String rangeEnd, String diagnosisCategory, String diagnosisVersion
+    ) {
+        ObjectNode parameters = objectMapper.createObjectNode();
+        putOptionalText(parameters, "病种名称", diseaseName);
+        parameters.put("开始时间", rangeStart);
+        parameters.put("结束时间", rangeEnd);
+        putOptionalText(parameters, "疾病类别", diagnosisCategory);
+        putOptionalText(parameters, "诊断版本", diagnosisVersion);
         return parameters;
     }
 
@@ -237,11 +287,52 @@ public class SoapPhisClient implements PhisProtocolClient {
             throw new PhisCommunicationException("基层HIS调用被中断，结果未知", exception);
         } catch (ExecutionException exception) {
             if (exception.getCause() instanceof PhisProtocolException protocol) throw protocol;
-            throw new PhisCommunicationException("基层HIS通信失败，结果未知", exception);
+            throw communicationFailure(exception);
         } finally {
             // get 的期限覆盖完整正文；取消未完成交换会同时终止 HTTP 订阅和连接读取。
             if (!pending.isDone()) pending.cancel(true);
         }
+    }
+
+    /**
+     * 将JDK异步HTTP失败转换为不含地址、凭证和目标报文的受控诊断。
+     *
+     * <p>结果未知仍表示不能确认HIS是否已处理请求；细分网络阶段仅用于指导端点、网络或证书排查，
+     * 不得拼接底层异常文本，避免泄露目标地址或认证信息。</p>
+     *
+     * @param exception 异步HTTP交换返回的执行异常
+     * @return 可安全写入批次结果的通信异常
+     */
+    private PhisCommunicationException communicationFailure(ExecutionException exception) {
+        Throwable cause = unwrapAsyncFailure(exception);
+        if (cause instanceof HttpConnectTimeoutException) {
+            return new PhisCommunicationException("基层HIS连接超时，结果未知", exception);
+        }
+        if (cause instanceof HttpTimeoutException) {
+            return new PhisCommunicationException("基层HIS请求超时，结果未知", exception);
+        }
+        if (cause instanceof ConnectException) {
+            return new PhisCommunicationException("基层HIS连接未建立，结果未知", exception);
+        }
+        if (cause instanceof javax.net.ssl.SSLException) {
+            return new PhisCommunicationException("基层HIS TLS握手失败，结果未知", exception);
+        }
+        return new PhisCommunicationException("基层HIS通信失败，结果未知", exception);
+    }
+
+    /**
+     * 取出JDK异步封装后的第一层实际通信原因，不读取或回显其异常正文。
+     *
+     * @param failure 异步HTTP调用抛出的异常
+     * @return 最内层可用于类别判断的异常
+     */
+    private Throwable unwrapAsyncFailure(Throwable failure) {
+        Throwable current = failure;
+        while ((current instanceof ExecutionException || current instanceof CompletionException)
+                && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     /** 在完整收包前逐块限制内存占用，超限立即取消 HTTP 订阅。 */
@@ -402,25 +493,59 @@ public class SoapPhisClient implements PhisProtocolClient {
     }
 
     /**
+     * 把100-006原始JSON数组转换为ICD10诊断条目。
+     *
+     * <p>接口文档对疾病编码的字段名存在“疾病编码/病种编码”不一致；仅一个字段出现或二者规范化后相同时接受，冲突时拒绝整份响应。</p>
+     */
+    private List<Icd10Entry> mapIcd10Entries(JsonNode data) {
+        if (data == null || !data.isArray()) {
+            throw new PhisProtocolException("基层HIS ICD10目录响应不是数组");
+        }
+        List<Icd10Entry> entries = new ArrayList<>();
+        for (JsonNode item : data) {
+            if (!item.isObject()) {
+                throw new PhisProtocolException("基层HIS ICD10目录条目不是对象");
+            }
+            entries.add(new Icd10Entry(
+                    requiredAliasedText(item, "疾病编码", "病种编码", "ICD10目录"),
+                    requiredText(item, "病种名称", "ICD10目录"),
+                    icd10Text(item, "助记码"), icd10Text(item, "备注"),
+                    requiredText(item, "创建时间", "ICD10目录"), icd10Text(item, "疾病ID")
+            ));
+        }
+        return List.copyOf(entries);
+    }
+
+    /**
      * 解析并校验100-005返回的非负声明数量。
      *
      * @param data 100-005原始数据
      * @return 非负声明行数
      */
     private long mapDeclaredCount(JsonNode data) {
+        return mapDeclaredCount(data, "医院三大目录");
+    }
+
+    /** 解析100-007返回的非负声明数量。 */
+    private long mapIcd10DeclaredCount(JsonNode data) {
+        return mapDeclaredCount(data, "ICD10目录");
+    }
+
+    /** 按交易名称解析单条行数响应，拒绝负数、浮点数和多条结果。 */
+    private long mapDeclaredCount(JsonNode data, String responseName) {
         if (data == null || !data.isArray() || data.size() != 1 || !data.get(0).isObject()) {
-            throw new PhisProtocolException("基层HIS医院三大目录行数响应结构无效");
+            throw new PhisProtocolException("基层HIS" + responseName + "行数响应结构无效");
         }
         JsonNode value = data.get(0).get("行数");
         if (value == null || !(value.isIntegralNumber() || value.isTextual())) {
-            throw new PhisProtocolException("基层HIS医院三大目录行数无效");
+            throw new PhisProtocolException("基层HIS" + responseName + "行数无效");
         }
         try {
             long count = Long.parseLong(value.asText().trim());
             if (count < 0) throw new NumberFormatException("negative");
             return count;
         } catch (NumberFormatException exception) {
-            throw new PhisProtocolException("基层HIS医院三大目录行数不是非负整数", exception);
+            throw new PhisProtocolException("基层HIS" + responseName + "行数不是非负整数", exception);
         }
     }
 
@@ -492,6 +617,37 @@ public class SoapPhisClient implements PhisProtocolClient {
      */
     private String medicalDirectoryText(JsonNode item, String fieldName) {
         return optionalText(item, fieldName, "医院三大目录");
+    }
+
+    /** 读取100-006 ICD10目录的可空标量字段。 */
+    private String icd10Text(JsonNode item, String fieldName) {
+        return optionalText(item, fieldName, "ICD10目录");
+    }
+
+    /** 读取协议明确必填的非空文本字段。 */
+    private String requiredText(JsonNode item, String fieldName, String responseName) {
+        String value = optionalText(item, fieldName, responseName);
+        if (value == null || value.isBlank()) {
+            throw new PhisProtocolException("基层HIS" + responseName + "缺少必填字段：" + fieldName);
+        }
+        return value;
+    }
+
+    /**
+     * 兼容文档中同一必填字段的两个名称，并拒绝一个条目中互相冲突的值。
+     */
+    private String requiredAliasedText(JsonNode item, String primaryName, String aliasName, String responseName) {
+        String primary = optionalText(item, primaryName, responseName);
+        String alias = optionalText(item, aliasName, responseName);
+        if (primary != null && !primary.isBlank() && alias != null && !alias.isBlank()
+                && !primary.trim().equals(alias.trim())) {
+            throw new PhisProtocolException("基层HIS" + responseName + "疾病编码字段值冲突");
+        }
+        String value = primary == null || primary.isBlank() ? alias : primary;
+        if (value == null || value.isBlank()) {
+            throw new PhisProtocolException("基层HIS" + responseName + "缺少必填字段：" + primaryName);
+        }
+        return value;
     }
 
     /**

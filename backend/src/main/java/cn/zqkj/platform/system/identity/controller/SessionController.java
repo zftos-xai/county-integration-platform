@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
@@ -95,6 +96,8 @@ public class SessionController {
             authentication = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(request.loginName(), request.password())
             );
+        } catch (InternalAuthenticationServiceException exception) {
+            throw exception;
         } catch (AuthenticationException exception) {
             auditService.recordLoginFailure(request.loginName(), auditService.currentRequestId());
             throw exception;

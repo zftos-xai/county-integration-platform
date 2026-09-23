@@ -7,6 +7,10 @@ import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataSyncOptionsVO;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectorySyncResultVO;
+import cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10SyncResultVO;
+import cn.zqkj.platform.masterdata.domain.icd10.dto.Icd10HisInvocationQuery;
+import cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10HisInvocationPageVO;
+import cn.zqkj.platform.exchange.domain.vo.ExchangeRecordVO;
 import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import java.util.List;
 
@@ -69,6 +73,40 @@ public interface MasterDataBatchService {
      * @return 分项结果；未执行批次返回空列表
      */
     List<MedicalDirectorySyncResultVO> findMedicalDirectoryResults(long id, List<String> allowedOrganizationCodes);
+
+    /**
+     * 读取公共ICD10批次按西医、中医类别保存的分项运行结果。
+     *
+     * @param id 平台范围ICD10批次主键
+     * @param allowedOrganizationCodes 调用入口确认的机构范围；平台批次不要求目录机构归属
+     * @return 分项结果；未执行批次返回空列表
+     */
+    List<Icd10SyncResultVO> findIcd10Results(long id, List<String> allowedOrganizationCodes);
+
+    /**
+     * 分页读取公共ICD10批次的已落库HIS调用事实。
+     *
+     * <p>读取不会重发100-006或100-007；历史批次没有追踪记录时返回空页，不能据此推断HIS未被调用。</p>
+     *
+     * @param id 平台范围ICD10批次主键
+     * @param query 服务端已校验的有界分页条件
+     * @param allowedOrganizationCodes 调用入口确认的机构范围；仅用于确认批次可见性
+     * @return 不含完整报文和凭证的调用事实页
+     */
+    Icd10HisInvocationPageVO findIcd10HisInvocations(
+            long id, Icd10HisInvocationQuery query, List<String> allowedOrganizationCodes);
+
+    /**
+     * 读取机构目录批次已保存的通用HIS调用事实。
+     *
+     * <p>仅适用于100-003、100-004和100-005；调用事实按批次号与机构代码精确关联，
+     * 不调用HIS，不返回完整报文或认证信息。公共ICD10须读取其专用调用事实。</p>
+     *
+     * @param id 同步批次主键
+     * @param allowedOrganizationCodes 调用入口确认的机构范围
+     * @return 最多一百条按请求时间倒序排列的脱敏调用事实
+     */
+    List<ExchangeRecordVO> findBatchHisInvocations(long id, List<String> allowedOrganizationCodes);
 
     /**
      * 查询给定机构范围内实际可用的 HIS 来源和同步业务。

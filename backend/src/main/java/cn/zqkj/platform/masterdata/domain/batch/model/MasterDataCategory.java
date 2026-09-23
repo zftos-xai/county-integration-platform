@@ -10,7 +10,9 @@ public enum MasterDataCategory {
     /** 一次完成100-003全部四类目录的医院综合目录同步。 */
     HOSPITAL_DIRECTORY("医院综合目录", "100-003", null, MasterDataScopeType.ORGANIZATION),
     /** 一次完成100-004、100-005四类医疗目录的数量核对和分页同步。 */
-    MEDICAL_DIRECTORY("药品、诊疗和耗材目录", "100-004", "100-005", MasterDataScopeType.ORGANIZATION);
+    MEDICAL_DIRECTORY("药品、诊疗和耗材目录", "100-004", "100-005", MasterDataScopeType.ORGANIZATION),
+    /** 一次按西医和中医类别完成100-006、100-007数量核对的公共ICD10目录同步。 */
+    ICD10_DIAGNOSIS("ICD10诊断目录", "100-006", "100-007", MasterDataScopeType.PLATFORM);
 
     private final String displayName;
     private final String dataTradeCode;

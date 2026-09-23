@@ -24,7 +24,7 @@ function findJavaSources(directory) {
 }
 
 /**
- * 校验基础数据域以“批次、医院综合目录、医疗目录”分组，防止对象重新堆回领域根目录。
+ * 校验基础数据域以“批次、医院综合目录、医疗目录、ICD10诊断目录”分组，防止对象重新堆回领域根目录。
  *
  * @param {string} sourcePath 生产Java源码绝对路径
  * @param {string} source Java源码文本
@@ -44,9 +44,9 @@ function verifyMasterDataDomainLayout(sourcePath, source) {
   }
 
   const packagePath = relative(masterDataRoot, join(sourcePath, ".."));
-  const allowed = /^(?:controller|mapper)\/(?:batch|hospitaldirectory|medicaldirectory)$|^domain\/(?:batch|hospitaldirectory|medicaldirectory)(?:\/(?:dto|model|vo))?$|^service\/(?:batch|hospitaldirectory|medicaldirectory)(?:\/impl)?$/;
+  const allowed = /^(?:controller|mapper)\/(?:batch|hospitaldirectory|medicaldirectory|icd10)$|^domain\/(?:batch|hospitaldirectory|medicaldirectory|icd10)(?:\/(?:dto|model|vo))?$|^service\/(?:batch|hospitaldirectory|medicaldirectory|icd10)(?:\/impl)?$/;
   if (!allowed.test(packagePath)) {
-    violations.push(`${relative(projectRoot, sourcePath)}: masterdata 只能按 batch、hospitaldirectory、medicaldirectory 业务域归属`);
+    violations.push(`${relative(projectRoot, sourcePath)}: masterdata 只能按 batch、hospitaldirectory、medicaldirectory、icd10 业务域归属`);
   }
 }
 
@@ -71,7 +71,7 @@ function verifyHisDomainLayout(sourcePath, source) {
   }
 
   const packagePath = relative(hisRoot, join(sourcePath, ".."));
-  const allowed = /^client$|^exception$|^service(?:\/impl)?$|^domain\/(?:hospitaldirectory|medicaldirectory|organization)(?:\/(?:dto|model))?$|^domain\/(?:protocol|endpointverification)(?:\/model)?$/;
+  const allowed = /^client$|^exception$|^service(?:\/impl)?$|^domain\/(?:hospitaldirectory|medicaldirectory|icd10|organization)(?:\/(?:dto|model))?$|^domain\/(?:protocol|endpointverification)(?:\/model)?$/;
   if (!allowed.test(packagePath)) {
     violations.push(`${relative(projectRoot, sourcePath)}: his 只能按SOAP适配层、协议或具体HIS交易模型归属`);
   }

@@ -4,9 +4,13 @@ import cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchCounts;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.common.utils.Func;
+import cn.zqkj.platform.exchange.domain.model.ExchangeResult;
+import cn.zqkj.platform.exchange.domain.model.ExchangeRuntimeRecord;
+import cn.zqkj.platform.exchange.service.ExchangeRuntimeRecordService;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.protocol.model.PhisResponse;
+import cn.zqkj.platform.his.domain.protocol.model.PhisTrade;
 import cn.zqkj.platform.his.exception.PhisBusinessException;
 import cn.zqkj.platform.his.exception.PhisCommunicationException;
 import cn.zqkj.platform.his.exception.PhisConfigurationException;
@@ -29,6 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -48,6 +55,7 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
     private final HospitalDirectorySyncMapper mapper;
     private final MasterDataBatchMapper batchMapper;
     private final PhisService phisService;
+    private final ExchangeRuntimeRecordService exchangeRecords;
     private final ManagementAuditService auditService;
     private final TransactionTemplate transactionTemplate;
 
@@ -57,15 +65,17 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
      * @param batchMapper 批次执行版本锁
      * @param mapper 综合目录持久化边界
      * @param phisService HIS强类型调用服务
+     * @param exchangeRecords 每次真实100-003调用的脱敏交换事实写入边界
      * @param auditService 管理审计服务
      * @param transactionTemplate 短事务模板
      */
     public HospitalDirectorySyncServiceImpl(HospitalDirectorySyncMapper mapper, PhisService phisService,
-                                            ManagementAuditService auditService, TransactionTemplate transactionTemplate,
-                                            MasterDataBatchMapper batchMapper) {
+                                            ExchangeRuntimeRecordService exchangeRecords, ManagementAuditService auditService,
+                                            TransactionTemplate transactionTemplate, MasterDataBatchMapper batchMapper) {
         this.mapper = mapper;
         this.batchMapper = batchMapper;
         this.phisService = phisService;
+        this.exchangeRecords = exchangeRecords;
         this.auditService = auditService;
         this.transactionTemplate = transactionTemplate;
     }
@@ -130,8 +140,9 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
         long organizationId = batch.organizationId();
         ValidationResult validation;
         try {
-            PhisResponse<List<HospitalDirectoryEntry>> response = phisService.queryHospitalDirectory(organizationId,
-                    batch.environment(), new HospitalDirectoryQuery(hisType(type), null, batch.sourceOrganizationId()));
+            PhisResponse<List<HospitalDirectoryEntry>> response = invokeRecorded(batch, type,
+                    () -> phisService.queryHospitalDirectory(organizationId, batch.environment(),
+                            new HospitalDirectoryQuery(hisType(type), null, batch.sourceOrganizationId())));
             if (!response.success()) {
                 return TypeSyncOutcome.failed(type, false, 0, safeFailure(response.errorMessage()));
             }
@@ -160,6 +171,59 @@ public class HospitalDirectorySyncServiceImpl implements HospitalDirectorySyncSe
             LOGGER.error("100-003目录对账失败｜批次{}｜类型{}｜{}", batchId, type.code(), Func.rootCause(exception).getClass().getSimpleName());
             return TypeSyncOutcome.failed(type, false, validation.returned(), "平台保存" + typeLabel(type) + "失败，未确认的旧数据未标记无效", validation);
         }
+    }
+
+    /**
+     * 发起一次100-003请求并独立保存脱敏调用终态。
+     *
+     * <p>交换事实在外部调用完成后立即写入，因而即使该目录类型随后校验或对账失败，
+     * 仍能在批次详情定位真实发生过的HIS请求；配置或参数错误在发送前被拒绝，不伪造调用事实。</p>
+     *
+     * @param batch 已抢占执行权的机构批次
+     * @param type 本次请求的医院目录类别
+     * @param invocation 只执行一次的HIS调用
+     * @return 可确认的HIS响应
+     */
+    private PhisResponse<List<HospitalDirectoryEntry>> invokeRecorded(
+            MasterDataBatchSnapshot batch, HospitalDirectoryType type,
+            Supplier<PhisResponse<List<HospitalDirectoryEntry>>> invocation
+    ) {
+        String requestId = Func.simpleUuid();
+        LocalDateTime receivedAt = LocalDateTime.now(ZoneOffset.UTC);
+        long startedAt = System.nanoTime();
+        PhisResponse<List<HospitalDirectoryEntry>> response;
+        try {
+            response = invocation.get();
+        } catch (PhisCommunicationException exception) {
+            recordInvocation(batch, type, requestId, ExchangeResult.NO_RESPONSE, null,
+                    "通信失败或超时，未取得可确认的HIS响应", "通信失败，未取得可确认的HIS响应", startedAt, receivedAt);
+            throw exception;
+        } catch (PhisProtocolException exception) {
+            recordInvocation(batch, type, requestId, ExchangeResult.INVALID_RESPONSE, null,
+                    "已收到HIS响应，但无法确认协议结果", null, startedAt, receivedAt);
+            throw exception;
+        }
+        if (response == null) {
+            recordInvocation(batch, type, requestId, ExchangeResult.INVALID_RESPONSE, null,
+                    "HIS调用未提供可确认的响应对象", null, startedAt, receivedAt);
+            throw new PhisProtocolException("100-003未返回有效响应；交易号" + requestId);
+        }
+        long returned = response.success() && response.data() != null ? response.data().size() : 0;
+        recordInvocation(batch, type, requestId, response.success() ? ExchangeResult.SUCCESS : ExchangeResult.FAILURE,
+                response.resultCode(), response.success() ? "100-003成功；返回" + returned + "条" : "HIS明确返回失败",
+                null, startedAt, receivedAt);
+        return response;
+    }
+
+    /** 保存与机构批次关联、但不含SOAP正文或认证信息的100-003调用事实。 */
+    private void recordInvocation(MasterDataBatchSnapshot batch, HospitalDirectoryType type, String requestId,
+                                  ExchangeResult result, String resultCode, String resultMessage,
+                                  String communicationErrorSummary, long startedAt, LocalDateTime receivedAt) {
+        exchangeRecords.record(new ExchangeRuntimeRecord(requestId, PhisTrade.HOSPITAL_DIRECTORY_QUERY.code(),
+                "PLATFORM", SOURCE_SYSTEM_CODE, batch.organizationCode(), batch.batchNo(), result, resultCode,
+                resultMessage, (System.nanoTime() - startedAt) / 1_000_000,
+                typeLabel(type) + "目录；100-003", communicationErrorSummary, receivedAt,
+                LocalDateTime.now(ZoneOffset.UTC)));
     }
 
     /**

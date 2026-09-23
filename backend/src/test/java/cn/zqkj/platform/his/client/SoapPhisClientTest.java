@@ -1,11 +1,15 @@
 package cn.zqkj.platform.his.client;
 
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryType;
+import cn.zqkj.platform.his.domain.icd10.model.Icd10DiagnosisCategory;
+import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryType;
 import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
@@ -21,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,6 +39,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 验证基层HIS客户端使用WSDL确认的HTTP、SOAPAction和受控异常边界。
  */
 class SoapPhisClientTest {
+
+    /** 验证连接拒绝不再与其他通信失败混为同一条不可操作的摘要。 */
+    @Test
+    void classifiesConnectionRefusalWithoutExposingEndpoint() throws Exception {
+        int unusedPort;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            unusedPort = socket.getLocalPort();
+        }
+        PhisCommunicationException exception = assertThrows(
+                PhisCommunicationException.class,
+                () -> client().queryHospitalDirectory(
+                        PhisInvocationContext.create(
+                                URI.create("http://127.0.0.1:" + unusedPort + "/WebService.asmx"),
+                                1_000, 3_000, "SYNTHETIC-AUTH"),
+                        query()));
+        assertTrue(exception.getMessage().contains("连接未建立"));
+        assertTrue(!exception.getMessage().contains(String.valueOf(unusedPort)));
+    }
 
     /** 持续滴流不能通过不断收到少量正文绕过整次调用期限。 */
     @Test
@@ -91,8 +114,11 @@ class SoapPhisClientTest {
         });
         try {
             org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(3), () -> {
-                assertThrows(PhisCommunicationException.class, () -> client().queryHospitalDirectory(
-                        PhisInvocationContext.create(serviceUri(server), 100, 800, "SYNTHETIC-AUTH"), query()));
+                PhisCommunicationException exception = assertThrows(
+                        PhisCommunicationException.class,
+                        () -> client().queryHospitalDirectory(
+                                PhisInvocationContext.create(serviceUri(server), 100, 800, "SYNTHETIC-AUTH"), query()));
+                assertTrue(exception.getMessage().contains("超时"));
                 assertEquals(0, headersSent.getCount());
             });
         } finally {
@@ -166,6 +192,73 @@ class SoapPhisClientTest {
             assertTrue(requestBody.get().contains("<TradeCode>100-004</TradeCode>"));
             assertTrue(requestBody.get().contains("开始行数"));
             assertTrue(requestBody.get().contains("结束行数"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 验证100-006不携带机构归属字段，并映射文档不一致的疾病编码别名。 */
+    @Test
+    void queriesIcd10PageWithoutOrganizationScope() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startServer(exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[{"
+                    + "\"病种编码\":\"I10\",\"病种名称\":\"高血压病\",\"创建时间\":\"2019-01-01 08:00:00\","
+                    + "\"疾病ID\":\"DX-001\"}]}"));
+        });
+
+        try {
+            PhisResponse<List<Icd10Entry>> response = client().queryIcd10(context(server), new Icd10Query(
+                    null, 1, 100, LocalDateTime.of(2026, 9, 1, 0, 0),
+                    LocalDateTime.of(2026, 9, 20, 23, 59, 59), Icd10DiagnosisCategory.WESTERN, null));
+
+            assertTrue(response.success());
+            assertEquals("I10", response.data().get(0).diseaseCode());
+            assertEquals("DX-001", response.data().get(0).sourceDiseaseId());
+            assertTrue(requestBody.get().contains("<TradeCode>100-006</TradeCode>"));
+            assertTrue(requestBody.get().contains("疾病类别"));
+            assertTrue(!requestBody.get().contains("机构编码"));
+            assertTrue(!requestBody.get().contains("诊断版本"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 验证100-007与100-006同范围且仅在明确传入时发送诊断版本。 */
+    @Test
+    void countsIcd10WithExplicitVersionOnly() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startServer(exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[{\"行数\":\"37\"}]}"));
+        });
+
+        try {
+            PhisResponse<Long> response = client().countIcd10(context(server), new Icd10CountQuery(
+                    "高血压", LocalDateTime.of(2026, 9, 1, 0, 0),
+                    LocalDateTime.of(2026, 9, 20, 23, 59, 59), null, "病案直报系统"));
+
+            assertTrue(response.success());
+            assertEquals(37L, response.data());
+            assertTrue(requestBody.get().contains("<TradeCode>100-007</TradeCode>"));
+            assertTrue(requestBody.get().contains("病案直报系统"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 验证文档别名同时出现但编码不同的响应不会被静默映射。 */
+    @Test
+    void rejectsConflictingIcd10DiseaseCodeAliases() throws Exception {
+        HttpServer server = startServer(exchange -> send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[{"
+                + "\"疾病编码\":\"I10\",\"病种编码\":\"I11\",\"病种名称\":\"高血压病\","
+                + "\"创建时间\":\"2019-01-01 08:00:00\"}]}")));
+
+        try {
+            assertThrows(PhisProtocolException.class, () -> client().queryIcd10(context(server), new Icd10Query(
+                    null, 1, 100, LocalDateTime.of(2026, 9, 1, 0, 0),
+                    LocalDateTime.of(2026, 9, 20, 23, 59, 59), null, null)));
         } finally {
             server.stop(0);
         }

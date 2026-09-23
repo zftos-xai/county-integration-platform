@@ -11,6 +11,7 @@ public interface PhisEndpointVerificationService {
     /**
      * 在不启用端点的前提下校验其来源机构与最小目录读取能力。
      *
+     * @param endpointId 正在校验的外部端点主键，用于关联脱敏HIS调用事实
      * @param organizationId 平台机构主键
      * @param environment 接口运行环境
      * @param platformOrganizationName 平台机构名称，用作100-008查询条件
@@ -19,6 +20,7 @@ public interface PhisEndpointVerificationService {
      * @return 明确通过或明确拒绝的校验结论
      */
     PhisEndpointVerificationResult verify(
+            long endpointId,
             long organizationId,
             ParameterEnvironment environment,
             String platformOrganizationName,

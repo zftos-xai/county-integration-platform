@@ -2,11 +2,14 @@ package cn.zqkj.platform.his.service.impl;
 
 import cn.zqkj.platform.his.client.PhisProtocolClient;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
+import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryType;
+import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryType;
 import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
@@ -238,6 +241,27 @@ class PhisServiceImplTest {
 
         verify(client).queryMedicalDirectory(any(), any());
         verify(client).countMedicalDirectory(any(), any());
+    }
+
+    /** 验证公共ICD10目录仍只通过获授权端点调用，不把端点机构传入协议字段。 */
+    @Test
+    void usesConfiguredEndpointForPublicIcd10Calls() {
+        PhisProtocolClient client = mock(PhisProtocolClient.class);
+        when(client.queryIcd10(any(), any())).thenReturn(PhisResponse.success("1", List.<Icd10Entry>of()));
+        when(client.countIcd10(any(), any())).thenReturn(PhisResponse.success("1", 0L));
+        ExternalEndpointResolutionService resolver = configuredResolver(8L, "AUTH-008");
+        PhisServiceImpl service = new PhisServiceImpl(resolver, client);
+        LocalDateTime start = LocalDateTime.of(2026, 9, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 9, 2, 0, 0);
+        Icd10Query pageQuery = new Icd10Query(null, 1, 100, start, end, null, null);
+        Icd10CountQuery countQuery = new Icd10CountQuery(null, start, end, null, null);
+
+        service.queryIcd10(8L, ParameterEnvironment.TEST, pageQuery);
+        service.countIcd10(8L, ParameterEnvironment.TEST, countQuery);
+
+        verify(resolver, times(2)).findEnabledRuntime("PRIMARY_HIS", ParameterEnvironment.TEST, 8L);
+        verify(client).queryIcd10(any(), eq(pageQuery));
+        verify(client).countIcd10(any(), eq(countQuery));
     }
 
     /** 验证本地查询错误记录为未发送，并且不会解析配置或调用HIS。 */

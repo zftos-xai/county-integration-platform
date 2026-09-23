@@ -31,18 +31,22 @@ public class MigrationSchemaContractParser {
             Pattern.CASE_INSENSITIVE
     );
     private static final Pattern ALTER_TABLE_ADD_PATTERN = Pattern.compile(
-            "(?ims)^ALTER\\s+TABLE\\s+(?:(?:\\[?([a-zA-Z_][\\w]*)]?)\\.)?"
+            "(?ims)^\\s*ALTER\\s+TABLE\\s+(?:(?:\\[?([a-zA-Z_][\\w]*)]?)\\.)?"
                     + "\\[?([a-zA-Z_][\\w]*)]?\\s+ADD\\s*(.*?);"
     );
+    private static final Pattern ALTER_TABLE_ALTER_COLUMN_PATTERN = Pattern.compile(
+            "(?ims)^\\s*ALTER\\s+TABLE\\s+(?:(?:\\[?([a-zA-Z_][\\w]*)]?)\\.)?"
+                    + "\\[?([a-zA-Z_][\\w]*)]?\\s+ALTER\\s+COLUMN\\s+([^;\\r\\n]+);"
+    );
     private static final Pattern ALTER_TABLE_DROP_CONSTRAINT_PATTERN = Pattern.compile(
-            "(?im)^ALTER\\s+TABLE\\s+(?:(?:\\[?[a-zA-Z_][\\w]*]?)\\.)?"
+            "(?im)^\\s*ALTER\\s+TABLE\\s+(?:(?:\\[?[a-zA-Z_][\\w]*]?)\\.)?"
                     + "\\[?[a-zA-Z_][\\w]*]?\\s+DROP\\s+CONSTRAINT\\s+\\[?[a-zA-Z_][\\w]*]?\\s*;"
     );
     private static final Pattern ALTER_TABLE_CHECKED_ADD_CONSTRAINT_PATTERN = Pattern.compile(
-            "(?ims)^ALTER\\s+TABLE\\s+(?:(?:\\[?[a-zA-Z_][\\w]*]?)\\.)?"
+            "(?ims)^\\s*ALTER\\s+TABLE\\s+(?:(?:\\[?[a-zA-Z_][\\w]*]?)\\.)?"
                     + "\\[?[a-zA-Z_][\\w]*]?\\s+WITH\\s+CHECK\\s+ADD\\s+CONSTRAINT\\s+.*?;"
     );
-    private static final Pattern ALTER_TABLE_PATTERN = Pattern.compile("(?im)^ALTER\\s+TABLE\\s+");
+    private static final Pattern ALTER_TABLE_PATTERN = Pattern.compile("(?im)^\\s*ALTER\\s+TABLE\\s+");
 
     private final ResourcePatternResolver resourceResolver;
 
@@ -70,6 +74,7 @@ public class MigrationSchemaContractParser {
                 rejectUnsupportedSchemaChanges(resource, sql);
                 parseCreateTables(resource, sql, columns);
                 parseAlterTableAdds(resource, sql, columns);
+                parseAlterTableColumns(resource, sql, columns);
             }
             if (columns.isEmpty()) {
                 throw new IllegalStateException("未从Flyway迁移脚本解析出任何数据库字段契约");
@@ -93,6 +98,9 @@ public class MigrationSchemaContractParser {
                 .matcher(supportedChangesRemoved)
                 .replaceAll("");
         supportedChangesRemoved = ALTER_TABLE_DROP_CONSTRAINT_PATTERN
+                .matcher(supportedChangesRemoved)
+                .replaceAll("");
+        supportedChangesRemoved = ALTER_TABLE_ALTER_COLUMN_PATTERN
                 .matcher(supportedChangesRemoved)
                 .replaceAll("");
         if (ALTER_TABLE_PATTERN.matcher(supportedChangesRemoved).find()) {
@@ -120,8 +128,26 @@ public class MigrationSchemaContractParser {
             }
             String[] lines = definitions.split("\\R");
             for (String line : lines) {
-                parseColumn(resource, schemaName, tableName, line, columns);
+                parseColumn(resource, schemaName, tableName, line, columns, false);
             }
+        }
+    }
+
+    /**
+     * 解析SQL Server的 {@code ALTER TABLE ... ALTER COLUMN}，将补丁后的物理类型和空值规则
+     * 覆盖到同一字段契约中；标识列和计算列禁止通过此路径变更。
+     *
+     * @param resource 当前迁移资源
+     * @param sql 迁移脚本文本
+     * @param columns 累积字段契约
+     */
+    private void parseAlterTableColumns(Resource resource, String sql,
+                                        Map<String, DatabaseContractColumn> columns) {
+        Matcher alterMatcher = ALTER_TABLE_ALTER_COLUMN_PATTERN.matcher(sql);
+        while (alterMatcher.find()) {
+            String schemaName = normalizeIdentifier(alterMatcher.group(1) == null ? "dbo" : alterMatcher.group(1));
+            String tableName = normalizeIdentifier(alterMatcher.group(2));
+            parseColumn(resource, schemaName, tableName, alterMatcher.group(3), columns, true);
         }
     }
 
@@ -141,7 +167,7 @@ public class MigrationSchemaContractParser {
             String tableName = normalizeIdentifier(tableMatcher.group(2));
             String[] lines = tableMatcher.group(3).split("\\R");
             for (String line : lines) {
-                parseColumn(resource, schemaName, tableName, line, columns);
+                parseColumn(resource, schemaName, tableName, line, columns, false);
             }
         }
     }
@@ -156,7 +182,7 @@ public class MigrationSchemaContractParser {
      * @param columns 累积字段契约
      */
     private void parseColumn(Resource resource, String schemaName, String tableName, String line,
-                             Map<String, DatabaseContractColumn> columns) {
+                             Map<String, DatabaseContractColumn> columns, boolean replacesExisting) {
         String definition = line.replaceFirst("--.*$", "").trim().replaceFirst(",\\s*$", "");
         String uppercaseDefinition = definition.toUpperCase(Locale.ROOT);
         if (definition.isEmpty() || uppercaseDefinition.startsWith("CONSTRAINT")
@@ -184,10 +210,22 @@ public class MigrationSchemaContractParser {
                 Pattern.compile("\\bIDENTITY\\s*\\(", Pattern.CASE_INSENSITIVE).matcher(remainder).find(),
                 Pattern.compile("\\bAS\\s*\\(", Pattern.CASE_INSENSITIVE).matcher(remainder).find()
         );
-        DatabaseContractColumn previous = columns.putIfAbsent(column.qualifiedName(), column);
+        DatabaseContractColumn previous = columns.get(column.qualifiedName());
+        if (replacesExisting) {
+            if (previous == null) {
+                throw new IllegalStateException(resource.getFilename() + " 修改了未声明字段 " + column.qualifiedName());
+            }
+            if (previous.identity() || previous.computed() || column.identity() || column.computed()) {
+                throw new IllegalStateException(resource.getFilename() + " 不支持变更标识或计算字段 "
+                        + column.qualifiedName());
+            }
+            columns.put(column.qualifiedName(), column);
+            return;
+        }
         if (previous != null) {
             throw new IllegalStateException("Flyway迁移重复定义字段 " + column.qualifiedName());
         }
+        columns.put(column.qualifiedName(), column);
     }
 
     /**

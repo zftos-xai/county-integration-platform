@@ -30,6 +30,16 @@ public interface MasterDataBatchMapper {
     boolean hasBoundSourceChanged(@Param("batchId") long batchId);
 
     /**
+     * 读取创建公共批次时所绑定端点的所属机构。
+     *
+     * <p>该机构只用于重新解析已选端点的运行时凭证，绝不表示公共目录或批次归属。</p>
+     *
+     * @param batchId 平台范围ICD10批次主键
+     * @return 已绑定端点的启用机构主键；端点不存在或没有机构绑定时为空
+     */
+    Long findBoundEndpointOrganizationId(@Param("batchId") long batchId);
+
+    /**
      * 按平台机构代码读取已启用机构主键。
      *
      * @param organizationCode 平台机构代码

@@ -22,4 +22,12 @@ class MasterDataCategoryTest {
     void leavesUnsupportedCountTradeEmpty() {
         assertNull(MasterDataCategory.HOSPITAL_DIRECTORY.countTradeCode());
     }
+
+    /** 验证ICD10明确使用平台公共范围及100-006、100-007交易。 */
+    @Test
+    void mapsPublicIcd10CategoryToDocumentedTrades() {
+        assertEquals("100-006", MasterDataCategory.ICD10_DIAGNOSIS.dataTradeCode());
+        assertEquals("100-007", MasterDataCategory.ICD10_DIAGNOSIS.countTradeCode());
+        assertEquals(MasterDataScopeType.PLATFORM, MasterDataCategory.ICD10_DIAGNOSIS.scopeType());
+    }
 }

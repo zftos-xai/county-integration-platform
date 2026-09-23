@@ -9,7 +9,8 @@ const outputFile = join(projectRoot, 'deploy', 'sqlserver', '04-verify-database-
 const repairOutputFile = join(projectRoot, 'deploy', 'sqlserver', '05-repair-database-contract.sql')
 const checkOnly = process.argv.includes('--check')
 const createTablePattern = /^CREATE\s+TABLE\s+(?:(?:\[?([a-zA-Z_][\w]*)\]?)\.)?\[?([a-zA-Z_][\w]*)\]?\s*\((.*?)^\);/gims
-const alterTableAddPattern = /^ALTER\s+TABLE\s+(?:(?:\[?([a-zA-Z_][\w]*)\]?)\.)?\[?([a-zA-Z_][\w]*)\]?\s+ADD\s+([\s\S]*?);/gim
+const alterTableAddPattern = /^\s*ALTER\s+TABLE\s+(?:(?:\[?([a-zA-Z_][\w]*)\]?)\.)?\[?([a-zA-Z_][\w]*)\]?\s+ADD\s+([\s\S]*?);/gim
+const alterTableColumnPattern = /^\s*ALTER\s+TABLE\s+(?:(?:\[?([a-zA-Z_][\w]*)\]?)\.)?\[?([a-zA-Z_][\w]*)\]?\s+ALTER\s+COLUMN\s+([^;\r\n]+);/gim
 const columnPattern = /^\s*\[?([a-zA-Z_][\w]*)\]?\s+([a-zA-Z][a-zA-Z0-9_]*)(?:\((max|\d+)(?:\s*,\s*(\d+))?\))?(?:\s+(.*))?$/i
 
 /** Escapes one Unicode SQL string literal. */
@@ -50,53 +51,63 @@ function parseMigrations() {
     .filter((name) => /^V.*\.sql$/.test(name))
     .sort()
   const columns = []
-  const qualifiedNames = new Set()
+  const columnIndexes = new Map()
+
+  /** Parses one SQL Server column definition into the database-contract representation. */
+  function parseColumn(migrationFile, schemaName, tableName, rawDefinition) {
+    const definition = rawDefinition.replace(/--.*$/, '').trim().replace(/,\s*$/, '')
+    const columnMatch = definition.match(columnPattern)
+    if (!columnMatch) throw new Error(`${migrationFile} 无法解析字段定义: ${definition}`)
+
+    const columnName = columnMatch[1].toLowerCase()
+    const typeName = normalizeType(columnMatch[2])
+    const firstArgument = columnMatch[3] ?? null
+    const secondArgument = columnMatch[4] ?? null
+    const remainder = columnMatch[5] ?? ''
+    const lengthType = ['nvarchar', 'nchar', 'varchar', 'char', 'varbinary', 'binary'].includes(typeName)
+    const numericType = ['decimal', 'numeric'].includes(typeName)
+    const timeScaleType = ['datetime2', 'datetimeoffset', 'time'].includes(typeName)
+    return {
+      qualifiedName: `${schemaName}.${tableName}.${columnName}`,
+      schemaName,
+      tableName,
+      columnName,
+      typeName,
+      maxLength: lengthType ? (firstArgument === 'max' ? -1 : Number(firstArgument) * (typeName.startsWith('n') ? 2 : 1)) : null,
+      precision: numericType ? Number(firstArgument) : null,
+      scale: numericType ? Number(secondArgument) : timeScaleType ? Number(firstArgument) : null,
+      nullable: typeName !== 'rowversion' && !/\bNOT\s+NULL\b/i.test(remainder),
+      identity: /\bIDENTITY\s*\(/i.test(remainder),
+      computed: /\bAS\s*\(/i.test(remainder),
+    }
+  }
 
   /** Adds physical columns declared by a CREATE TABLE body or ALTER TABLE ... ADD body. */
   function appendColumns(migrationFile, schemaName, tableName, definitions) {
     for (const rawLine of definitions.split(/\r?\n/)) {
       const definition = rawLine.replace(/--.*$/, '').trim().replace(/,\s*$/, '')
       if (!definition || definition.toUpperCase().startsWith('CONSTRAINT')) continue
-      const columnMatch = definition.match(columnPattern)
-      if (!columnMatch) throw new Error(`${migrationFile} 无法解析字段定义: ${definition}`)
-
-      const columnName = columnMatch[1].toLowerCase()
-      const typeName = normalizeType(columnMatch[2])
-      const firstArgument = columnMatch[3] ?? null
-      const secondArgument = columnMatch[4] ?? null
-      const remainder = columnMatch[5] ?? ''
-      const lengthType = ['nvarchar', 'nchar', 'varchar', 'char', 'varbinary', 'binary'].includes(typeName)
-      const numericType = ['decimal', 'numeric'].includes(typeName)
-      const timeScaleType = ['datetime2', 'datetimeoffset', 'time'].includes(typeName)
-      const maxLength = lengthType
-        ? firstArgument === 'max' ? -1 : Number(firstArgument) * (typeName.startsWith('n') ? 2 : 1)
-        : null
-      const precision = numericType ? Number(firstArgument) : null
-      const scale = numericType ? Number(secondArgument) : timeScaleType ? Number(firstArgument) : null
-      const qualifiedName = `${schemaName}.${tableName}.${columnName}`
-      if (qualifiedNames.has(qualifiedName)) throw new Error(`Flyway迁移重复定义字段 ${qualifiedName}`)
-      qualifiedNames.add(qualifiedName)
-      columns.push({
-        schemaName,
-        tableName,
-        columnName,
-        typeName,
-        maxLength,
-        precision,
-        scale,
-        nullable: typeName !== 'rowversion' && !/\bNOT\s+NULL\b/i.test(remainder),
-        identity: /\bIDENTITY\s*\(/i.test(remainder),
-        computed: /\bAS\s*\(/i.test(remainder),
-      })
+      const column = parseColumn(migrationFile, schemaName, tableName, definition)
+      if (columnIndexes.has(column.qualifiedName)) throw new Error(`Flyway迁移重复定义字段 ${column.qualifiedName}`)
+      columnIndexes.set(column.qualifiedName, columns.length)
+      columns.push(column)
     }
+  }
+
+  /** Applies a later ALTER COLUMN declaration to the same physical field contract. */
+  function alterColumn(migrationFile, schemaName, tableName, rawDefinition) {
+    const altered = parseColumn(migrationFile, schemaName, tableName, rawDefinition)
+    const index = columnIndexes.get(altered.qualifiedName)
+    if (index === undefined) throw new Error(`${migrationFile} 修改了未声明字段 ${altered.qualifiedName}`)
+    const previous = columns[index]
+    if (previous.identity || previous.computed || altered.identity || altered.computed) {
+      throw new Error(`${migrationFile} 不支持变更标识或计算字段 ${altered.qualifiedName}`)
+    }
+    columns[index] = altered
   }
 
   for (const migrationFile of migrationFiles) {
     const sql = readFileSync(join(migrationRoot, migrationFile), 'utf8')
-    // 仅禁止会改变字段物理契约的修改；约束重建不会改变字段清单，迁移可安全继续生成字段契约。
-    if (/^ALTER\s+TABLE\s+.*\s+(?:ALTER|DROP)\s+COLUMN\s+/im.test(sql)) {
-      throw new Error(`${migrationFile} 包含尚未支持的 ALTER TABLE 结构修改`)
-    }
     for (const tableMatch of sql.matchAll(createTablePattern)) {
       const schemaName = (tableMatch[1] ?? 'dbo').toLowerCase()
       const tableName = tableMatch[2].toLowerCase()
@@ -109,6 +120,11 @@ function parseMigrations() {
       if (!definitions.trimStart().toUpperCase().startsWith('CONSTRAINT')) {
         appendColumns(migrationFile, schemaName, tableName, definitions)
       }
+    }
+    for (const alterMatch of sql.matchAll(alterTableColumnPattern)) {
+      const schemaName = (alterMatch[1] ?? 'dbo').toLowerCase()
+      const tableName = alterMatch[2].toLowerCase()
+      alterColumn(migrationFile, schemaName, tableName, alterMatch[3])
     }
   }
   if (columns.length === 0) throw new Error('未从Flyway迁移脚本解析出任何字段')

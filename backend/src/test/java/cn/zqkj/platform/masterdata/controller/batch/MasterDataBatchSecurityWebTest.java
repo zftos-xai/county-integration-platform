@@ -13,6 +13,7 @@ import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataSyncMode;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchPageVO;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataSyncOptionsVO;
+import cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10HisInvocationPageVO;
 import cn.zqkj.platform.masterdata.service.batch.MasterDataBatchService;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
 import cn.zqkj.platform.system.identity.domain.model.UserAccount;
@@ -166,6 +167,45 @@ class MasterDataBatchSecurityWebTest {
 
         prepareAccount(List.of());
         mockMvc.perform(get("/api/v1/master-data/batches/25/directory-results")
+                        .with(user(principal(List.of()))))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * ICD10调用事实与普通批次结果共用只读权限，并由服务层继续限定批次可见范围。
+     *
+     * @throws Exception MockMvc调用失败时抛出
+     */
+    @Test
+    void protectsIcd10InvocationReadWithMasterDataReadPermission() throws Exception {
+        prepareAccount(List.of("master-data:read"));
+        when(service.findIcd10HisInvocations(any(Long.class), any(), any()))
+                .thenReturn(new Icd10HisInvocationPageVO(List.of(), 0, 1, 50));
+        mockMvc.perform(get("/api/v1/master-data/batches/25/his-invocations")
+                        .with(user(principal(List.of("master-data:read")))))
+                .andExpect(status().isOk());
+
+        prepareAccount(List.of());
+        mockMvc.perform(get("/api/v1/master-data/batches/25/his-invocations")
+                        .with(user(principal(List.of()))))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * 机构目录批次的通用调用事实同样先受基础数据读取权限保护。
+     *
+     * @throws Exception MockMvc调用失败时抛出
+     */
+    @Test
+    void protectsBatchExchangeRecordReadWithMasterDataReadPermission() throws Exception {
+        prepareAccount(List.of("master-data:read"));
+        when(service.findBatchHisInvocations(any(Long.class), any())).thenReturn(List.of());
+        mockMvc.perform(get("/api/v1/master-data/batches/25/exchange-records")
+                        .with(user(principal(List.of("master-data:read")))))
+                .andExpect(status().isOk());
+
+        prepareAccount(List.of());
+        mockMvc.perform(get("/api/v1/master-data/batches/25/exchange-records")
                         .with(user(principal(List.of()))))
                 .andExpect(status().isForbidden());
     }

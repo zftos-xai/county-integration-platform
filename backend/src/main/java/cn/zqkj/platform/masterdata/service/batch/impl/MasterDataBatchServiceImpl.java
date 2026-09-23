@@ -4,6 +4,9 @@ import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.common.exception.ResourceNotFoundException;
 import cn.zqkj.platform.common.utils.Func;
+import cn.zqkj.platform.exchange.domain.dto.ExchangeRecordQuery;
+import cn.zqkj.platform.exchange.domain.vo.ExchangeRecordVO;
+import cn.zqkj.platform.exchange.service.ExchangeRecordQueryService;
 import cn.zqkj.platform.masterdata.domain.batch.dto.MasterDataBatchQuery;
 import cn.zqkj.platform.masterdata.domain.batch.dto.StartMasterDataBatchRequest;
 import cn.zqkj.platform.masterdata.domain.batch.model.MasterDataBatchCreation;
@@ -18,12 +21,17 @@ import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataSyncOptionsVO;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataSyncSourceVO;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectorySyncResultVO;
+import cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10SyncResultVO;
+import cn.zqkj.platform.masterdata.domain.icd10.dto.Icd10HisInvocationQuery;
+import cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10HisInvocationPageVO;
+import cn.zqkj.platform.masterdata.mapper.icd10.Icd10SyncMapper;
 import cn.zqkj.platform.masterdata.mapper.batch.MasterDataBatchMapper;
 import cn.zqkj.platform.masterdata.mapper.hospitaldirectory.HospitalDirectorySyncMapper;
 import cn.zqkj.platform.masterdata.mapper.medicaldirectory.MedicalDirectorySyncMapper;
 import cn.zqkj.platform.masterdata.service.batch.MasterDataBatchService;
 import cn.zqkj.platform.masterdata.service.hospitaldirectory.HospitalDirectorySyncService;
 import cn.zqkj.platform.masterdata.service.medicaldirectory.MedicalDirectorySyncService;
+import cn.zqkj.platform.masterdata.service.icd10.Icd10SyncService;
 import cn.zqkj.platform.system.audit.domain.dto.ManagementAuditCommand;
 import cn.zqkj.platform.system.audit.service.ManagementAuditService;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointRuntimeConfiguration;
@@ -39,6 +47,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -52,14 +61,18 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
     private static final String FULL_SYNC_RANGE_NOTE =
             "用户指定的默认查询窗口：批次创建时刻向前20年至创建时刻；不证明HIS更早或无时间记录已覆盖";
     private static final List<MasterDataCategory> IMPLEMENTED_CATEGORIES = List.of(
-            MasterDataCategory.HOSPITAL_DIRECTORY, MasterDataCategory.MEDICAL_DIRECTORY);
+            MasterDataCategory.HOSPITAL_DIRECTORY, MasterDataCategory.MEDICAL_DIRECTORY,
+            MasterDataCategory.ICD10_DIAGNOSIS);
     private final MasterDataBatchMapper mapper;
     private final HospitalDirectorySyncMapper hospitalDirectoryMapper;
     private final MedicalDirectorySyncMapper medicalDirectoryMapper;
+    private final Icd10SyncMapper icd10Mapper;
+    private final ExchangeRecordQueryService exchangeRecordQueryService;
     private final ManagementAuditService auditService;
     private final ExternalEndpointResolutionService endpointResolutionService;
     private final HospitalDirectorySyncService hospitalSyncService;
     private final MedicalDirectorySyncService medicalSyncService;
+    private final Icd10SyncService icd10SyncService;
     private final TransactionTemplate transactions;
 
     /**
@@ -68,11 +81,53 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
      * @param mapper 基础数据批次持久化边界
      * @param hospitalDirectoryMapper 100-003目录运行事实持久化边界
      * @param medicalDirectoryMapper 100-004/100-005目录运行事实持久化边界
+     * @param icd10Mapper 100-006/100-007公共目录运行事实持久化边界
+     * @param exchangeRecordQueryService 机构目录批次调用事实的只读查询边界
      * @param auditService 管理审计追加服务
      * @param endpointResolutionService 外部接口可用配置解析边界
      * @param hospitalSyncService 医院综合目录同步流程
      * @param medicalSyncService 医疗目录同步流程
+     * @param icd10SyncService 公共ICD10目录同步流程
      * @param transactions 批次原子抢占使用的短事务
+     */
+    @Autowired
+    public MasterDataBatchServiceImpl(
+            MasterDataBatchMapper mapper,
+            HospitalDirectorySyncMapper hospitalDirectoryMapper,
+            MedicalDirectorySyncMapper medicalDirectoryMapper,
+            Icd10SyncMapper icd10Mapper,
+            ExchangeRecordQueryService exchangeRecordQueryService,
+            ManagementAuditService auditService,
+            ExternalEndpointResolutionService endpointResolutionService,
+            HospitalDirectorySyncService hospitalSyncService,
+            MedicalDirectorySyncService medicalSyncService,
+            Icd10SyncService icd10SyncService,
+            TransactionTemplate transactions
+    ) {
+        this.mapper = mapper;
+        this.hospitalDirectoryMapper = hospitalDirectoryMapper;
+        this.medicalDirectoryMapper = medicalDirectoryMapper;
+        this.icd10Mapper = icd10Mapper;
+        this.exchangeRecordQueryService = exchangeRecordQueryService;
+        this.auditService = auditService;
+        this.endpointResolutionService = endpointResolutionService;
+        this.hospitalSyncService = hospitalSyncService;
+        this.medicalSyncService = medicalSyncService;
+        this.icd10SyncService = icd10SyncService;
+        this.transactions = transactions;
+    }
+
+    /**
+     * 保留既有机构目录单元测试和调用方的构造兼容；公共ICD10运行必须使用完整依赖构造。
+     *
+     * @param mapper 批次持久化边界
+     * @param hospitalDirectoryMapper 医院目录结果边界
+     * @param medicalDirectoryMapper 医疗目录结果边界
+     * @param auditService 管理审计服务
+     * @param endpointResolutionService 端点运行时解析服务
+     * @param hospitalSyncService 医院目录同步服务
+     * @param medicalSyncService 医疗目录同步服务
+     * @param transactions 短事务模板
      */
     public MasterDataBatchServiceImpl(
             MasterDataBatchMapper mapper,
@@ -84,14 +139,38 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
             MedicalDirectorySyncService medicalSyncService,
             TransactionTemplate transactions
     ) {
-        this.mapper = mapper;
-        this.hospitalDirectoryMapper = hospitalDirectoryMapper;
-        this.medicalDirectoryMapper = medicalDirectoryMapper;
-        this.auditService = auditService;
-        this.endpointResolutionService = endpointResolutionService;
-        this.hospitalSyncService = hospitalSyncService;
-        this.medicalSyncService = medicalSyncService;
-        this.transactions = transactions;
+        this(mapper, hospitalDirectoryMapper, medicalDirectoryMapper, null, null, auditService,
+                endpointResolutionService, hospitalSyncService, medicalSyncService, null, transactions);
+    }
+
+    /**
+     * 保留已有ICD10调用方的构造兼容；机构目录调用事实读取需使用完整依赖构造。
+     *
+     * @param mapper 批次持久化边界
+     * @param hospitalDirectoryMapper 医院目录结果边界
+     * @param medicalDirectoryMapper 医疗目录结果边界
+     * @param icd10Mapper ICD10结果边界
+     * @param auditService 管理审计服务
+     * @param endpointResolutionService 端点运行时解析服务
+     * @param hospitalSyncService 医院目录同步服务
+     * @param medicalSyncService 医疗目录同步服务
+     * @param icd10SyncService ICD10同步服务
+     * @param transactions 短事务模板
+     */
+    public MasterDataBatchServiceImpl(
+            MasterDataBatchMapper mapper,
+            HospitalDirectorySyncMapper hospitalDirectoryMapper,
+            MedicalDirectorySyncMapper medicalDirectoryMapper,
+            Icd10SyncMapper icd10Mapper,
+            ManagementAuditService auditService,
+            ExternalEndpointResolutionService endpointResolutionService,
+            HospitalDirectorySyncService hospitalSyncService,
+            MedicalDirectorySyncService medicalSyncService,
+            Icd10SyncService icd10SyncService,
+            TransactionTemplate transactions
+    ) {
+        this(mapper, hospitalDirectoryMapper, medicalDirectoryMapper, icd10Mapper, null, auditService,
+                endpointResolutionService, hospitalSyncService, medicalSyncService, icd10SyncService, transactions);
     }
 
     /**
@@ -103,9 +182,12 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
     @Override
     public MasterDataBatchSummaryVO run(long id, byte[] expectedVersion, AccessActor actor) {
         MasterDataBatchSnapshot batch = requireVisibleBatch(id, List.copyOf(actor.organizationCodes()));
-        Long enabledOrganizationId = mapper.findEnabledOrganizationId(batch.organizationCode());
-        if (batch.organizationId() == null || !batch.organizationId().equals(enabledOrganizationId)) {
-            throw new InvalidRequestException("批次机构不存在或已停用");
+        boolean publicIcd10 = batch.category() == MasterDataCategory.ICD10_DIAGNOSIS;
+        Long endpointOrganizationId = publicIcd10 ? mapper.findBoundEndpointOrganizationId(batch.id())
+                : mapper.findEnabledOrganizationId(batch.organizationCode());
+        if (endpointOrganizationId == null || (!publicIcd10
+                && (batch.organizationId() == null || !batch.organizationId().equals(endpointOrganizationId)))) {
+            throw new InvalidRequestException(publicIcd10 ? "公共批次绑定的调用端点机构不存在或已停用" : "批次机构不存在或已停用");
         }
         if (batch.category() == MasterDataCategory.MEDICAL_DIRECTORY
                 && (batch.rangeStart() == null || batch.rangeEnd() == null || batch.sourceOrganizationId() == null)) {
@@ -113,7 +195,7 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
         }
         if (batch.sourceEndpointId() != null) {
             var current = endpointResolutionService.findEnabledRuntime(
-                    SOURCE_SYSTEM_CODE, batch.environment(), batch.organizationId())
+                    SOURCE_SYSTEM_CODE, batch.environment(), endpointOrganizationId)
                     .orElseThrow(() -> new ResourceConflictException("批次绑定的HIS来源配置已失效"));
             if (current.endpoint().id() != batch.sourceEndpointId()
                     || !Arrays.equals(current.endpoint().version(), batch.sourceEndpointVersion())) {
@@ -124,11 +206,18 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
             if (mapper.beginFetch(id, expectedVersion, actor.loginName()) != 1) {
                 throw new ResourceConflictException("批次状态已经变化，请重新读取后再操作");
             }
-            return requireBatch(id);
+            MasterDataBatchSnapshot claimed = requireBatch(id);
+            auditService.append(new ManagementAuditCommand(actor.userId(), actor.loginName(),
+                    claimed.organizationId(), claimed.organizationCode(), "MASTER_DATA_BATCH_RUN_STARTED",
+                    "MASTER_DATA_BATCH", claimed.batchNo(), "SUCCESS",
+                    "已开始" + claimed.category().displayName() + "同步；后续HIS调用和结果将按批次保存", auditService.currentRequestId()));
+            return claimed;
         });
         switch (batch.category()) {
             case HOSPITAL_DIRECTORY -> hospitalSyncService.synchronize(execution, actor.userId(), actor.loginName());
             case MEDICAL_DIRECTORY -> medicalSyncService.synchronize(execution, actor.userId(), actor.loginName());
+            case ICD10_DIAGNOSIS -> icd10SyncService.synchronize(
+                    execution, endpointOrganizationId, actor.userId(), actor.loginName());
         }
         return toView(requireBatch(id));
     }
@@ -149,8 +238,14 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
         switch (batch.category()) {
             case HOSPITAL_DIRECTORY -> hospitalSyncService.completeRecordedResults(batch, actor.userId(), actor.loginName());
             case MEDICAL_DIRECTORY -> medicalSyncService.completeRecordedResults(batch, actor.userId(), actor.loginName());
+            case ICD10_DIAGNOSIS -> icd10SyncService.completeRecordedResults(batch, actor.userId(), actor.loginName());
         }
-        return toView(requireBatch(id));
+        MasterDataBatchSummaryVO recovered = toView(requireBatch(id));
+        transactions.executeWithoutResult(ignored -> auditService.append(new ManagementAuditCommand(
+                actor.userId(), actor.loginName(), recovered.organizationCode() == null ? null : batch.organizationId(),
+                recovered.organizationCode(), "MASTER_DATA_BATCH_RECOVERED", "MASTER_DATA_BATCH", recovered.batchNo(),
+                "SUCCESS", "已结束中断同步；未完成分项按已保存事实收尾，未重新调用HIS", auditService.currentRequestId())));
+        return recovered;
     }
 
     /**
@@ -213,6 +308,45 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
         return medicalDirectoryMapper.findResults(id);
     }
 
+    /** {@inheritDoc} */
+    @Transactional(readOnly = true)
+    @Override
+    public List<Icd10SyncResultVO> findIcd10Results(long id, List<String> allowedOrganizationCodes) {
+        MasterDataBatchSnapshot snapshot = requireVisibleBatch(id, allowedOrganizationCodes);
+        if (snapshot.category() != MasterDataCategory.ICD10_DIAGNOSIS) {
+            throw new InvalidRequestException("当前批次不是100-006/100-007公共ICD10目录业务");
+        }
+        return icd10Mapper.findResults(id);
+    }
+
+    /** {@inheritDoc} */
+    @Transactional(readOnly = true)
+    @Override
+    public Icd10HisInvocationPageVO findIcd10HisInvocations(
+            long id, Icd10HisInvocationQuery query, List<String> allowedOrganizationCodes) {
+        MasterDataBatchSnapshot snapshot = requireVisibleBatch(id, allowedOrganizationCodes);
+        if (snapshot.category() != MasterDataCategory.ICD10_DIAGNOSIS) {
+            throw new InvalidRequestException("当前批次不是ICD10诊断目录业务");
+        }
+        return new Icd10HisInvocationPageVO(icd10Mapper.findHisInvocations(id, query),
+                icd10Mapper.countHisInvocations(id), query.page(), query.pageSize());
+    }
+
+    /** {@inheritDoc} */
+    @Transactional(readOnly = true)
+    @Override
+    public List<ExchangeRecordVO> findBatchHisInvocations(long id, List<String> allowedOrganizationCodes) {
+        MasterDataBatchSnapshot snapshot = requireVisibleBatch(id, allowedOrganizationCodes);
+        if (snapshot.category() == MasterDataCategory.ICD10_DIAGNOSIS) {
+            throw new InvalidRequestException("公共ICD10批次须读取专用HIS调用事实");
+        }
+        if (Func.isBlank(snapshot.organizationCode())) {
+            throw new InvalidRequestException("机构目录批次缺少调用事实所需的机构范围");
+        }
+        return exchangeRecordQueryService.findRecent(new ExchangeRecordQuery(snapshot.organizationCode(), null, null,
+                null, snapshot.batchNo(), null, null, 100));
+    }
+
     /**
      * 列出获准机构可用的 HIS 来源环境和已实现同步业务。
      *
@@ -244,7 +378,7 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
                         category.displayName(),
                         category.dataTradeCode(),
                         category.countTradeCode(),
-                        category == MasterDataCategory.MEDICAL_DIRECTORY));
+                        category == MasterDataCategory.MEDICAL_DIRECTORY || category == MasterDataCategory.ICD10_DIAGNOSIS));
         }
         return new MasterDataSyncOptionsVO(List.copyOf(sources), List.copyOf(businesses));
     }
@@ -258,25 +392,28 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
     @Transactional
     @Override
     public MasterDataBatchSummaryVO start(StartMasterDataBatchRequest request, AccessActor actor) {
-        if (!request.isTimeRangeValid()) throw new InvalidRequestException("同步模式与来源查询范围不匹配");
-        Long organizationId = mapper.findEnabledOrganizationId(request.organizationCode());
-        if (organizationId == null) throw new InvalidRequestException("所选机构不存在或已停用");
+        if (!request.isTimeRangeValid() || !request.isScopeInputValid()) {
+            throw new InvalidRequestException("同步模式、目录归属与调用端点机构不匹配");
+        }
+        boolean publicIcd10 = request.category() == MasterDataCategory.ICD10_DIAGNOSIS;
+        String endpointOrganizationCode = publicIcd10 ? request.sourceEndpointOrganizationCode() : request.organizationCode();
+        Long endpointOrganizationId = mapper.findEnabledOrganizationId(endpointOrganizationCode);
+        if (endpointOrganizationId == null) throw new InvalidRequestException("所选调用端点机构不存在或已停用");
         ExternalEndpointRuntimeConfiguration runtime = endpointResolutionService.findEnabledRuntime(
-                        SOURCE_SYSTEM_CODE, request.environment(), organizationId)
+                        SOURCE_SYSTEM_CODE, request.environment(), endpointOrganizationId)
                 .orElseThrow(() -> new InvalidRequestException(
                         "所选机构在该环境没有通过100-008校验的基层HIS接口配置"));
-        String verifiedSourceOrganizationId = runtime.endpoint() == null ? null
-                : Func.trimToNull(runtime.endpoint().sourceOrganizationId());
-        if (verifiedSourceOrganizationId == null) {
+        String verifiedSourceOrganizationId = runtime.endpoint() == null ? null : Func.trimToNull(runtime.endpoint().sourceOrganizationId());
+        if (!publicIcd10 && verifiedSourceOrganizationId == null) {
             throw new InvalidRequestException("该机构的基层HIS配置未保存100-008来源机构结果，不能发起同步");
         }
         if (request.category() == MasterDataCategory.MEDICAL_DIRECTORY
-                && mapper.hasMedicalCatalogFromOtherEnvironment(organizationId, request.environment())) {
+                && mapper.hasMedicalCatalogFromOtherEnvironment(endpointOrganizationId, request.environment())) {
             throw new ResourceConflictException("该机构当前医疗目录来自另一接口环境，不能交叉写入");
         }
         // 当前HIS的目录交易使用平台机构编码；100-008返回ID只用于确认配置身份。
         // 依据：2026-09-20真实联调，不能以来源ID替换已验证可用的交易参数。
-        String sourceOrganizationId = request.organizationCode();
+        String sourceOrganizationId = publicIcd10 ? null : request.organizationCode();
         OffsetDateTime rangeStart = request.rangeStart();
         OffsetDateTime rangeEnd = request.rangeEnd();
         String fullRuleEvidence = null;
@@ -289,24 +426,26 @@ public class MasterDataBatchServiceImpl implements MasterDataBatchService {
             fullRuleEvidence = FULL_SYNC_RANGE_NOTE;
         }
         MasterDataBatchCreation creation = new MasterDataBatchCreation(
-                request.requestKey(), request.organizationCode(), request.environment(), request.category(),
+                request.requestKey(), publicIcd10 ? null : request.organizationCode(), request.environment(), request.category(),
                 request.mode(), Func.toUtc(rangeStart), Func.toUtc(rangeEnd), runtime.endpoint().id(),
                 runtime.endpoint().version(), fullRuleEvidence);
         String batchNo = "BD-" + Func.simpleUuid()
                 .substring(0, 20).toUpperCase(Locale.ROOT);
         try {
             long id = mapper.create(batchNo, SOURCE_SYSTEM_CODE, creation,
-                    organizationId, sourceOrganizationId, actor.loginName());
+                    publicIcd10 ? null : endpointOrganizationId, sourceOrganizationId, actor.loginName());
             MasterDataBatchSummaryVO result = toView(requireBatch(id));
             auditService.append(new ManagementAuditCommand(
                     actor.userId(), actor.loginName(),
-                    organizationId,
-                    request.organizationCode(),
+                    publicIcd10 ? null : endpointOrganizationId,
+                    publicIcd10 ? null : request.organizationCode(),
                     "MASTER_DATA_BATCH_CREATED",
                     "MASTER_DATA_BATCH",
                     result.batchNo(),
                     "SUCCESS",
-                    "已创建" + request.category().displayName() + "同步批次；尚未开始取得数据",
+                    "已创建" + request.category().displayName()
+                            + (publicIcd10 ? "公共批次；端点选择仅作为调用与审计证据，尚未开始取得数据"
+                            : "同步批次；尚未开始取得数据"),
                     null
             ));
             return result;

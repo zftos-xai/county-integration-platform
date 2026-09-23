@@ -12,6 +12,10 @@ import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataBatchSummaryVO;
 import cn.zqkj.platform.masterdata.domain.batch.vo.MasterDataSyncOptionsVO;
 import cn.zqkj.platform.masterdata.domain.hospitaldirectory.vo.HospitalDirectorySyncResultVO;
 import cn.zqkj.platform.masterdata.domain.medicaldirectory.vo.MedicalDirectorySyncResultVO;
+import cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10SyncResultVO;
+import cn.zqkj.platform.masterdata.domain.icd10.dto.Icd10HisInvocationQuery;
+import cn.zqkj.platform.masterdata.domain.icd10.vo.Icd10HisInvocationPageVO;
+import cn.zqkj.platform.exchange.domain.vo.ExchangeRecordVO;
 import cn.zqkj.platform.masterdata.service.batch.MasterDataBatchService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -138,6 +142,65 @@ public class MasterDataBatchController {
     }
 
     /**
+     * 查询公共ICD10批次按西医和中医类别保存的分项运行结果。
+     *
+     * <p>公共目录没有机构归属；端点所属机构不会出现在此接口的结果中。</p>
+     *
+     * @param id 批次主键
+     * @param principal 当前登录用户
+     * @return 已落库的ICD10分项运行事实
+     */
+    @GetMapping("/{id}/icd10-results")
+    @PreAuthorize("hasAuthority('master-data:read')")
+    public ApiResponse<List<Icd10SyncResultVO>> findIcd10Results(
+            @PathVariable @Positive long id,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        return ApiResponse.success(service.findIcd10Results(id, List.copyOf(principal.organizationCodes())));
+    }
+
+    /**
+     * 查询公共ICD10批次的脱敏HIS调用事实。
+     *
+     * <p>需要 {@code master-data:read} 功能权限；只读取已保存的100-006/100-007调用摘要，
+     * 不返回完整SOAP报文、端点地址或认证信息，也不会再次调用HIS。</p>
+     *
+     * @param id 批次主键
+     * @param request 服务端校验的分页条件
+     * @param principal 当前登录用户
+     * @return 稳定分页的调用事实
+     */
+    @GetMapping("/{id}/his-invocations")
+    @PreAuthorize("hasAuthority('master-data:read')")
+    public ApiResponse<Icd10HisInvocationPageVO> findIcd10HisInvocations(
+            @PathVariable @Positive long id,
+            @Valid @ModelAttribute Icd10HisInvocationQuery request,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        return ApiResponse.success(service.findIcd10HisInvocations(
+                id, request, List.copyOf(principal.organizationCodes())));
+    }
+
+    /**
+     * 查询机构目录批次关联的通用HIS调用事实。
+     *
+     * <p>需要 {@code master-data:read} 功能权限；服务端先校验批次机构范围，再按批次号读取
+     * 已保存的100-003、100-004或100-005脱敏摘要，不调用HIS或返回原始报文。</p>
+     *
+     * @param id 批次主键
+     * @param principal 当前登录用户
+     * @return 最多一百条已保存调用事实
+     */
+    @GetMapping("/{id}/exchange-records")
+    @PreAuthorize("hasAuthority('master-data:read')")
+    public ApiResponse<List<ExchangeRecordVO>> findBatchHisInvocations(
+            @PathVariable @Positive long id,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        return ApiResponse.success(service.findBatchHisInvocations(id, List.copyOf(principal.organizationCodes())));
+    }
+
+    /**
      * 在入口确认目标机构范围后创建尚未执行的同步批次。
      *
      * <p>需要 {@code master-data:sync} 功能权限。</p>
@@ -153,7 +216,8 @@ public class MasterDataBatchController {
             @Valid @RequestBody StartMasterDataBatchRequest request,
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
-        accessGuard.requireAccess(request.organizationCode());
+        accessGuard.requireAccess(request.category() == cn.zqkj.platform.masterdata.domain.batch.model.MasterDataCategory.ICD10_DIAGNOSIS
+                ? request.sourceEndpointOrganizationCode() : request.organizationCode());
         return ApiResponse.success(service.start(request, principal.accessActor()));
     }
 
