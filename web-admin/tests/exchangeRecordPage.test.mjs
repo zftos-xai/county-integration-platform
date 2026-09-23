@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import test from 'node:test'
+
+const pagePath = new URL('../src/views/exchange/record/ExchangeRecordView.vue', import.meta.url)
+const routerPath = new URL('../src/router/index.ts', import.meta.url)
+const layoutPath = new URL('../src/layout/AppLayout.vue', import.meta.url)
+const externalSystemPath = new URL('../src/views/configuration/external-system/ExternalSystemView.vue', import.meta.url)
+const batchPanelPath = new URL('../src/views/master-data/batch/components/BatchExchangeRecordPanel.vue', import.meta.url)
+const tradeCatalogPath = new URL('../src/api/exchange/phisTradeCatalog.ts', import.meta.url)
+
+test('HIS调用记录正式页面只读查询并覆盖筛选、错误和详情状态', async () => {
+  const page = await readFile(pagePath, 'utf8')
+  assert.match(page, /listExchangeRecords/)
+  assert.match(page, /organizationCode/)
+  assert.match(page, /sourceRecordId/)
+  assert.match(page, /当前条件下没有调用记录/)
+  assert.match(page, /role="dialog"/)
+  assert.match(page, /交易目录筛选/)
+  assert.match(page, /交易码/)
+  assert.match(page, /<th>请求时间<\/th>/)
+  assert.match(page, /<th>接口名称<\/th><th>交易码<\/th>/)
+  assert.match(page, /data-label="请求时间"/)
+  assert.doesNotMatch(page, /<th>请求编号<\/th>/)
+  assert.match(page, /data-label="接口名称"/)
+  assert.match(page, /data-label="交易码"/)
+  assert.match(page, /\.exchange-table \.prototype-tag \{ display: inline;/)
+  assert.doesNotMatch(page, /exchange-panel action-column-table/)
+  assert.doesNotMatch(page, /HIS 调用记录只供核查|exchange-scope-note|仅展示当前账号获授权机构的数据/)
+  assert.match(page, /listPhisTrades/)
+  assert.match(page, /文档未收录/)
+  assert.match(page, /交易目录未登记/)
+  assert.doesNotMatch(page, /tradeName|医院三大目录查询|100-004.*医院三大目录查询/)
+  assert.match(page, /业务关联类型/)
+  assert.match(page, /同步批次/)
+  assert.match(page, /外部系统端点/)
+  assert.match(page, /HIS返回码（协议原值）/)
+  assert.match(page, /standard-list-toolbar__filters\) \{ display: contents; \}/)
+  assert.match(page, /\.exchange-record-page \{ display: grid; gap: 12px; container-type: inline-size; \}/)
+  assert.match(page, /@container \(max-width: 1100px\)/)
+  assert.match(page, /trade-combobox/)
+  assert.match(page, /class="trade-options"/)
+  assert.match(page, /filteredTrades/)
+  assert.doesNotMatch(page, /<datalist|list="phis-trade-options"/)
+  assert.doesNotMatch(page, /createExchangeRecord|updateExchangeRecord|deleteExchangeRecord|runMasterDataBatch/)
+})
+
+test('交易名称和文档状态只从PhisTrade后端目录读取', async () => {
+  const [page, catalog] = await Promise.all([readFile(pagePath, 'utf8'), readFile(tradeCatalogPath, 'utf8')])
+  assert.match(catalog, /'\/his\/trades'/)
+  assert.match(catalog, /documentedInPublicSpecification/)
+  assert.match(page, /tradeFor\(record\.interfaceCode\)/)
+  assert.match(page, /tradeFor\(selectedRecord\.interfaceCode\).*description/)
+  assert.match(page, /isTradeCatalogUnavailable/)
+  assert.doesNotMatch(page, /<input[^>]+v-model="requestId"|读取上限|最多读取条数/)
+})
+
+test('HIS调用记录具有正式路由、导航入口及调用上下文跳转', async () => {
+  const [router, layout, externalSystems, batchPanel] = await Promise.all([
+    readFile(routerPath, 'utf8'), readFile(layoutPath, 'utf8'), readFile(externalSystemPath, 'utf8'), readFile(batchPanelPath, 'utf8'),
+  ])
+  assert.match(router, /path:\s*'exchanges',[\s\S]{0,160}?component:\s*ExchangeRecordView[\s\S]{0,160}?requiredPermission:\s*'exchange:read'/)
+  assert.match(layout, /to:\s*'\/exchanges',[\s\S]{0,100}?label:\s*'HIS调用记录'/)
+  assert.match(externalSystems, /sourceRecordId:\s*`EXTERNAL_ENDPOINT:\$\{endpoint\.id\}`/)
+  assert.match(batchPanel, /sourceRecordId: props\.sourceRecordId/)
+  assert.match(batchPanel, /打开管理页/)
+})
