@@ -61,6 +61,8 @@
 
 批次详情首次读取因 `md_icd10_his_invocation.diagnosis_category` 存储值为 `0/1`，而 MyBatis 构造映射按枚举名称读取，导致接口报错。已在 `Icd10SyncMapper.xml` 的 HIS 调用查询中显式映射 `0→WESTERN`、`1→TRADITIONAL`，重启后详情正常回读 368 条调用记录。
 
+详情面板的旧接口时间值未携带时区后缀，前端曾按本地时间解析而比批次概要少 8 小时；已统一按服务端 UTC 值补齐时区后缀再格式化，批次概要、HIS 调用记录和审计记录现均显示一致的北京时间。
+
 ## 自动化复验
 
 - `./tools/verify.sh`：通过。
