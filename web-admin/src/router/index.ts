@@ -6,8 +6,6 @@ const DashboardView = () => import('@/views/dashboard/DashboardView.vue');
 const OrganizationsView = () =>
   import('@/views/system/organization/OrganizationView.vue');
 const PrototypeView = () => import('@/views/prototype/PrototypeView.vue');
-const Icd10DirectoryPrototypeView = () =>
-  import('@/views/prototype/Icd10DirectoryPrototypeView.vue');
 const DatabaseContractPrototypeView = () =>
   import('@/views/prototype/DatabaseContractPrototypeView.vue');
 const DatabaseContractMaintenanceView = () =>
@@ -25,10 +23,13 @@ const DictionariesView = () =>
 const ExternalSystemsView = () =>
   import('@/views/configuration/external-system/ExternalSystemView.vue');
 const AuditView = () => import('@/views/audit/management/AuditView.vue');
+const ExchangeRecordView = () => import('@/views/exchange/record/ExchangeRecordView.vue');
 const HospitalDirectoryView = () =>
   import('@/views/master-data/directory/HospitalDirectoryView.vue');
 const MedicalDirectoryView = () =>
   import('@/views/master-data/directory/MedicalDirectoryView.vue');
+const Icd10DirectoryView = () =>
+  import('@/views/master-data/directory/Icd10DirectoryView.vue');
 const MasterDataBatchView = () =>
   import('@/views/master-data/batch/MasterDataBatchView.vue');
 const MasterDataBatchDetailView = () =>
@@ -156,12 +157,11 @@ const router = createRouter({
         },
         {
           path: 'master-data/directory/icd10',
-          component: Icd10DirectoryPrototypeView,
+          component: Icd10DirectoryView,
           meta: {
             title: '数据目录',
             public: false,
             requiredPermission: 'master-data:read',
-            prototypeOnly: true,
             catalogScope: 'PUBLIC',
           },
         },
@@ -194,8 +194,12 @@ const router = createRouter({
         },
         {
           path: 'exchanges',
-          component: PlaceholderView,
-          meta: { title: '交换记录', public: false },
+          component: ExchangeRecordView,
+          meta: {
+            title: 'HIS调用记录',
+            public: false,
+            requiredPermission: 'exchange:read',
+          },
         },
         {
           path: 'exceptions',

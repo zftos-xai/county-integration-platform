@@ -15,14 +15,14 @@
 .directory-table tr.expanded td.directory-actions { background:#f1f8f6; }
 .directory-actions button { height:32px; padding:0 9px; border:1px solid #70ae9f; border-radius:5px; background:var(--surface); display:inline-flex; align-items:center; gap:3px; color:var(--accent); font-size:12px; cursor:pointer; }
 .directory-table .directory-detail-row>td { height:auto; padding:0 12px 12px; background:#f1f8f6; white-space:normal; overflow:visible; }
-.directory-detail { --detail-line:#b9cdd0; width:100%; overflow-x:auto; border:1px solid #d7e8e3; border-radius:6px; background:var(--surface); display:grid; grid-template-columns:max-content max-content; }
+.directory-detail { --detail-line:#b9cdd0; width:100%; border:1px solid #d7e8e3; border-radius:6px; background:var(--surface); display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr); }
 .directory-detail section { min-width:0; padding:7px 9px; }
 .directory-detail section+section { border-left:1px dashed var(--detail-line); }
 .directory-detail h3,.directory-detail h4 { margin:0 0 6px; color:var(--ink); font-size:12px; white-space:nowrap; }
 .directory-detail dl {
   margin:0;
   display:grid;
-  grid-template-columns:repeat(2,max-content);
+  grid-template-columns:repeat(2,minmax(0,1fr));
   gap:0;
   border-top:1px dashed var(--detail-line);
   border-left:1px dashed var(--detail-line);
@@ -32,12 +32,12 @@
 .directory-detail dl div {
   min-width:0;
   display:grid;
-  grid-template-columns:100px minmax(max-content,1fr);
+  grid-template-columns:minmax(82px,100px) minmax(0,1fr);
   border-right:1px dashed var(--detail-line);
   border-bottom:1px dashed var(--detail-line);
   background:var(--surface);
 }
-.directory-detail dt,.directory-detail dd { padding:4px 7px; line-height:1.25; white-space:nowrap; }
+.directory-detail dt,.directory-detail dd { min-width:0; padding:4px 7px; line-height:1.35; }
 .directory-detail dt {
   border-right:1px dashed var(--detail-line);
   background:#f6f8f9;
@@ -45,9 +45,13 @@
   font-size:11px;
   font-weight:600;
 }
-.directory-detail dd { min-width:0; margin:0; color:#3a515a; font-size:12px; }
+.directory-detail dd { margin:0; color:#3a515a; font-size:12px; overflow-wrap:anywhere; }
 .directory-detail--hospital section:first-child dl { grid-template-columns:max-content; }
 .directory-detail section:last-child dl { grid-template-columns:max-content; }
-.directory-detail section:last-child dl div { grid-template-columns:125px minmax(max-content,1fr); }
+.directory-detail section:last-child dl div { grid-template-columns:125px minmax(0,1fr); }
 .directory-detail:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 .directory-actions button:focus-visible,.batch-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media (max-width:1100px) {
+  .directory-detail { grid-template-columns:minmax(0,1fr); }
+  .directory-detail section+section { border-top:1px dashed var(--detail-line); border-left:0; }
+}

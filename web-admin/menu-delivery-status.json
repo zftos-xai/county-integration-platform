@@ -149,6 +149,19 @@
       "auditActions": ["/api/v1/audit", "/events"]
     },
     {
+      "id": "exchange-records",
+      "label": "HIS调用记录",
+      "route": "/exchanges",
+      "permission": "exchange:read",
+      "writeCapable": false,
+      "stage": "前端已接入",
+      "page": "web-admin/src/views/exchange/record/ExchangeRecordView.vue",
+      "api": "web-admin/src/api/exchange/exchangeRecord.ts",
+      "tests": ["web-admin/tests/exchangeRecordApiPaths.test.mjs", "web-admin/tests/exchangeRecordPage.test.mjs"],
+      "auditSource": "backend/src/main/java/cn/zqkj/platform/exchange/controller/ExchangeRecordController.java",
+      "auditActions": ["/api/v1/exchange-records"]
+    },
+    {
       "id": "external-systems",
       "label": "外部系统",
       "route": "/external-systems",

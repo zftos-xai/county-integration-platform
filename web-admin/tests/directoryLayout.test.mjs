@@ -108,11 +108,13 @@ test('两个目录的展开详情共用带单元格边界的字段栅格', async
   assert.match(styles, /\.directory-table th:last-child,\.directory-table td\.directory-actions\s*\{[^}]*position:sticky/s)
   assert.match(styles, /\.directory-detail--hospital section:first-child dl\s*\{ grid-template-columns:max-content; \}/)
   assert.match(hospital, /directory-detail directory-detail--hospital/)
-  assert.match(styles, /\.directory-detail dt,\.directory-detail dd\s*\{[^}]*white-space:nowrap;/s)
+  assert.match(styles, /\.directory-detail dt,\.directory-detail dd\s*\{[^}]*line-height:1\.35;/s)
   assert.doesNotMatch(styles, /\.directory-detail dl div\s*\{[^}]*min-height:/s)
-  assert.match(styles, /\.directory-detail\s*\{[^}]*width:100%;[^}]*overflow-x:auto;[^}]*grid-template-columns:max-content max-content;/s)
+  assert.match(styles, /\.directory-detail\s*\{[^}]*width:100%;[^}]*grid-template-columns:minmax\(0,1\.15fr\) minmax\(0,\.85fr\);/s)
+  assert.match(styles, /\.directory-detail dl\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/s)
+  assert.match(styles, /\.directory-detail dd\s*\{[^}]*overflow-wrap:anywhere/s)
   assert.match(styles, /\.directory-detail section:last-child dl\s*\{ grid-template-columns:max-content; \}/)
-  assert.doesNotMatch(styles, /@media\s*\(max-width:1100px\)[\s\S]*?\.directory-detail/)
+  assert.match(styles, /@media\s*\(max-width:1100px\)\s*\{[^}]*\.directory-detail\s*\{ grid-template-columns:minmax\(0,1fr\); \}/s)
 })
 
 test('数据目录页头和页签去除通用导航内边距造成的多余留白', async () => {

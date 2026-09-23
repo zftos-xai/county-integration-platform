@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Clock3,
   Database,
+  FileOutput,
   LogOut,
   Menu,
   ServerCog,
@@ -119,6 +120,12 @@ const navigationGroups: NavigationGroup[] = [
         permission: 'database-contract:read',
       },
       {
+        to: '/exchanges',
+        label: 'HIS调用记录',
+        icon: FileOutput,
+        permission: 'exchange:read',
+      },
+      {
         to: '/audit',
         label: '审计记录',
         icon: ClipboardList,
@@ -169,8 +176,8 @@ const pageContext = computed(() => {
       description: '维护业务接口、版本与运行边界',
     },
     '/exchanges': {
-      section: '业务接口处理',
-      description: '追踪跨机构交换和目标端结果',
+      section: '运行处理',
+      description: '按机构核查已发生的HIS调用终态和受控摘要',
     },
     '/exceptions': {
       section: '运行处理',

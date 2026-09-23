@@ -18,6 +18,7 @@ import {
   cancelMasterDataBatch,
   getMasterDataBatch,
   getHospitalDirectorySyncResults,
+  getIcd10SyncResults,
   getMedicalDirectorySyncResults,
   runMasterDataBatch,
   listMasterDataBatches,
@@ -32,6 +33,7 @@ import type {
   MasterDataCategory,
   MasterDataSyncOptions,
   HospitalDirectorySyncResult,
+  Icd10SyncResult,
   MedicalDirectorySyncResult,
   StartMasterDataBatchInput,
 } from '@/api/master-data/batch';
@@ -40,6 +42,7 @@ import { authState, hasPermission } from '@/store/modules/auth';
 import { ApiClientError } from '@/utils/request';
 import StartBatchDrawer from './components/StartBatchDrawer.vue';
 import DirectorySyncResultPanel from './components/DirectorySyncResultPanel.vue';
+import Icd10SyncResultPanel from './components/Icd10SyncResultPanel.vue';
 import MedicalDirectorySyncResultPanel from './components/MedicalDirectorySyncResultPanel.vue';
 import { formatBatchDuration, formatBatchTime as formatTime } from './batchTime';
 import {
@@ -66,6 +69,7 @@ const detailError = ref<ApiClientError | null>(null);
 const isDetailLoading = ref(false);
 const directoryResults = ref<HospitalDirectorySyncResult[]>([]);
 const medicalDirectoryResults = ref<MedicalDirectorySyncResult[]>([]);
+const icd10Results = ref<Icd10SyncResult[]>([]);
 const isDirectoryResultsLoading = ref(false);
 const isAdvancing = ref(false);
 const confirmCancelId = ref<number | null>(null);
@@ -286,7 +290,7 @@ function openCreator() {
   }
   const defaultBusiness = syncOptions.value.businesses[0];
   if (defaultBusiness) form.value.category = defaultBusiness.category;
-  form.value.mode = form.value.category === 'MEDICAL_DIRECTORY' ? 'TIME_RANGE' : 'NOT_APPLICABLE';
+  form.value.mode = form.value.category === 'MEDICAL_DIRECTORY' || form.value.category === 'ICD10_DIAGNOSIS' ? 'TIME_RANGE' : 'NOT_APPLICABLE';
   formError.value = '';
   createError.value = null;
   lastStartInput.value = null;
@@ -423,17 +427,19 @@ async function recoverCompletedBatch(
   }
 }
 
-/** 打开该机构当前有效目录；目录页面是同步完成后实际使用数据的入口。 */
+/** 打开当前批次对应的有效目录；公共ICD-10目录不附加机构筛选。 */
 async function openCurrentDirectory() {
   const organizationCode = selected.value?.organizationCode;
-  const directoryPath = selected.value?.category === 'MEDICAL_DIRECTORY'
-    ? '/master-data/directory/medical'
-    : '/master-data/directory';
+  const directoryPath = selected.value?.category === 'ICD10_DIAGNOSIS'
+    ? '/master-data/directory/icd10'
+    : selected.value?.category === 'MEDICAL_DIRECTORY'
+      ? '/master-data/directory/medical'
+      : '/master-data/directory';
   selected.value = null;
   actionError.value = null;
   await router.push({
     path: directoryPath,
-    query: organizationCode ? { organization: organizationCode } : undefined,
+    query: organizationCode ? { organizationCode } : undefined,
   });
 }
 
@@ -461,6 +467,7 @@ async function openDetail(item: MasterDataBatchSummary) {
   isDirectoryResultsLoading.value = true;
   directoryResults.value = [];
   medicalDirectoryResults.value = [];
+  icd10Results.value = [];
   try {
     const latest = await getMasterDataBatch(item.id, controller.signal);
     if (!mounted || controller.signal.aborted || selected.value?.id !== item.id)
@@ -468,8 +475,10 @@ async function openDetail(item: MasterDataBatchSummary) {
     selected.value = latest;
     if (latest.category === 'HOSPITAL_DIRECTORY') {
       directoryResults.value = await getHospitalDirectorySyncResults(item.id, controller.signal);
-    } else {
+    } else if (latest.category === 'MEDICAL_DIRECTORY') {
       medicalDirectoryResults.value = await getMedicalDirectorySyncResults(item.id, controller.signal);
+    } else {
+      icd10Results.value = await getIcd10SyncResults(item.id, controller.signal);
     }
     if (item.status === 'FETCHING' && latest.status !== 'FETCHING' &&
         !controller.signal.aborted && selected.value?.id === item.id) {
@@ -650,12 +659,18 @@ function resultCountLabel(item: MasterDataBatchSummary) {
 
 /** @param item 同步批次 @return 本次实际处理的目录范围 */
 function batchScopeDescription(item: MasterDataBatchSummary) {
-  return item.category === 'MEDICAL_DIRECTORY' ? '中药、西药、诊疗、耗材' : '科室、医生、病区、床位';
+  return item.category === 'ICD10_DIAGNOSIS'
+    ? '西医诊断、中医诊断'
+    : item.category === 'MEDICAL_DIRECTORY'
+      ? '中药、西药、诊疗、耗材'
+      : '科室、医生、病区、床位';
 }
 
 /** @param item 同步批次 @return 更新策略的准确业务说明 */
 function currentDataExplanation(item: MasterDataBatchSummary) {
-  return item.category === 'MEDICAL_DIRECTORY'
+  return item.category === 'ICD10_DIAGNOSIS'
+    ? '系统分别核对100-007声明数量并分页取得100-006西医、中医诊断数据；完整通过校验的类别直接更新平台公共目录。来源时间范围不证明为全量快照，因此本次不会按未返回数据标记无效。'
+    : item.category === 'MEDICAL_DIRECTORY'
     ? '系统先核对100-005声明数量，再分页取得100-004数据；完整通过校验的类型直接更新当前目录。来源时间范围未证明为全量快照，因此本次不会按未返回数据标记无效。'
     : '本次读取科室、病区、床位和人员目录；完整返回且通过校验的部分已直接更新为当前数据。';
 }
@@ -985,15 +1000,20 @@ onBeforeUnmount(() => {
               :loading="isDirectoryResultsLoading"
             />
             <MedicalDirectorySyncResultPanel
-              v-else
+              v-else-if="selected.category === 'MEDICAL_DIRECTORY'"
               :results="medicalDirectoryResults"
+              :loading="isDirectoryResultsLoading"
+            />
+            <Icd10SyncResultPanel
+              v-else
+              :results="icd10Results"
               :loading="isDirectoryResultsLoading"
             />
             <section class="batch-detail-section batch-execution-section">
               <h3>本次同步</h3>
               <dl class="batch-execution-facts">
                 <div>
-                  <dt>同步机构</dt>
+                  <dt>{{ selected.scopeType === 'PLATFORM' ? '目录范围' : '同步机构' }}</dt>
                   <dd>{{ scopeLabel(selected) }}</dd>
                 </div>
                 <div>

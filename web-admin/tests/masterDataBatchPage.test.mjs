@@ -22,6 +22,18 @@ const medicalResultPanelPath = new URL(
   '../src/views/master-data/batch/components/MedicalDirectorySyncResultPanel.vue',
   import.meta.url,
 );
+const icd10InvocationPanelPath = new URL(
+  '../src/views/master-data/batch/components/Icd10HisInvocationPanel.vue',
+  import.meta.url,
+);
+const auditPanelPath = new URL(
+  '../src/views/master-data/batch/components/BatchAuditPanel.vue',
+  import.meta.url,
+);
+const exchangeRecordPanelPath = new URL(
+  '../src/views/master-data/batch/components/BatchExchangeRecordPanel.vue',
+  import.meta.url,
+);
 const batchTimePath = new URL(
   '../src/views/master-data/batch/batchTime.ts',
   import.meta.url,
@@ -54,6 +66,36 @@ test('批次字段表使用独立的虚线栅格，不继承全局详情表留�
   assert.match(panel, /class="batch-detail-grid result-card-fields"/);
   assert.match(styles, /padding: 4px 7px;/);
   assert.doesNotMatch(styles, /(^|\n)\.detail-grid\s*\{/);
+});
+
+test('ICD10详情将同步结果、脱敏HIS调用事实和管理审计分区展示', async () => {
+  const [detail, invocationPanel, auditPanel] = await Promise.all([
+    readFile(detailPath, 'utf8'),
+    readFile(icd10InvocationPanelPath, 'utf8'),
+    readFile(auditPanelPath, 'utf8'),
+  ]);
+  assert.match(detail, /getIcd10HisInvocations/);
+  assert.match(detail, /<Icd10HisInvocationPanel/);
+  assert.match(detail, /listManagementAuditEvents/);
+  assert.match(detail, /<BatchAuditPanel/);
+  assert.match(detail, /hasPermission\('audit:read'\)/);
+  assert.match(invocationPanel, /HIS 请求记录/);
+  assert.match(invocationPanel, /不保存或显示完整 SOAP 报文、端点和凭证/);
+  assert.match(auditPanel, /管理审计记录/);
+  assert.match(auditPanel, /不包含 HIS 报文/);
+});
+
+test('机构目录批次读取通用交换事实，且读取失败不覆盖同步结果', async () => {
+  const [detail, panel] = await Promise.all([
+    readFile(detailPath, 'utf8'),
+    readFile(exchangeRecordPanelPath, 'utf8'),
+  ]);
+  assert.match(detail, /getBatchExchangeRecords/);
+  assert.match(detail, /void loadExchangeRecords\(summary\)/);
+  assert.match(detail, /<BatchExchangeRecordPanel/);
+  assert.match(detail, /exchangeRecordError/);
+  assert.match(panel, /HIS 请求记录/);
+  assert.match(panel, /不保存或显示完整 SOAP 报文、端点和凭证/);
 });
 
 test('医疗目录分项结果使用完整业务标签并显示批次起止与运行时长', async () => {
@@ -145,7 +187,7 @@ test('统一入口保留全量选择，并只读预览服务端将冻结的时�
   assert.match(source, /:disabled="isSaving"/);
   assert.doesNotMatch(source, /fullSyncAvailable|fullSyncEnvironments/);
   assert.match(page, /@click="openCreator\(\)"/);
-  assert.match(page, /form\.value\.mode = form\.value\.category === 'MEDICAL_DIRECTORY' \? 'TIME_RANGE' : 'NOT_APPLICABLE'/);
+  assert.match(page, /form\.value\.mode = form\.value\.category === 'MEDICAL_DIRECTORY' \|\| form\.value\.category === 'ICD10_DIAGNOSIS' \? 'TIME_RANGE' : 'NOT_APPLICABLE'/);
   assert.doesNotMatch(page, /发起医疗目录全量同步|openCreator\('FULL'\)/);
   assert.match(source, /\.batch-start-form \.batch-mode-option \{[^}]*display: flex; align-items: center;/);
   assert.match(source, /\.batch-start-form input\[type="datetime-local"\]/);
@@ -156,7 +198,7 @@ test('同步弹窗以简明分区组织字段，说明紧邻对应控件', async
   const source = await readFile(drawerPath, 'utf8');
 
   assert.match(source, /class="batch-start-form"/);
-  assert.match(source, /<span>HIS 来源机构<\/span>/);
+  assert.match(source, /form\.category === 'ICD10_DIAGNOSIS' \? 'HIS 调用端点机构' : 'HIS 来源机构'/);
   assert.match(source, /class="batch-setup-grid"/);
   assert.match(source, /class="batch-range-grid"[\s\S]*?<small v-else>数量核对与目录查询使用同一范围/);
   assert.doesNotMatch(source, /work-form batch-start-form|batch-source-heading|batch-settings-heading/);

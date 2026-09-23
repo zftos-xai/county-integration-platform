@@ -19,6 +19,7 @@ export type MasterDataBatchForm = {
 export const masterDataCategoryLabels: Record<MasterDataCategory, string> = {
   HOSPITAL_DIRECTORY: '医院综合目录',
   MEDICAL_DIRECTORY: '药品、诊疗和耗材目录',
+  ICD10_DIAGNOSIS: 'ICD-10 诊断目录',
 }
 
 /** 创建未填写的同步批次表单。 */
@@ -52,17 +53,20 @@ export function previewFullSyncRange(now: Date) {
 /** 校验发起同步前必须由用户明确的业务范围。 */
 export function validateMasterDataBatchForm(form: MasterDataBatchForm) {
   if (!form.organizationCode) return '请选择同步机构'
-  if (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'NOT_APPLICABLE') {
+  if ((form.category === 'MEDICAL_DIRECTORY' || form.category === 'ICD10_DIAGNOSIS') && form.mode === 'NOT_APPLICABLE') {
     return '请选择全量同步或指定时间范围'
   }
-  if (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' && (!form.rangeStart || !form.rangeEnd)) {
+  if (form.category === 'ICD10_DIAGNOSIS' && form.mode !== 'TIME_RANGE') {
+    return 'ICD-10 诊断目录必须指定 HIS 来源查询时间范围'
+  }
+  if ((form.category === 'MEDICAL_DIRECTORY' || form.category === 'ICD10_DIAGNOSIS') && form.mode === 'TIME_RANGE' && (!form.rangeStart || !form.rangeEnd)) {
     return '请填写 HIS 要求的来源查询开始和结束时间'
   }
-  if (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' &&
+  if ((form.category === 'MEDICAL_DIRECTORY' || form.category === 'ICD10_DIAGNOSIS') && form.mode === 'TIME_RANGE' &&
       (!Number.isFinite(Date.parse(`${form.rangeStart}+08:00`)) || !Number.isFinite(Date.parse(`${form.rangeEnd}+08:00`)))) {
     return '请填写有效的来源查询时间'
   }
-  if (form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' && new Date(form.rangeEnd) < new Date(form.rangeStart)) {
+  if ((form.category === 'MEDICAL_DIRECTORY' || form.category === 'ICD10_DIAGNOSIS') && form.mode === 'TIME_RANGE' && new Date(form.rangeEnd) < new Date(form.rangeStart)) {
     return '来源查询结束时间不能早于开始时间'
   }
   return null
@@ -80,11 +84,12 @@ export function generateBatchRequestKey() {
 export function toStartMasterDataBatchInput(form: MasterDataBatchForm): StartMasterDataBatchInput {
   return {
     requestKey: generateBatchRequestKey(),
-    organizationCode: form.organizationCode,
+    organizationCode: form.category === 'ICD10_DIAGNOSIS' ? null : form.organizationCode,
+    sourceEndpointOrganizationCode: form.category === 'ICD10_DIAGNOSIS' ? form.organizationCode : null,
     environment: form.environment,
     category: form.category,
-    mode: form.category === 'MEDICAL_DIRECTORY' ? form.mode : 'NOT_APPLICABLE',
-    rangeStart: form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' && form.rangeStart ? `${form.rangeStart}+08:00` : null,
-    rangeEnd: form.category === 'MEDICAL_DIRECTORY' && form.mode === 'TIME_RANGE' && form.rangeEnd ? `${form.rangeEnd}+08:00` : null,
+    mode: form.category === 'MEDICAL_DIRECTORY' || form.category === 'ICD10_DIAGNOSIS' ? form.mode : 'NOT_APPLICABLE',
+    rangeStart: (form.category === 'MEDICAL_DIRECTORY' || form.category === 'ICD10_DIAGNOSIS') && form.mode === 'TIME_RANGE' && form.rangeStart ? `${form.rangeStart}+08:00` : null,
+    rangeEnd: (form.category === 'MEDICAL_DIRECTORY' || form.category === 'ICD10_DIAGNOSIS') && form.mode === 'TIME_RANGE' && form.rangeEnd ? `${form.rangeEnd}+08:00` : null,
   }
 }

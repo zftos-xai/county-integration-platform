@@ -3,12 +3,18 @@
 import { AlertCircle, CheckCircle2, RefreshCw } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { getHospitalDirectorySyncResults, getMasterDataBatch, getMedicalDirectorySyncResults, recoverMasterDataBatch } from '@/api/master-data/batch'
-import type { HospitalDirectorySyncResult, MasterDataBatchSummary, MedicalDirectorySyncResult } from '@/api/master-data/batch'
+import { getBatchExchangeRecords, getHospitalDirectorySyncResults, getIcd10HisInvocations, getIcd10SyncResults, getMasterDataBatch, getMedicalDirectorySyncResults, recoverMasterDataBatch } from '@/api/master-data/batch'
+import type { BatchExchangeRecord, HospitalDirectorySyncResult, Icd10HisInvocationPage, Icd10SyncResult, MasterDataBatchSummary, MedicalDirectorySyncResult } from '@/api/master-data/batch'
+import { listManagementAuditEvents } from '@/api/system/audit'
+import type { ManagementAuditEvent } from '@/api/system/audit'
 import { ApiClientError } from '@/utils/request'
 import { hasPermission } from '@/store/modules/auth'
 import DirectorySyncResultPanel from './components/DirectorySyncResultPanel.vue'
+import Icd10SyncResultPanel from './components/Icd10SyncResultPanel.vue'
+import Icd10HisInvocationPanel from './components/Icd10HisInvocationPanel.vue'
+import BatchExchangeRecordPanel from './components/BatchExchangeRecordPanel.vue'
 import MedicalDirectorySyncResultPanel from './components/MedicalDirectorySyncResultPanel.vue'
+import BatchAuditPanel from './components/BatchAuditPanel.vue'
 import { formatBatchDuration, formatBatchTime } from './batchTime'
 
 const route = useRoute()
@@ -17,6 +23,15 @@ const batch = ref<MasterDataBatchSummary | null>(null)
 const loading = ref(false)
 const directoryResults = ref<HospitalDirectorySyncResult[]>([])
 const medicalDirectoryResults = ref<MedicalDirectorySyncResult[]>([])
+const icd10Results = ref<Icd10SyncResult[]>([])
+const hisInvocations = ref<Icd10HisInvocationPage | null>(null)
+const hisInvocationLoading = ref(false)
+const exchangeRecords = ref<BatchExchangeRecord[]>([])
+const exchangeRecordLoading = ref(false)
+const exchangeRecordError = ref('')
+const auditEvents = ref<ManagementAuditEvent[]>([])
+const auditLoading = ref(false)
+const auditError = ref('')
 const error = ref('')
 const recovering = ref(false)
 const confirmedRecovery = ref(false)
@@ -25,20 +40,25 @@ const currentTime = ref(Date.now())
 let durationTimer: ReturnType<typeof setInterval> | null = null
 const canRecover = computed(() => hasPermission('master-data:sync') &&
   (batch.value?.status === 'FETCHING' || batch.value?.status === 'RESULT_UNKNOWN'))
+const canReadAudit = computed(() => hasPermission('audit:read'))
 
-/** 返回当前批次所属机构的数据目录，避免多机构用户跳转后查看了其他机构。 */
+/** 返回当前批次对应的数据目录；公共ICD-10目录不附加机构筛选。 */
 const directoryPath = computed(() => ({
-  path: batch.value?.category === 'MEDICAL_DIRECTORY'
-    ? '/master-data/directory/medical'
-    : '/master-data/directory',
+  path: batch.value?.category === 'ICD10_DIAGNOSIS'
+    ? '/master-data/directory/icd10'
+    : batch.value?.category === 'MEDICAL_DIRECTORY'
+      ? '/master-data/directory/medical'
+      : '/master-data/directory',
   query: batch.value?.organizationCode ? { organizationCode: batch.value.organizationCode } : {},
 }))
 
 /** 当前批次面向用户的同步数据范围。 */
 const dataScope = computed(() =>
-  batch.value?.category === 'MEDICAL_DIRECTORY'
-    ? '中药、西药、诊疗、耗材'
-    : '科室、医生、病区、床位',
+  batch.value?.category === 'ICD10_DIAGNOSIS'
+    ? '西医诊断、中医诊断'
+    : batch.value?.category === 'MEDICAL_DIRECTORY'
+      ? '中药、西药、诊疗、耗材'
+      : '科室、医生、病区、床位',
 )
 
 /** 读取一次同步记录；查看不会再次调用HIS。 */
@@ -53,13 +73,74 @@ async function load() {
     if (summary.category === 'MEDICAL_DIRECTORY') {
       medicalDirectoryResults.value = await getMedicalDirectorySyncResults(batchId)
       directoryResults.value = []
+      icd10Results.value = []
+      hisInvocations.value = null
+    } else if (summary.category === 'ICD10_DIAGNOSIS') {
+      const [results, invocations] = await Promise.all([
+        getIcd10SyncResults(batchId),
+        getIcd10HisInvocations(batchId),
+      ])
+      icd10Results.value = results
+      hisInvocations.value = invocations
+      directoryResults.value = []
+      medicalDirectoryResults.value = []
+      exchangeRecords.value = []
     } else {
       directoryResults.value = await getHospitalDirectorySyncResults(batchId)
       medicalDirectoryResults.value = []
+      icd10Results.value = []
+      hisInvocations.value = null
     }
+    void loadExchangeRecords(summary)
+    void loadAuditEvents(summary)
   }
   catch (caught) { error.value = caught instanceof ApiClientError ? caught.message : '无法读取同步记录' }
   finally { loading.value = false }
+}
+
+/** 读取机构目录批次的通用交换事实；失败不能覆盖已读取的同步结果。 */
+async function loadExchangeRecords(summary: MasterDataBatchSummary) {
+  exchangeRecords.value = []
+  exchangeRecordError.value = ''
+  if (summary.category === 'ICD10_DIAGNOSIS') return
+  exchangeRecordLoading.value = true
+  try {
+    exchangeRecords.value = await getBatchExchangeRecords(summary.id)
+  } catch (caught) {
+    exchangeRecordError.value = caught instanceof ApiClientError ? caught.message : '无法读取HIS调用记录'
+  } finally {
+    exchangeRecordLoading.value = false
+  }
+}
+
+/** 按批次号读取独立的管理审计；无权限或读取失败不能覆盖同步结果。 */
+async function loadAuditEvents(summary: MasterDataBatchSummary) {
+  auditEvents.value = []
+  auditError.value = ''
+  if (!canReadAudit.value) return
+  auditLoading.value = true
+  try {
+    auditEvents.value = await listManagementAuditEvents({
+      targetType: 'MASTER_DATA_BATCH', targetId: summary.batchNo, limit: 100,
+    })
+  } catch (caught) {
+    auditError.value = caught instanceof ApiClientError ? caught.message : '无法读取管理审计记录'
+  } finally {
+    auditLoading.value = false
+  }
+}
+
+/** 翻页读取已保存的ICD-10调用事实；查看不会重发HIS请求。 */
+async function changeHisInvocationPage(page: number) {
+  if (!batch.value || batch.value.category !== 'ICD10_DIAGNOSIS' || hisInvocationLoading.value) return
+  hisInvocationLoading.value = true
+  try {
+    hisInvocations.value = await getIcd10HisInvocations(batch.value.id, page)
+  } catch (caught) {
+    error.value = caught instanceof ApiClientError ? caught.message : '无法读取HIS调用记录'
+  } finally {
+    hisInvocationLoading.value = false
+  }
 }
 
 /** 明确确认后结束当前版本的中断批次；请求结果未知时仅提示回读，不能自动重试。 */
@@ -115,6 +196,22 @@ function nextStep(current: MasterDataBatchSummary) {
   return '请先处理失败原因；不要重跑当前记录，处理完成后再新建同步。'
 }
 
+/** @param current 同步记录 @return 与目录范围相符的页面标题 */
+function categoryLabel(current: MasterDataBatchSummary) {
+  return current.category === 'ICD10_DIAGNOSIS'
+    ? 'ICD-10诊断目录'
+    : current.category === 'MEDICAL_DIRECTORY'
+      ? '医疗目录'
+      : '医院综合目录'
+}
+
+/** @param current 同步记录 @return 不将端点机构误表达为公共目录归属的范围名称 */
+function scopeLabel(current: MasterDataBatchSummary) {
+  return current.scopeType === 'PLATFORM'
+    ? '平台公共目录'
+    : (current.organizationName ?? current.organizationCode ?? '机构未识别')
+}
+
 onMounted(() => {
   durationTimer = setInterval(() => { currentTime.value = Date.now() }, 1000)
   void load()
@@ -128,8 +225,8 @@ onBeforeUnmount(() => {
   <section class="sync-record-page">
     <header class="record-heading">
       <div class="record-identity">
-        <small>{{ batch?.category === 'MEDICAL_DIRECTORY' ? '医疗目录' : '医院综合目录' }}</small>
-        <p v-if="batch">{{ batch.organizationName ?? batch.organizationCode }} · {{ batch.environment === 'PRODUCTION' ? '生产环境' : batch.environment === 'TEST' ? '测试环境' : '开发环境' }} · 批次号 {{ batch.batchNo }}</p>
+        <small>{{ batch ? categoryLabel(batch) : '同步记录' }}</small>
+        <p v-if="batch">{{ scopeLabel(batch) }} · {{ batch.environment === 'PRODUCTION' ? '生产环境' : batch.environment === 'TEST' ? '测试环境' : '开发环境' }} · 批次号 {{ batch.batchNo }}</p>
         <p v-else>读取已落库的同步运行事实；查看不会再次调用 HIS。</p>
       </div>
       <div class="record-heading-actions">
@@ -155,13 +252,13 @@ onBeforeUnmount(() => {
       <section v-else-if="batch.status === 'RESULT_UNKNOWN'" class="record-alert warning"><AlertCircle :size="20" /><div><strong>结果待确认</strong><span>{{ outcomeSummary(batch) }}</span></div></section>
       <section class="record-card">
         <h3>本次调用</h3>
-        <div class="record-overview" :class="{ 'record-overview--single': batch.category !== 'MEDICAL_DIRECTORY' }">
+        <div class="record-overview" :class="{ 'record-overview--single': batch.category !== 'MEDICAL_DIRECTORY' && batch.category !== 'ICD10_DIAGNOSIS' }">
           <div class="batch-detail-grid-scroll" role="region" aria-label="本次同步信息" tabindex="0">
-            <dl class="batch-detail-grid record-flow"><div><dt>同步机构</dt><dd>{{ batch.organizationName ?? batch.organizationCode }}</dd></div><div><dt>数据范围</dt><dd>{{ dataScope }}</dd></div><div><dt>HIS 交易</dt><dd>{{ batch.dataTradeCode }}{{ batch.countTradeCode ? `、${batch.countTradeCode}` : '' }}</dd></div><div><dt>结果</dt><dd>{{ statusLabel(batch) }}</dd></div><div><dt>开始时间</dt><dd>{{ batch.startedAt ? formatBatchTime(batch.startedAt) : '尚未开始' }}</dd></div><div><dt>结束时间</dt><dd>{{ batch.finishedAt ? formatBatchTime(batch.finishedAt) : batch.startedAt ? '进行中' : '—' }}</dd></div><div><dt>{{ batch.finishedAt ? '总耗时' : '已运行' }}</dt><dd>{{ formatBatchDuration(batch, currentTime) }}</dd></div></dl>
+            <dl class="batch-detail-grid record-flow"><div><dt>{{ batch.scopeType === 'PLATFORM' ? '目录范围' : '同步机构' }}</dt><dd>{{ scopeLabel(batch) }}</dd></div><div><dt>数据范围</dt><dd>{{ dataScope }}</dd></div><div><dt>HIS 交易</dt><dd>{{ batch.dataTradeCode }}{{ batch.countTradeCode ? `、${batch.countTradeCode}` : '' }}</dd></div><div><dt>结果</dt><dd>{{ statusLabel(batch) }}</dd></div><div><dt>开始时间</dt><dd>{{ batch.startedAt ? formatBatchTime(batch.startedAt) : '尚未开始' }}</dd></div><div><dt>结束时间</dt><dd>{{ batch.finishedAt ? formatBatchTime(batch.finishedAt) : batch.startedAt ? '进行中' : '—' }}</dd></div><div><dt>{{ batch.finishedAt ? '总耗时' : '已运行' }}</dt><dd>{{ formatBatchDuration(batch, currentTime) }}</dd></div></dl>
           </div>
-          <div v-if="batch.category === 'MEDICAL_DIRECTORY'" class="batch-detail-grid-scroll" role="region" aria-label="查询范围" tabindex="0">
+          <div v-if="batch.category === 'MEDICAL_DIRECTORY' || batch.category === 'ICD10_DIAGNOSIS'" class="batch-detail-grid-scroll" role="region" aria-label="查询范围" tabindex="0">
             <dl class="batch-detail-grid record-window">
-              <div><dt>同步方式</dt><dd>{{ batch.mode === 'FULL' ? '全量同步' : '指定时间范围' }}</dd></div>
+              <div><dt>同步方式</dt><dd>{{ batch.category === 'ICD10_DIAGNOSIS' ? '指定时间范围' : batch.mode === 'FULL' ? '全量同步' : '指定时间范围' }}</dd></div>
               <div><dt>实际查询</dt><dd>{{ batch.rangeStart ?? '—' }} 至 {{ batch.rangeEnd ?? '—' }}</dd></div>
               <div v-if="batch.mode === 'FULL' && batch.fullRuleEvidence"><dt>来源规则依据</dt><dd>{{ batch.fullRuleEvidence }}</dd></div>
             </dl>
@@ -171,13 +268,22 @@ onBeforeUnmount(() => {
       <section v-if="batch.counts.returned > 0 || batch.status === 'COMPLETED'" class="record-card">
         <h3>取得与对账结果</h3>
         <div class="batch-detail-grid-scroll record-counts-wrap" role="region" aria-label="取得与对账统计" tabindex="0">
-          <dl v-if="batch.category === 'MEDICAL_DIRECTORY'" class="batch-detail-grid record-counts"><div><dt>来源声明行数</dt><dd>{{ batch.counts.declared ?? '未确认' }}</dd></div><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>自动拦截数</dt><dd>{{ batch.counts.invalid + batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
+          <dl v-if="batch.category === 'MEDICAL_DIRECTORY' || batch.category === 'ICD10_DIAGNOSIS'" class="batch-detail-grid record-counts"><div><dt>来源声明行数</dt><dd>{{ batch.counts.declared ?? '未确认' }}</dd></div><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>自动拦截数</dt><dd>{{ batch.counts.invalid + batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
           <dl v-else class="batch-detail-grid record-counts"><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>展开重复</dt><dd>{{ batch.counts.duplicate }} 行</dd></div><div><dt>丢弃的无效关系</dt><dd>{{ batch.counts.invalid }} 条</dd></div><div><dt>主数据冲突</dt><dd>{{ batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
         </div>
         <p v-if="batch.status === 'COMPLETED'" class="record-directory-link"><RouterLink :to="directoryPath">查看当前数据目录</RouterLink></p>
       </section>
       <MedicalDirectorySyncResultPanel v-if="batch.category === 'MEDICAL_DIRECTORY'" :results="medicalDirectoryResults" :loading="loading" />
-      <DirectorySyncResultPanel v-else :results="directoryResults" :loading="loading" />
+      <BatchExchangeRecordPanel v-if="batch.category === 'MEDICAL_DIRECTORY'" :records="exchangeRecords" :loading="exchangeRecordLoading" :error="exchangeRecordError" :organization-code="batch.organizationCode ?? ''" :source-record-id="batch.batchNo" />
+      <template v-else-if="batch.category === 'ICD10_DIAGNOSIS'">
+        <Icd10SyncResultPanel :results="icd10Results" :loading="loading" />
+        <Icd10HisInvocationPanel :page="hisInvocations" :loading="loading || hisInvocationLoading" @change-page="changeHisInvocationPage" />
+      </template>
+      <template v-else>
+        <DirectorySyncResultPanel :results="directoryResults" :loading="loading" />
+        <BatchExchangeRecordPanel :records="exchangeRecords" :loading="exchangeRecordLoading" :error="exchangeRecordError" :organization-code="batch.organizationCode ?? ''" :source-record-id="batch.batchNo" />
+      </template>
+      <BatchAuditPanel :events="auditEvents" :loading="auditLoading" :error="auditError" :permitted="canReadAudit" />
     </template>
   </section>
 </template>

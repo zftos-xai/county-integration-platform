@@ -92,7 +92,7 @@ watch(
 watch(
   () => form.value.category,
   (category) => {
-    form.value.mode = category === 'MEDICAL_DIRECTORY' ? 'TIME_RANGE' : 'NOT_APPLICABLE'
+    form.value.mode = category === 'MEDICAL_DIRECTORY' || category === 'ICD10_DIAGNOSIS' ? 'TIME_RANGE' : 'NOT_APPLICABLE'
     form.value.rangeStart = ''
     form.value.rangeEnd = ''
   },
@@ -184,7 +184,7 @@ watch(
         >
           <section class="batch-form-section" aria-label="HIS 数据来源">
             <label class="batch-form-field">
-              <span>HIS 来源机构</span>
+              <span>{{ form.category === 'ICD10_DIAGNOSIS' ? 'HIS 调用端点机构' : 'HIS 来源机构' }}</span>
               <select v-model="form.organizationCode" required>
                 <option value="" disabled>请选择机构</option>
                 <option
@@ -195,6 +195,7 @@ watch(
                   {{ item.organizationName }}
                 </option>
               </select>
+              <small v-if="form.category === 'ICD10_DIAGNOSIS'">仅用于授权和调用端点，不会成为 ICD-10 公共目录的机构归属。</small>
             </label>
           </section>
 
@@ -231,7 +232,7 @@ watch(
             <fieldset v-if="selectedBusiness?.requiresTimeRange" class="batch-mode-field">
               <legend>本次同步方式</legend>
               <div class="batch-mode-options">
-                <label class="batch-mode-option" :class="{ 'is-selected': form.mode === 'FULL' }">
+                <label v-if="form.category !== 'ICD10_DIAGNOSIS'" class="batch-mode-option" :class="{ 'is-selected': form.mode === 'FULL' }">
                   <input v-model="form.mode" type="radio" value="FULL" />
                   <span>全量同步</span>
                 </label>
@@ -248,6 +249,7 @@ watch(
                 <label class="batch-form-field"><span>结束时间</span><input v-if="form.mode === 'FULL'" :value="fullRangePreview.end" type="datetime-local" readonly /><input v-else v-model="form.rangeEnd" type="datetime-local" required /></label>
               </div>
               <small v-if="form.mode === 'FULL'">按创建时刻向前 20 年查询；以上为预览，实际范围以创建后的批次记录为准。更早或无时间记录不在范围内。</small>
+              <small v-else-if="form.category === 'ICD10_DIAGNOSIS'">ICD-10 不使用来源未提供的版本条件；西医和中医类别会分别完成数量核对与分页取得。</small>
               <small v-else>数量核对与目录查询使用同一范围，请按 HIS 提供方确认的口径填写。</small>
             </div>
           </section>

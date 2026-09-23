@@ -1,7 +1,7 @@
 <!-- 外部系统管理页面：使用真实API维护系统身份及按环境、机构隔离的接口配置。 -->
 <script setup lang="ts">
 import {
-  AlertCircle, Circle, KeyRound, LoaderCircle, Pencil,
+  AlertCircle, Circle, ClipboardList, KeyRound, LoaderCircle, Pencil,
   Plus, RefreshCw, Search, ServerCog, Settings2,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -60,6 +60,7 @@ let endpointController: AbortController | null = null
 let mounted = true
 
 const canWrite = computed(() => hasPermission('configuration:write'))
+const canReadExchange = computed(() => hasPermission('exchange:read'))
 const organizationOptions = computed(() => organizations.value.length > 0 ? organizations.value : authState.user ? [{
   id: authState.user.primaryOrganizationId,
   organizationCode: authState.user.organizationCode,
@@ -355,6 +356,19 @@ function openGroupEndpointEdit(group: EndpointGroup) {
   if (endpoint) openEndpointEdit(endpoint)
 }
 
+/** 打开该端点校验请求的只读调用记录，端点主键是服务端保存的稳定关联引用。 */
+async function openEndpointExchangeRecords(group: EndpointGroup) {
+  const endpoint = primaryEndpoint(group)
+  if (!endpoint || !endpoint.organizationCode || !canReadExchange.value) return
+  await router.push({
+    path: '/exchanges',
+    query: {
+      organizationCode: endpoint.organizationCode,
+      sourceRecordId: `EXTERNAL_ENDPOINT:${endpoint.id}`,
+    },
+  })
+}
+
 /** 返回一条接口配置的简短状态文案。 */
 function endpointState(endpoint?: ExternalEndpoint) {
   if (!endpoint) return '未配置'
@@ -426,7 +440,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
                 <td><span class="credential-status" :class="{ missing: !primaryEndpoint(group)?.credentialConfigured }"><KeyRound :size="14" />{{ primaryEndpoint(group)?.credentialConfigured ? '已配置' : '未配置' }}</span></td>
                 <td><span class="single-line" :title="primaryEndpoint(group)?.sourceOrganizationName ?? '—'">{{ primaryEndpoint(group)?.sourceOrganizationName ?? '—' }}</span></td>
                 <td><span class="single-line" :title="group.latestEndpoint ? formatLocalDateTime(group.latestEndpoint.updatedAt) : '—'">{{ group.latestEndpoint ? formatLocalDateTime(group.latestEndpoint.updatedAt) : '—' }}</span></td>
-                <td><button v-if="canWrite && primaryEndpoint(group)" class="table-action" type="button" @click="openGroupEndpointEdit(group)"><Pencil :size="13" />编辑</button><button v-else-if="canWrite && group.organizationId && selectedSystem?.enabled" class="table-action" type="button" @click="openEndpointCreate(group.organizationId)"><Plus :size="13" />新增配置</button></td>
+                <td><div class="table-actions"><button v-if="canWrite && primaryEndpoint(group)" class="table-action" type="button" @click="openGroupEndpointEdit(group)"><Pencil :size="13" />编辑</button><button v-else-if="canWrite && group.organizationId && selectedSystem?.enabled" class="table-action" type="button" @click="openEndpointCreate(group.organizationId)"><Plus :size="13" />新增配置</button><button v-if="canReadExchange && selectedSystem?.systemCode === 'PRIMARY_HIS' && primaryEndpoint(group)" class="table-action" type="button" @click="openEndpointExchangeRecords(group)"><ClipboardList :size="13" />调用记录</button></div></td>
               </tr>
           </tbody>
         </table>
@@ -462,7 +476,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .incomplete-filter input { width: 15px; height: 15px; accent-color: #147467; }
 .matrix-table-wrap { overflow-x: auto; }
 .matrix-table { min-width: 1830px; table-layout: fixed; }
-.matrix-table .org-column { width: 210px; }.matrix-table .org-code-column { width: 255px; }.matrix-table .state-column { width: 110px; }.matrix-table .url-column { width: 260px; }.matrix-table .credential-column { width: 105px; }.matrix-table .source-column { width: 230px; }.matrix-table .updated-column { width: 150px; }.matrix-table .action-column { width: 80px; }
+.matrix-table .org-column { width: 210px; }.matrix-table .org-code-column { width: 255px; }.matrix-table .state-column { width: 110px; }.matrix-table .url-column { width: 260px; }.matrix-table .credential-column { width: 105px; }.matrix-table .source-column { width: 230px; }.matrix-table .updated-column { width: 150px; }.matrix-table .action-column { width: 140px; }
 .matrix-table th,.matrix-table td { overflow: hidden; }
 .matrix-table td { height: 50px; padding-top: 8px; padding-bottom: 8px; white-space: nowrap; }
 .matrix-table th:last-child,.matrix-table td:last-child { text-align: right; }
@@ -472,7 +486,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .endpoint-url { color: #70828b; font-size: 11px; }
 .credential-status { display: inline-flex; align-items: center; gap: 6px; color: #17765e; font-weight: 650; }
 .credential-status.missing { color: #bb613e; }
-.table-action { padding: 4px 0; border: 0; background: transparent; color: #147467; display: inline-flex; align-items: center; gap: 5px; font-weight: 650; white-space: nowrap; }
+.table-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }.table-action { padding: 4px 0; border: 0; background: transparent; color: #147467; display: inline-flex; align-items: center; gap: 5px; font-weight: 650; white-space: nowrap; }
 .single-line { min-width: 0; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page-state { min-height: 390px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; color: #33745c; text-align: center; }
 .page-state span { max-width: 420px; color: #75828c; font-size: 11px; line-height: 1.6; }

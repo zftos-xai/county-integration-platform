@@ -9,6 +9,9 @@ import {
   masterDataBatchCancelPath,
   masterDataBatchDetailPath,
   masterDataBatchDirectoryResultsPath,
+  masterDataBatchIcd10ResultsPath,
+  masterDataBatchIcd10HisInvocationsPath,
+  masterDataBatchExchangeRecordsPath,
   masterDataBatchMedicalDirectoryResultsPath,
   masterDataBatchRunPath,
   masterDataBatchRecoverPath,
@@ -17,11 +20,16 @@ import {
   type MasterDataBatchQueryParameters,
 } from './batchApiPaths'
 import { hospitalDirectoryTypes, type HospitalDirectoryType } from './directory'
+import {
+  isIcd10DiagnosisCategory,
+  type Icd10DiagnosisCategory,
+} from './icd10Directory'
 
 /** 当前已经确认进入首批基础数据业务的类别。 */
 export const masterDataCategories = [
   'HOSPITAL_DIRECTORY',
   'MEDICAL_DIRECTORY',
+  'ICD10_DIAGNOSIS',
 ] as const
 
 /** 首批基础数据类别代码。 */
@@ -86,6 +94,63 @@ export type HospitalDirectorySyncResult = {
   failureSummary: string | null
 }
 
+/** 公共ICD-10按西医或中医诊断类别保存的同步结论。 */
+export type Icd10SyncResult = {
+  diagnosisCategory: Icd10DiagnosisCategory
+  status: HospitalDirectorySyncResultStatus
+  declaredCount: number | null
+  returnedCount: number
+  duplicateCount: number
+  invalidCount: number
+  conflictCount: number
+  createdCount: number
+  updatedCount: number
+  unchangedCount: number
+  activeCount: number | null
+  failureSummary: string | null
+}
+
+/** 一次已落库的100-006或100-007脱敏调用事实。 */
+export type Icd10HisInvocation = {
+  id: number
+  diagnosisCategory: Icd10DiagnosisCategory
+  invocationSequence: number
+  tradeCode: '100-006' | '100-007'
+  pageStart: number | null
+  pageEnd: number | null
+  requestSummary: string
+  outcomeStatus: 'SUCCESS' | 'FAILURE' | 'NO_RESPONSE' | 'INVALID_RESPONSE'
+  resultCode: string | null
+  responseSummary: string | null
+  returnedCount: number | null
+  durationMs: number
+  requestedAt: string
+  completedAt: string
+}
+
+/** ICD-10批次的有界HIS调用事实页。 */
+export type Icd10HisInvocationPage = {
+  items: Icd10HisInvocation[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+/** 一次机构目录批次关联的通用脱敏HIS调用事实。 */
+export type BatchExchangeRecord = {
+  id: number
+  requestId: string
+  interfaceCode: string
+  result: 'SUCCESS' | 'FAILURE' | 'NO_RESPONSE' | 'INVALID_RESPONSE' | null
+  targetResultCode: string | null
+  resultMessage: string | null
+  durationMs: number | null
+  requestSummary: string | null
+  communicationErrorSummary: string | null
+  receivedAt: string
+  processedAt: string | null
+}
+
 /** 同步批次列表和详情共用的只读摘要。 */
 export type MasterDataBatchSummary = {
   id: number
@@ -126,6 +191,8 @@ export type MasterDataBatchPage = {
 export type StartMasterDataBatchInput = {
   requestKey: string
   organizationCode: string | null
+  /** 公共ICD10选择的已授权HIS端点所属机构；不是目录归属。 */
+  sourceEndpointOrganizationCode: string | null
   environment: MasterDataEnvironment
   category: MasterDataCategory
   mode: MasterDataSyncMode
@@ -268,6 +335,70 @@ export function isHospitalDirectorySyncResult(
   )
 }
 
+/** 校验ICD-10诊断类别分项结果，禁止把缺失字段伪装为零。 */
+export function isIcd10SyncResult(value: unknown): value is Icd10SyncResult {
+  if (!isRecord(value)) return false
+  const numericFields = [
+    value.returnedCount,
+    value.duplicateCount,
+    value.invalidCount,
+    value.conflictCount,
+    value.createdCount,
+    value.updatedCount,
+    value.unchangedCount,
+  ]
+  return (
+    isIcd10DiagnosisCategory(value.diagnosisCategory) &&
+    (value.status === 'COMPLETED' ||
+      value.status === 'FAILED' ||
+      value.status === 'RESULT_UNKNOWN') &&
+    (typeof value.declaredCount === 'number' || value.declaredCount === null) &&
+    numericFields.every((item) => typeof item === 'number') &&
+    (typeof value.activeCount === 'number' || value.activeCount === null) &&
+    (typeof value.failureSummary === 'string' || value.failureSummary === null)
+  )
+}
+
+/** 校验ICD-10调用事实，禁止把缺失摘要或未知终态带入详情页。 */
+export function isIcd10HisInvocation(value: unknown): value is Icd10HisInvocation {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'number'
+    && isIcd10DiagnosisCategory(value.diagnosisCategory)
+    && typeof value.invocationSequence === 'number'
+    && (value.tradeCode === '100-006' || value.tradeCode === '100-007')
+    && (typeof value.pageStart === 'number' || value.pageStart === null)
+    && (typeof value.pageEnd === 'number' || value.pageEnd === null)
+    && typeof value.requestSummary === 'string'
+    && (value.outcomeStatus === 'SUCCESS' || value.outcomeStatus === 'FAILURE'
+      || value.outcomeStatus === 'NO_RESPONSE' || value.outcomeStatus === 'INVALID_RESPONSE')
+    && (typeof value.resultCode === 'string' || value.resultCode === null)
+    && (typeof value.responseSummary === 'string' || value.responseSummary === null)
+    && (typeof value.returnedCount === 'number' || value.returnedCount === null)
+    && typeof value.durationMs === 'number'
+    && typeof value.requestedAt === 'string' && typeof value.completedAt === 'string'
+}
+
+/** 校验ICD-10调用事实分页响应。 */
+export function isIcd10HisInvocationPage(value: unknown): value is Icd10HisInvocationPage {
+  return isRecord(value) && Array.isArray(value.items) && value.items.every(isIcd10HisInvocation)
+    && typeof value.total === 'number' && typeof value.page === 'number' && typeof value.pageSize === 'number'
+}
+
+/** 校验机构目录批次关联的通用交换事实，避免将不完整响应作为调用记录展示。 */
+export function isBatchExchangeRecord(value: unknown): value is BatchExchangeRecord {
+  if (!isRecord(value)) return false
+  const results = ['SUCCESS', 'FAILURE', 'NO_RESPONSE', 'INVALID_RESPONSE']
+  return typeof value.id === 'number' && typeof value.requestId === 'string'
+    && typeof value.interfaceCode === 'string'
+    && (value.result === null || (typeof value.result === 'string' && results.some((item) => item === value.result)))
+    && (typeof value.targetResultCode === 'string' || value.targetResultCode === null)
+    && (typeof value.resultMessage === 'string' || value.resultMessage === null)
+    && (typeof value.durationMs === 'number' || value.durationMs === null)
+    && (typeof value.requestSummary === 'string' || value.requestSummary === null)
+    && (typeof value.communicationErrorSummary === 'string' || value.communicationErrorSummary === null)
+    && typeof value.receivedAt === 'string' && (typeof value.processedAt === 'string' || value.processedAt === null)
+}
+
 /** 校验后端返回的一条同步批次摘要。 */
 export function isMasterDataBatchSummary(
   value: unknown,
@@ -370,6 +501,42 @@ export function getMedicalDirectorySyncResults(
     { signal },
     (value): value is MedicalDirectorySyncResult[] =>
       Array.isArray(value) && value.every(isMedicalDirectorySyncResult),
+  )
+}
+
+/** 读取一个100-006/100-007批次的西医、中医分项事实；查看不会再次调用HIS。 */
+export function getIcd10SyncResults(
+  batchId: number,
+  signal?: AbortSignal,
+) {
+  return apiRequest<Icd10SyncResult[]>(
+    masterDataBatchIcd10ResultsPath(batchId),
+    { signal },
+    (value): value is Icd10SyncResult[] =>
+      Array.isArray(value) && value.every(isIcd10SyncResult),
+  )
+}
+
+/** 读取已落库的ICD-10 HIS调用事实；不会重发100-006或100-007。 */
+export function getIcd10HisInvocations(
+  batchId: number,
+  page = 1,
+  pageSize = 50,
+  signal?: AbortSignal,
+) {
+  return apiRequest<Icd10HisInvocationPage>(
+    masterDataBatchIcd10HisInvocationsPath(batchId, page, pageSize),
+    { signal },
+    isIcd10HisInvocationPage,
+  )
+}
+
+/** 读取机构目录批次关联的100-003、100-004或100-005调用事实；不会重新调用HIS。 */
+export function getBatchExchangeRecords(batchId: number, signal?: AbortSignal) {
+  return apiRequest<BatchExchangeRecord[]>(
+    masterDataBatchExchangeRecordsPath(batchId),
+    { signal },
+    (value): value is BatchExchangeRecord[] => Array.isArray(value) && value.every(isBatchExchangeRecord),
   )
 }
 

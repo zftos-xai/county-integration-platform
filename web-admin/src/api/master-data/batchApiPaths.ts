@@ -23,6 +23,22 @@ export function masterDataBatchMedicalDirectoryResultsPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/medical-directory-results`
 }
 
+/** @param batchId 平台批次主键 @return 100-006/100-007按诊断类别保存的结果地址 */
+export function masterDataBatchIcd10ResultsPath(batchId: number) {
+  return `${masterDataBatchDetailPath(batchId)}/icd10-results`
+}
+
+/** @param batchId 平台批次主键 @param page 从一开始页码 @param pageSize 每页调用事实数 @return ICD-10脱敏HIS调用事实地址 */
+export function masterDataBatchIcd10HisInvocationsPath(batchId: number, page: number, pageSize: number) {
+  const parameters = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  return `${masterDataBatchDetailPath(batchId)}/his-invocations?${parameters.toString()}`
+}
+
+/** @param batchId 平台批次主键 @return 机构目录批次关联的通用脱敏HIS调用事实地址 */
+export function masterDataBatchExchangeRecordsPath(batchId: number) {
+  return `${masterDataBatchDetailPath(batchId)}/exchange-records`
+}
+
 /** @param batchId 平台批次主键 @return 尚未执行批次的取消地址 */
 export function masterDataBatchCancelPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/cancel`
