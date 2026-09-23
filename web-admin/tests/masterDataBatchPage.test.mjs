@@ -118,6 +118,7 @@ test('医疗目录分项结果使用完整业务标签并显示批次起止与�
     assert.doesNotMatch(source, /接口环境 \/ 交易/);
   }
   assert.match(time, /second: '2-digit'/);
+  assert.match(time, /const normalized = value\.endsWith\('Z'\)/);
   assert.match(time, /batch\.finishedAt \? new Date\(batch\.finishedAt\)\.getTime\(\) : now/);
 });
 

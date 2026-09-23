@@ -3,7 +3,9 @@ import type { MasterDataBatchSummary } from '@/api/master-data/batch'
 /** 将服务端批次时间显示到秒；缺失或无效时间不会伪装成有效时间。 */
 export function formatBatchTime(value: string | null) {
   if (!value) return '—'
-  const date = new Date(value)
+  // 数据库时间按UTC返回但部分旧接口未附带时区后缀；统一补Z，避免详情面板比批次概要少8小时。
+  const normalized = value.endsWith('Z') || /[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`
+  const date = new Date(normalized)
   if (Number.isNaN(date.getTime())) return '时间不可用'
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
