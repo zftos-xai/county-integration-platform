@@ -67,7 +67,9 @@
 
     <select id="findHisInvocations" resultMap="icd10HisInvocation">
         <!-- 批次可见性已在服务层确认；按类别、调用顺序和主键稳定分页。 -->
-        SELECT id, diagnosis_category, invocation_sequence, trade_code, page_start, page_end,
+        SELECT id,
+               CASE diagnosis_category WHEN N'0' THEN N'WESTERN' WHEN N'1' THEN N'TRADITIONAL' END AS diagnosis_category,
+               invocation_sequence, trade_code, page_start, page_end,
                request_summary, outcome_status, result_code, response_summary, returned_count,
                duration_ms, requested_at, completed_at
         FROM md_icd10_his_invocation
