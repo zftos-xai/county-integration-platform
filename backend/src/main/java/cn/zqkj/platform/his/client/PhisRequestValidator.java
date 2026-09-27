@@ -3,6 +3,9 @@ package cn.zqkj.platform.his.client;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
+import cn.zqkj.platform.his.domain.lis.dto.LisItemQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisApplicationQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisReportWrite;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
@@ -17,6 +20,77 @@ public final class PhisRequestValidator {
 
     /** 禁止实例化无状态校验器。 */
     private PhisRequestValidator() {
+    }
+
+    /**
+     * 校验600-001 LIS项目目录查询。
+     *
+     * @param query 查询条件
+     * @throws PhisRequestException 机构编码或包类型不符合公版协议时抛出
+     */
+    public static void validate(LisItemQuery query) {
+        if (query == null || query.organizationCode() == null || query.organizationCode().isBlank()) {
+            throw new PhisRequestException("必须提供LIS项目目录机构编码");
+        }
+        if (query.organizationCode().trim().length() > 50) {
+            throw new PhisRequestException("LIS项目目录机构编码不能超过50个字符");
+        }
+        validateLisItemPackageType(query.packageType());
+    }
+
+    /**
+     * 校验600-001项目包类型值域。
+     *
+     * @param packageType 公版协议项目包类型
+     * @throws PhisRequestException 类型为空、超长或不属于已确认公版值域时抛出
+     */
+    public static void validateLisItemPackageType(String packageType) {
+        if (packageType == null || packageType.isBlank()) {
+            throw new PhisRequestException("必须提供LIS项目包类型");
+        }
+        String normalizedPackageType = packageType.trim();
+        if (normalizedPackageType.length() > 50
+                || !("检验".equals(normalizedPackageType) || "检查".equals(normalizedPackageType)
+                || "体检".equals(normalizedPackageType))) {
+            throw new PhisRequestException("LIS项目包类型不符合基层HIS协议");
+        }
+    }
+
+    /**
+     * 校验600-002 LIS申请查询。
+     *
+     * <p>公版允许四种申请标识为空，但没有定义多字段组合语义。平台要求至少提供一种标识，
+     * 防止机构级空条件查询意外返回大批患者申请。</p>
+     *
+     * @param query 查询条件
+     * @throws PhisRequestException 查询标识不符合平台安全边界时抛出
+     */
+    public static void validate(LisApplicationQuery query) {
+        if (query == null) {
+            throw new PhisRequestException("必须提供LIS申请查询条件");
+        }
+        validateOptionalLength("LIS申请单ID", query.applicationId(), 32);
+        validateOptionalLength("LIS业务ID", query.businessId(), 32);
+        validateOptionalLength("LIS门诊号", query.outpatientNumber(), 50);
+        validateOptionalLength("LIS住院号", query.inpatientNumber(), 50);
+        if (isBlank(query.applicationId()) && isBlank(query.businessId())
+                && isBlank(query.outpatientNumber()) && isBlank(query.inpatientNumber())) {
+            throw new PhisRequestException("必须至少提供一种LIS申请查询标识");
+        }
+    }
+
+    /**
+     * 校验600-003已编码报告字符串。
+     *
+     * <p>该对象属于平台到基层HIS的协议层；只拒绝缺失内容，不解析、改写或再次编码正文。</p>
+     *
+     * @param query 报告写入参数
+     * @throws PhisRequestException 报告内容为空时抛出
+     */
+    public static void validate(LisReportWrite query) {
+        if (query == null || query.encodedFhirReport() == null || query.encodedFhirReport().isBlank()) {
+            throw new PhisRequestException("必须提供已编码的LIS检验报告");
+        }
     }
 
     /**
@@ -144,5 +218,10 @@ public final class PhisRequestValidator {
         if (value != null && !value.isBlank() && value.trim().length() > maximumLength) {
             throw new PhisRequestException(fieldName + "不能超过" + maximumLength + "个字符");
         }
+    }
+
+    /** 判断可选查询文本是否为空白。 */
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

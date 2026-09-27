@@ -38,6 +38,9 @@ server:
 platform:
   his:
     query-zone: ${PLATFORM_HIS_QUERY_ZONE:Asia/Shanghai}
+  integration:
+    # 机器入口使用服务端部署环境路由，开发默认值防止未配置时访问测试或生产HIS。
+    his-environment: ${PLATFORM_INTEGRATION_HIS_ENVIRONMENT:DEVELOPMENT}
   database-contract:
     enabled: ${PLATFORM_DATABASE_CONTRACT_ENABLED:true}
   security:

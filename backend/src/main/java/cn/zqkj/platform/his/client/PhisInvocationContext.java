@@ -24,6 +24,7 @@ public final class PhisInvocationContext {
     private final int connectTimeoutMs;
     private final int requestTimeoutMs;
     private final String authorizationCode;
+    private final String sourceOrganizationId;
 
     /**
      * 使用已验证的非公开运行参数构建不可变上下文。
@@ -37,12 +38,14 @@ public final class PhisInvocationContext {
             URI soapEndpoint,
             int connectTimeoutMs,
             int requestTimeoutMs,
-            String authorizationCode
+            String authorizationCode,
+            String sourceOrganizationId
     ) {
         this.soapEndpoint = soapEndpoint;
         this.connectTimeoutMs = connectTimeoutMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.authorizationCode = authorizationCode;
+        this.sourceOrganizationId = sourceOrganizationId;
     }
 
     /**
@@ -64,13 +67,34 @@ public final class PhisInvocationContext {
             int requestTimeoutMs,
             String authorizationCode
     ) {
+        return create(serviceUri, connectTimeoutMs, requestTimeoutMs, authorizationCode, null);
+    }
+
+    /**
+     * 校验并创建一次调用上下文，并绑定同一已解析端点中的HIS来源机构号。
+     *
+     * @param serviceUri 管理员保存的HTTP或HTTPS服务地址
+     * @param connectTimeoutMs 连接超时毫秒，范围为100至60000
+     * @param requestTimeoutMs 请求总超时毫秒，不得小于连接超时且最大为300000
+     * @param authorizationCode 当前机构授权码
+     * @param sourceOrganizationId 当前端点验证确认的HIS来源机构号
+     * @return 已校验且固定脱敏的不可变上下文
+     * @throws PhisRequestException 地址、超时或授权码不符合调用要求时抛出
+     */
+    public static PhisInvocationContext create(
+            URI serviceUri,
+            int connectTimeoutMs,
+            int requestTimeoutMs,
+            String authorizationCode,
+            String sourceOrganizationId
+    ) {
         URI soapEndpoint = resolveSoapEndpoint(serviceUri);
         validateTimeouts(connectTimeoutMs, requestTimeoutMs);
         if (authorizationCode == null || authorizationCode.isBlank()) {
             throw new PhisRequestException("必须提供基层HIS机构授权码");
         }
         return new PhisInvocationContext(
-                soapEndpoint, connectTimeoutMs, requestTimeoutMs, authorizationCode);
+                soapEndpoint, connectTimeoutMs, requestTimeoutMs, authorizationCode, sourceOrganizationId);
     }
 
     /** 返回实际接收SOAP POST且不含操作说明参数的地址。 */
@@ -91,6 +115,17 @@ public final class PhisInvocationContext {
     /** 返回仅供本次请求注入业务参数的机构授权码。 */
     String authorizationCode() {
         return authorizationCode;
+    }
+
+    /**
+     * 返回与当前已解析端点绑定的HIS来源机构号。
+     *
+     * <p>该字段用于构造交易业务参数，不包含认证秘密；调用方不得将其用于覆盖其他机构端点。</p>
+     *
+     * @return 当前调用上下文的基层HIS来源机构号；未关联时为空
+     */
+    public String sourceOrganizationId() {
+        return sourceOrganizationId;
     }
 
     /**

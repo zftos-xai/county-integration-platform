@@ -3,6 +3,11 @@ package cn.zqkj.platform.his.service;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
+import cn.zqkj.platform.his.domain.lis.dto.LisItemQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisApplicationQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisReportWrite;
+import cn.zqkj.platform.his.domain.lis.model.LisItemEntry;
+import cn.zqkj.platform.his.domain.lis.model.LisApplicationEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
@@ -26,6 +31,74 @@ import java.util.List;
  * 已接收响应不符合协议分别通过不同异常类型表达；HIS明确返回的业务失败保留在响应中。</p>
  */
 public interface PhisService {
+
+    /**
+     * 查询基层HIS中指定来源机构的LIS项目包和明细。
+     *
+     * @param organizationId 平台机构主键，用于解析该机构已验证的基层HIS端点
+     * @param environment 部署环境
+     * @param query HIS来源机构编码及项目包类型
+     * @return 强类型LIS项目目录响应
+     * @throws PhisConfigurationException 当前机构没有可用端点或认证配置时抛出
+     * @throws PhisRequestException 查询条件不符合发送要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<List<LisItemEntry>> queryLisItems(
+            long organizationId, ParameterEnvironment environment, LisItemQuery query);
+
+    /**
+     * 查询当前平台机构已验证基层HIS端点中确认来源机构的LIS项目包。
+     *
+     * <p>来源机构号在同一次端点解析中取得并绑定到调用上下文；调用方不能提交或覆盖该值。</p>
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 服务端选择的部署环境
+     * @param packageType LIS项目包类型
+     * @return 强类型LIS项目目录响应
+     * @throws PhisConfigurationException 当前机构没有已验证端点或来源机构时抛出
+     * @throws PhisRequestException 项目包类型不符合要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<List<LisItemEntry>> queryLisItemPackages(
+            long organizationId, ParameterEnvironment environment, String packageType);
+
+    /**
+     * 按申请标识查询基层HIS中的LIS申请及关联患者、就诊信息。
+     *
+     * <p>机构端点由平台机构主键解析；目标HIS机构ID从同一已验证端点派生，不接受业务查询条件覆盖。
+     * 返回患者信息只供受控调用链本次传递，调用方不得写入运行记录或普通日志。</p>
+     *
+     * @param organizationId 平台机构主键，用于解析该机构已验证的基层HIS端点
+     * @param environment 部署环境
+     * @param query 至少一种申请标识
+     * @return 强类型LIS申请响应
+     * @throws PhisConfigurationException 当前机构没有可用端点或认证配置时抛出
+     * @throws PhisRequestException 查询条件不符合平台安全边界时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<List<LisApplicationEntry>> queryLisApplication(
+            long organizationId, ParameterEnvironment environment, LisApplicationQuery query);
+
+    /**
+     * 使用机构已验证端点向基层HIS回写已编码的LIS检验报告。
+     *
+     * <p>该方法只提交一次，不自动重试。通信异常时目标是否已保存无法确认，调用方必须先核查。
+     * 报告字符串不会写入平台运行日志。</p>
+     *
+     * @param organizationId 平台机构主键，用于解析该机构已验证的基层HIS端点
+     * @param environment 部署环境
+     * @param query 已编码报告字符串
+     * @return HIS明确结果；成功时含目标返回消息
+     * @throws PhisConfigurationException 当前机构没有可用端点或认证配置时抛出
+     * @throws PhisRequestException 报告内容在发送前不符合要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认保存结果时抛出
+     * @throws PhisProtocolException 已收到的响应不符合协议时抛出
+     */
+    PhisResponse<String> writeLisReport(
+            long organizationId, ParameterEnvironment environment, LisReportWrite query);
 
     /**
      * 查询基层HIS中的科室、医生、病区或床位目录。

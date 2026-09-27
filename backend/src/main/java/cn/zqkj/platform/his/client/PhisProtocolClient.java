@@ -3,6 +3,11 @@ package cn.zqkj.platform.his.client;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
+import cn.zqkj.platform.his.domain.lis.dto.LisItemQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisApplicationQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisReportWrite;
+import cn.zqkj.platform.his.domain.lis.model.LisItemEntry;
+import cn.zqkj.platform.his.domain.lis.model.LisApplicationEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
@@ -24,6 +29,45 @@ import java.util.List;
  * 协议传输、报文转换与响应校验。所有方法只执行一次请求，不自动重试。</p>
  */
 public interface PhisProtocolClient {
+
+    /**
+     * 查询基层 HIS 指定机构的 LIS 项目包和明细。
+     *
+     * @param context 已校验且包含机构认证信息的调用上下文
+     * @param query 项目目录查询条件
+     * @return 成功时包含来源项目包明细；HIS明确拒绝时返回不含数据的业务失败响应
+     * @throws PhisRequestException 请求参数在发送前不符合要求时抛出
+     * @throws PhisCommunicationException HTTP、超时、中断或网络通信失败时抛出
+     * @throws PhisProtocolException 已收到的SOAP或业务响应不符合协议时抛出
+     */
+    PhisResponse<List<LisItemEntry>> queryLisItems(PhisInvocationContext context, LisItemQuery query);
+
+    /**
+     * 按指定申请标识查询基层 HIS 中的 LIS 申请。
+     *
+     * @param context 已校验且包含机构认证信息的调用上下文
+     * @param query 至少一种申请查询标识；目标HIS机构从调用上下文取得
+     * @return 成功时包含仅在本次调用内传递的申请、患者和就诊信息
+     * @throws PhisRequestException 请求参数在发送前不符合要求时抛出
+     * @throws PhisCommunicationException HTTP、超时、中断或网络通信失败时抛出
+     * @throws PhisProtocolException 已收到的SOAP或业务响应不符合协议时抛出
+     */
+    PhisResponse<List<LisApplicationEntry>> queryLisApplication(
+            PhisInvocationContext context, LisApplicationQuery query);
+
+    /**
+     * 将调用方已编码的FHIR检验报告提交给基层HIS。
+     *
+     * <p>该方法只执行一次写请求，不自动重试；通信异常表示目标保存状态未知。</p>
+     *
+     * @param context 已校验且包含机构认证信息的调用上下文
+     * @param query 已编码报告字符串
+     * @return HIS明确成功时返回其消息文本；明确拒绝时返回业务失败响应
+     * @throws PhisRequestException 报告内容在发送前不符合要求时抛出
+     * @throws PhisCommunicationException 请求已发送但无法确认保存结果时抛出
+     * @throws PhisProtocolException 已收到的SOAP或业务响应不符合协议时抛出
+     */
+    PhisResponse<String> writeLisReport(PhisInvocationContext context, LisReportWrite query);
 
     /**
      * 查询基层HIS医院综合目录。

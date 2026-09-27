@@ -6,6 +6,11 @@ import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryRole
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
 import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
+import cn.zqkj.platform.his.domain.lis.dto.LisItemQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisApplicationQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisReportWrite;
+import cn.zqkj.platform.his.domain.lis.model.LisItemEntry;
+import cn.zqkj.platform.his.domain.lis.model.LisApplicationEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
@@ -75,6 +80,64 @@ public class SoapPhisClient implements PhisProtocolClient {
     public SoapPhisClient(PhisSoapCodec codec, ObjectMapper objectMapper) {
         this.codec = codec;
         this.objectMapper = objectMapper;
+    }
+
+    /**
+     * 调用600-001查询基层HIS的LIS项目包和明细。
+     *
+     * <p>金额和数量字段按来源JSON标量原样转成文本，不进行金额舍入或单位换算。</p>
+     *
+     * @param context 已校验的HIS调用上下文
+     * @param query LIS项目目录查询条件
+     * @return 强类型项目包明细响应
+     */
+    @Override
+    public PhisResponse<List<LisItemEntry>> queryLisItems(PhisInvocationContext context, LisItemQuery query) {
+        PhisRequestValidator.validate(query);
+        ObjectNode parameters = objectMapper.createObjectNode();
+        parameters.put("机构编码", query.organizationCode().trim());
+        parameters.put("包类型", query.packageType().trim());
+        return invoke(context, PhisTrade.LIS_ITEM_QUERY, parameters, this::mapLisItemEntries);
+    }
+
+    /**
+     * 调用600-002按申请标识读取LIS申请及关联信息。
+     *
+     * <p>响应含患者身份资料，仅在内存中转换为本次调用结果；本客户端不缓存或记录响应正文。</p>
+     *
+     * @param context 已校验的HIS调用上下文
+     * @param query 机构和申请查询标识
+     * @return 强类型申请响应
+     */
+    @Override
+    public PhisResponse<List<LisApplicationEntry>> queryLisApplication(
+            PhisInvocationContext context, LisApplicationQuery query
+    ) {
+        PhisRequestValidator.validate(query);
+        ObjectNode parameters = objectMapper.createObjectNode();
+        parameters.put("机构ID", context.sourceOrganizationId().trim());
+        parameters.put("申请单ID", optionalParameter(query.applicationId()));
+        parameters.put("业务ID", optionalParameter(query.businessId()));
+        parameters.put("门诊号", optionalParameter(query.outpatientNumber()));
+        parameters.put("住院号", optionalParameter(query.inpatientNumber()));
+        return invoke(context, PhisTrade.LIS_APPLICATION_QUERY, parameters, this::mapLisApplicationEntries);
+    }
+
+    /**
+     * 调用600-003提交已编码的FHIR检验报告。
+     *
+     * <p>严格按HIS协议将输入放入{@code 入参}；不解码、改写或二次编码报告正文。</p>
+     *
+     * @param context 已校验的HIS调用上下文
+     * @param query 已编码报告字符串
+     * @return HIS明确成功时返回的消息文本
+     */
+    @Override
+    public PhisResponse<String> writeLisReport(PhisInvocationContext context, LisReportWrite query) {
+        PhisRequestValidator.validate(query);
+        ObjectNode parameters = objectMapper.createObjectNode();
+        parameters.put("入参", query.encodedFhirReport());
+        return invoke(context, PhisTrade.LIS_REPORT_WRITE_BACK, parameters, this::mapLisReportWriteResult);
     }
 
     /**
@@ -406,6 +469,11 @@ public class SoapPhisClient implements PhisProtocolClient {
         }
     }
 
+    /** 按600-002示例保留可选字段键并将未提供值序列化为空字符串。 */
+    private String optionalParameter(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     /**
      * 把100-003原始JSON数组转换为医院综合目录条目。
      *
@@ -490,6 +558,103 @@ public class SoapPhisClient implements PhisProtocolClient {
             ));
         }
         return List.copyOf(entries);
+    }
+
+    /**
+     * 把600-001原始JSON数组转换为LIS项目包明细。
+     *
+     * @param data 600-001原始数据
+     * @return 强类型项目包明细列表
+     */
+    private List<LisItemEntry> mapLisItemEntries(JsonNode data) {
+        if (data == null || !data.isArray()) {
+            throw new PhisProtocolException("基层HIS LIS项目目录响应不是数组");
+        }
+        List<LisItemEntry> entries = new ArrayList<>();
+        for (JsonNode item : data) {
+            if (!item.isObject()) {
+                throw new PhisProtocolException("基层HIS LIS项目目录条目不是对象");
+            }
+            entries.add(new LisItemEntry(
+                    requiredText(item, "包名称", "LIS项目目录"),
+                    requiredText(item, "包ID", "LIS项目目录"),
+                    requiredText(item, "包编码", "LIS项目目录"),
+                    requiredText(item, "包类型", "LIS项目目录"),
+                    requiredText(item, "包总金额", "LIS项目目录"),
+                    requiredText(item, "明细名称", "LIS项目目录"),
+                    requiredText(item, "明细ID", "LIS项目目录"),
+                    requiredText(item, "明细单价", "LIS项目目录"),
+                    requiredText(item, "明细数量", "LIS项目目录"),
+                    requiredText(item, "明细单位", "LIS项目目录"),
+                    requiredText(item, "机构名称", "LIS项目目录"),
+                    requiredText(item, "机构ID", "LIS项目目录")
+            ));
+        }
+        return List.copyOf(entries);
+    }
+
+    /**
+     * 把600-002原始JSON数组转换为LIS申请条目。
+     *
+     * <p>字段按来源标量文本保留；null保持为null，未在公版解释的缩写字段不作转换。</p>
+     *
+     * @param data 600-002原始数据
+     * @return 强类型LIS申请条目列表
+     */
+    private List<LisApplicationEntry> mapLisApplicationEntries(JsonNode data) {
+        if (data == null || !data.isArray()) {
+            throw new PhisProtocolException("基层HIS LIS申请响应不是数组");
+        }
+        List<LisApplicationEntry> entries = new ArrayList<>();
+        for (JsonNode item : data) {
+            if (!item.isObject()) {
+                throw new PhisProtocolException("基层HIS LIS申请条目不是对象");
+            }
+            entries.add(new LisApplicationEntry(
+                    optionalText(item, "BILLID", "LIS申请"),
+                    optionalText(item, "OTHERTYPE", "LIS申请"),
+                    optionalText(item, "CSTYPE", "LIS申请"),
+                    optionalText(item, "ITEMCODE", "LIS申请"),
+                    optionalText(item, "ITEMNAME", "LIS申请"),
+                    optionalText(item, "FEE", "LIS申请"),
+                    optionalText(item, "PERSONID", "LIS申请"),
+                    optionalText(item, "PERSONNAME", "LIS申请"),
+                    optionalText(item, "CREATETIME", "LIS申请"),
+                    optionalText(item, "OPERATERID", "LIS申请"),
+                    optionalText(item, "OPERATERNAME", "LIS申请"),
+                    optionalText(item, "ORGID", "LIS申请"),
+                    optionalText(item, "ORGNAME", "LIS申请"),
+                    optionalText(item, "DIAGNOSIS", "LIS申请"),
+                    optionalText(item, "BWINFO", "LIS申请"),
+                    optionalText(item, "BUSINESSID", "LIS申请"),
+                    optionalText(item, "JZCODE", "LIS申请"),
+                    optionalText(item, "SOURCETYPE", "LIS申请"),
+                    optionalText(item, "SOURCETYPENAME", "LIS申请"),
+                    optionalText(item, "URGENCY", "LIS申请"),
+                    optionalText(item, "OPERATERDEPTID", "LIS申请"),
+                    optionalText(item, "OPERATERDEPTNAME", "LIS申请"),
+                    optionalText(item, "CURRENTBEDID", "LIS申请"),
+                    optionalText(item, "BEDCODE", "LIS申请"),
+                    optionalText(item, "BEDNAME", "LIS申请"),
+                    optionalText(item, "CARDTYPE", "LIS申请"),
+                    optionalText(item, "CARDTYPENAME", "LIS申请"),
+                    optionalText(item, "CARDID", "LIS申请"),
+                    optionalText(item, "TEL", "LIS申请"),
+                    optionalText(item, "GENDER", "LIS申请"),
+                    optionalText(item, "BIRTHDAY", "LIS申请"),
+                    optionalText(item, "ACTDEPTID", "LIS申请"),
+                    optionalText(item, "ACTDEPTNAME", "LIS申请")
+            ));
+        }
+        return List.copyOf(entries);
+    }
+
+    /** 读取600-003规定的成功消息字符串，不回显完整响应正文。 */
+    private String mapLisReportWriteResult(JsonNode data) {
+        if (data == null || !data.isTextual() || data.asText().isBlank()) {
+            throw new PhisProtocolException("基层HIS LIS报告回写响应缺少成功消息");
+        }
+        return data.asText();
     }
 
     /**

@@ -4,12 +4,17 @@ import cn.zqkj.platform.his.client.PhisProtocolClient;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
+import cn.zqkj.platform.his.domain.lis.dto.LisItemQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisApplicationQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisReportWrite;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntry;
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryType;
 import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
+import cn.zqkj.platform.his.domain.lis.model.LisItemEntry;
+import cn.zqkj.platform.his.domain.lis.model.LisApplicationEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryType;
 import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
@@ -50,6 +55,81 @@ import static org.mockito.Mockito.when;
 
 /** 验证基层HIS业务服务的机构隔离、端点选择、结果转换和安全日志。 */
 class PhisServiceImplTest {
+
+    /** 验证600-001通过当前机构的已验证基层HIS端点执行只读调用。 */
+    @Test
+    void queriesLisItemsUsingEnabledOrganizationEndpoint() {
+        PhisProtocolClient client = mock(PhisProtocolClient.class);
+        LisItemEntry item = new LisItemEntry(
+                "检验包", "PKG-01", "PKG-CODE", "检验", "55.2",
+                "血常规", "ITEM-01", "10.4", "1", "项", "测试卫生院", "ORG-01");
+        when(client.queryLisItems(any(), any())).thenReturn(
+                new PhisResponse<>(true, "1", List.of(item), null));
+        PhisServiceImpl service = new PhisServiceImpl(configuredResolver(8L, "AUTH-008"), client);
+
+        PhisResponse<List<LisItemEntry>> response = service.queryLisItems(
+                8L, ParameterEnvironment.TEST, new LisItemQuery("ORG-01", "检验"));
+
+        assertTrue(response.success());
+        assertEquals("ITEM-01", response.data().get(0).itemId());
+        verify(client).queryLisItems(any(), eq(new LisItemQuery("ORG-01", "检验")));
+    }
+
+    /** 验证集成用600-001调用从本次解析的端点取得HIS来源机构号。 */
+    @Test
+    void derivesLisItemOrganizationFromResolvedEndpoint() {
+        PhisProtocolClient client = mock(PhisProtocolClient.class);
+        when(client.queryLisItems(any(), any())).thenReturn(
+                PhisResponse.success("1", List.of(new LisItemEntry("包", "P", "C", "检验", "1",
+                        "项目", "I", "1", "1", "项", "机构", "HIS-ORG-8"))));
+        PhisServiceImpl service = new PhisServiceImpl(configuredResolver(8L, "AUTH-008"), client);
+
+        PhisResponse<List<LisItemEntry>> response = service.queryLisItemPackages(
+                8L, ParameterEnvironment.TEST, "检验");
+
+        assertTrue(response.success());
+        verify(client).queryLisItems(any(), eq(new LisItemQuery("HIS-ORG-8", "检验")));
+    }
+
+    /** 验证600-002按平台机构选择已验证端点，并只向协议层传递查询条件。 */
+    @Test
+    void queriesLisApplicationUsingEnabledOrganizationEndpoint() {
+        PhisProtocolClient client = mock(PhisProtocolClient.class);
+        LisApplicationEntry application = new LisApplicationEntry(
+                "BILL-01", null, null, "02", "肾功", "13", "PERSON-01", "测试患者",
+                "2026-09-24 09:30:00", null, null, "ORG-01", "测试卫生院", null, null,
+                "BUS-01", "VISIT-01", "6", "住院", null, null, null, null, null, null,
+                "01", "居民身份证", "TEST-CARD", null, "男", "1990-01-01", "DEPT-02", "检验科");
+        when(client.queryLisApplication(any(), any())).thenReturn(
+                new PhisResponse<>(true, "1", List.of(application), null));
+        PhisServiceImpl service = new PhisServiceImpl(configuredResolver(8L, "AUTH-008"), client);
+        LisApplicationQuery query = new LisApplicationQuery("APP-01", null, null, null);
+
+        PhisResponse<List<LisApplicationEntry>> response = service.queryLisApplication(
+                8L, ParameterEnvironment.TEST, query);
+
+        assertTrue(response.success());
+        assertEquals("BILL-01", response.data().get(0).billId());
+        org.mockito.ArgumentCaptor<cn.zqkj.platform.his.client.PhisInvocationContext> contextCaptor =
+                org.mockito.ArgumentCaptor.forClass(cn.zqkj.platform.his.client.PhisInvocationContext.class);
+        verify(client).queryLisApplication(contextCaptor.capture(), eq(query));
+        assertEquals("HIS-ORG-8", contextCaptor.getValue().sourceOrganizationId());
+    }
+
+    /** 验证600-003使用已验证端点提交一次，且成功时返回HIS消息。 */
+    @Test
+    void writesLisReportUsingEnabledOrganizationEndpoint() {
+        PhisProtocolClient client = mock(PhisProtocolClient.class);
+        LisReportWrite query = new LisReportWrite("eyJyZXNvdXJjZVR5cGUiOiJCdW5kbGUifQ==");
+        when(client.writeLisReport(any(), any())).thenReturn(PhisResponse.success("1", "报告保存成功"));
+        PhisServiceImpl service = new PhisServiceImpl(configuredResolver(8L, "AUTH-008"), client);
+
+        PhisResponse<String> response = service.writeLisReport(8L, ParameterEnvironment.TEST, query);
+
+        assertTrue(response.success());
+        assertEquals("报告保存成功", response.data());
+        verify(client).writeLisReport(any(), eq(query));
+    }
 
     /** 验证强类型条件会转换为100-003参数，并自动加入当前机构授权码。 */
     @Test
@@ -349,7 +429,10 @@ class PhisServiceImplTest {
         ExternalEndpoint endpoint = new ExternalEndpoint(
                 3L, 2L, ParameterEnvironment.TEST, organizationId, "ORG" + organizationId,
                 "http://his.example.invalid/WebService.asmx", 3000, 15000,
-                "managed://database", true, true, now, now, new byte[]{1});
+                "managed://database", true, true, now, now, new byte[]{1},
+                "测试机构", "HIS-ORG-" + organizationId, "测试机构",
+                cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointVerificationStatus.VERIFIED,
+                now, null);
         return new ExternalEndpointRuntimeConfiguration(endpoint,
                 new ExternalEndpointAuthentication("V01", "user", "password", code));
     }

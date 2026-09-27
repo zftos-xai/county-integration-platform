@@ -10,6 +10,11 @@ import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntr
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
 import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
+import cn.zqkj.platform.his.domain.lis.dto.LisItemQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisApplicationQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisReportWrite;
+import cn.zqkj.platform.his.domain.lis.model.LisItemEntry;
+import cn.zqkj.platform.his.domain.lis.model.LisApplicationEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
@@ -60,6 +65,90 @@ public class PhisServiceImpl implements PhisService {
     ) {
         this.endpointResolutionService = endpointResolutionService;
         this.phisProtocolClient = phisProtocolClient;
+    }
+
+    /**
+     * 通过机构已验证端点查询基层HIS LIS项目包及明细。
+     *
+     * <p>按600-001发送一次只读查询，并复用统一的端点校验、脱敏日志和结果未知处理。</p>
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 部署环境
+     * @param query 来源机构编码和项目包类型
+     * @return 强类型项目目录响应
+     */
+    @Override
+    public PhisResponse<List<LisItemEntry>> queryLisItems(
+            long organizationId, ParameterEnvironment environment, LisItemQuery query
+    ) {
+        return execute(organizationId, environment, PhisTrade.LIS_ITEM_QUERY,
+                EndpointRequirement.ENABLED, () -> PhisRequestValidator.validate(query), context ->
+                        phisProtocolClient.queryLisItems(context, query));
+    }
+
+    /**
+     * 从当前已解析端点派生来源机构号后查询600-001项目包。
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 部署环境
+     * @param packageType 项目包类型
+     * @return 强类型项目目录响应
+     */
+    @Override
+    public PhisResponse<List<LisItemEntry>> queryLisItemPackages(
+            long organizationId, ParameterEnvironment environment, String packageType
+    ) {
+        return execute(organizationId, environment, PhisTrade.LIS_ITEM_QUERY,
+                EndpointRequirement.ENABLED, () -> PhisRequestValidator.validateLisItemPackageType(packageType),
+                context -> {
+                    if (Func.isBlank(context.sourceOrganizationId())) {
+                        throw new PhisConfigurationException("当前机构未确认基层HIS来源机构");
+                    }
+                    return phisProtocolClient.queryLisItems(context,
+                            new LisItemQuery(context.sourceOrganizationId(), packageType));
+                });
+    }
+
+    /**
+     * 通过机构已验证端点查询基层HIS LIS申请及关联信息。
+     *
+     * <p>按600-002发送一次只读查询；结果仅写脱敏运行日志，不记录患者响应正文。</p>
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 部署环境
+     * @param query HIS目标机构ID和申请标识
+     * @return 强类型LIS申请响应
+     */
+    @Override
+    public PhisResponse<List<LisApplicationEntry>> queryLisApplication(
+            long organizationId, ParameterEnvironment environment, LisApplicationQuery query
+    ) {
+        return execute(organizationId, environment, PhisTrade.LIS_APPLICATION_QUERY,
+                EndpointRequirement.ENABLED, () -> PhisRequestValidator.validate(query), context -> {
+                    if (Func.isBlank(context.sourceOrganizationId())) {
+                        throw new PhisConfigurationException("当前机构未确认基层HIS来源机构");
+                    }
+                    return phisProtocolClient.queryLisApplication(context, query);
+                });
+    }
+
+    /**
+     * 经机构已验证端点执行一次600-003 LIS报告回写。
+     *
+     * <p>写操作无自动重试；通信异常按目标结果未知记录，不在日志中包含报告字符串。</p>
+     *
+     * @param organizationId 平台机构主键
+     * @param environment 部署环境
+     * @param query 已编码报告字符串
+     * @return HIS明确结果
+     */
+    @Override
+    public PhisResponse<String> writeLisReport(
+            long organizationId, ParameterEnvironment environment, LisReportWrite query
+    ) {
+        return execute(organizationId, environment, PhisTrade.LIS_REPORT_WRITE_BACK,
+                EndpointRequirement.ENABLED, () -> PhisRequestValidator.validate(query), context ->
+                        phisProtocolClient.writeLisReport(context, query));
     }
 
     /**
@@ -264,7 +353,7 @@ public class PhisServiceImpl implements PhisService {
         try {
             return PhisInvocationContext.create(
                     URI.create(endpoint.baseUrl()), endpoint.connectTimeoutMs(), endpoint.readTimeoutMs(),
-                    resolveAuthorizationCode(runtimeConfiguration.authentication()));
+                    resolveAuthorizationCode(runtimeConfiguration.authentication()), endpoint.sourceOrganizationId());
         } catch (IllegalArgumentException exception) {
             throw new PhisConfigurationException("当前机构的基层HIS接口地址无效");
         }

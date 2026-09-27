@@ -2,6 +2,10 @@ package cn.zqkj.platform.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import cn.zqkj.platform.his.exception.PhisConfigurationException;
+import cn.zqkj.platform.his.exception.PhisRequestException;
+import cn.zqkj.platform.integration.lis.domain.vo.LisIntegrationErrorVO;
+import cn.zqkj.platform.integration.lis.exception.LisIntegrationOperationException;
 import java.time.OffsetDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +22,7 @@ import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 将控制器异常转换为稳定且不泄露内部信息的 API 错误响应。
@@ -26,6 +31,24 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class GlobalExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * 返回携带平台操作编号的LIS入口业务错误。
+     *
+     * @param exception 已认证LIS业务失败及其追踪编号
+     * @param request 当前HTTP请求
+     * @return 包含错误代码和操作编号的LIS错误响应
+     */
+    @ExceptionHandler(LisIntegrationOperationException.class)
+    ResponseEntity<LisIntegrationErrorVO> handleLisIntegrationOperation(
+            LisIntegrationOperationException exception,
+            HttpServletRequest request
+    ) {
+        LOGGER.warn("LIS integration operation failed: {}", exception.errorCode());
+        return ResponseEntity.status(exception.status()).body(new LisIntegrationErrorVO(
+                exception.errorCode(), exception.getMessage(), requestId(request), exception.operationId(),
+                exception.exchangeRequestId(), OffsetDateTime.now()));
+    }
 
     /**
      * 处理 Bean Validation 和控制器参数校验错误。
@@ -41,11 +64,29 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException.class,
             MissingServletRequestParameterException.class,
             ServletRequestBindingException.class,
-            InvalidRequestException.class
+            InvalidRequestException.class,
+            PhisRequestException.class
     })
     ResponseEntity<ApiError> handleValidation(Exception exception, HttpServletRequest request) {
         LOGGER.warn("Request validation failed");
         return response(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "请求参数不符合接口要求", request);
+    }
+
+    /**
+     * 处理目标HIS端点或认证配置不可用。
+     *
+     * @param exception 基层HIS配置异常
+     * @param request 当前HTTP请求
+     * @return HTTP 409配置冲突响应
+     */
+    @ExceptionHandler(PhisConfigurationException.class)
+    ResponseEntity<ApiError> handlePhisConfiguration(
+            PhisConfigurationException exception,
+            HttpServletRequest request
+    ) {
+        LOGGER.warn("HIS endpoint configuration unavailable");
+        return response(HttpStatus.CONFLICT, "HIS_ENDPOINT_UNAVAILABLE",
+                "目标基层HIS接口当前不可用", request);
     }
 
     /**
@@ -109,6 +150,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 处理没有映射到控制器或静态资源的请求路径。
+     *
+     * @param exception Spring MVC未找到请求处理器时抛出的异常
+     * @param request 当前 HTTP 请求
+     * @return HTTP 404错误响应
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ApiError> handleUnknownRoute(NoResourceFoundException exception, HttpServletRequest request) {
+        LOGGER.warn("Requested route was not found: {}", request.getRequestURI());
+        return response(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "请求的资源不存在", request);
+    }
+
+    /**
      * 处理唯一性、当前状态或并发版本冲突。
      *
      * @param exception 资源冲突异常
@@ -149,11 +203,16 @@ public class GlobalExceptionHandler {
             String message,
             HttpServletRequest request
     ) {
+        return ResponseEntity.status(status)
+                .body(new ApiError(code, message, requestId(request), OffsetDateTime.now()));
+    }
+
+    /** 取得当前请求链路编号，供集成入口错误和通用错误共同定位。 */
+    private String requestId(HttpServletRequest request) {
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) {
             requestId = request.getHeader("X-Request-Id");
         }
-        return ResponseEntity.status(status)
-                .body(new ApiError(code, message, requestId, OffsetDateTime.now()));
+        return requestId;
     }
 }

@@ -3,6 +3,9 @@ package cn.zqkj.platform.his.client;
 import cn.zqkj.platform.his.domain.hospitaldirectory.dto.HospitalDirectoryQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10CountQuery;
 import cn.zqkj.platform.his.domain.icd10.dto.Icd10Query;
+import cn.zqkj.platform.his.domain.lis.dto.LisItemQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisApplicationQuery;
+import cn.zqkj.platform.his.domain.lis.dto.LisReportWrite;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryCountQuery;
 import cn.zqkj.platform.his.domain.medicaldirectory.dto.MedicalDirectoryQuery;
 import cn.zqkj.platform.his.domain.organization.dto.OrganizationQuery;
@@ -10,6 +13,8 @@ import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryEntr
 import cn.zqkj.platform.his.domain.hospitaldirectory.model.HospitalDirectoryType;
 import cn.zqkj.platform.his.domain.icd10.model.Icd10DiagnosisCategory;
 import cn.zqkj.platform.his.domain.icd10.model.Icd10Entry;
+import cn.zqkj.platform.his.domain.lis.model.LisItemEntry;
+import cn.zqkj.platform.his.domain.lis.model.LisApplicationEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryEntry;
 import cn.zqkj.platform.his.domain.medicaldirectory.model.MedicalDirectoryType;
 import cn.zqkj.platform.his.domain.organization.model.OrganizationEntry;
@@ -39,6 +44,174 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 验证基层HIS客户端使用WSDL确认的HTTP、SOAPAction和受控异常边界。
  */
 class SoapPhisClientTest {
+
+    /** 验证600-001请求字段、交易码及数值标量的无损文本映射。 */
+    @Test
+    void queriesLisItemPackagesAndDetails() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startServer(exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[{"
+                    + "\"包名称\":\"乙肝标志物定量\",\"包ID\":\"PKG-01\",\"包编码\":\"SC202\","
+                    + "\"包类型\":\"检验\",\"包总金额\":55.2,\"明细名称\":\"HBsAg\","
+                    + "\"明细ID\":\"ITEM-01\",\"明细单价\":10.4,\"明细数量\":1,"
+                    + "\"明细单位\":\"项\",\"机构名称\":\"测试卫生院\",\"机构ID\":\"ORG-01\"}]}"));
+        });
+
+        try {
+            PhisResponse<List<LisItemEntry>> response = client().queryLisItems(
+                    context(server), new LisItemQuery(" ORG-01 ", " 检验 "));
+
+            assertTrue(response.success());
+            assertEquals("PKG-01", response.data().get(0).packageId());
+            assertEquals("55.2", response.data().get(0).packageTotalAmount());
+            assertEquals("10.4", response.data().get(0).itemUnitPrice());
+            assertEquals("1", response.data().get(0).itemQuantity());
+            assertTrue(requestBody.get().contains("<TradeCode>600-001</TradeCode>"));
+            assertTrue(requestBody.get().contains("机构编码"));
+            assertTrue(requestBody.get().contains("ORG-01"));
+            assertTrue(requestBody.get().contains("包类型"));
+            assertTrue(requestBody.get().contains("检验"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 验证600-002请求键、完整响应字段及可空/数值标量映射。 */
+    @Test
+    void queriesLisApplicationByApplicationIdentifier() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startServer(exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            send(exchange, 200, soapResponse("{\"Result\":1,\"Msg\":[{"
+                    + "\"BILLID\":\"BILL-01\",\"OTHERTYPE\":null,\"CSTYPE\":null,"
+                    + "\"ITEMCODE\":\"02\",\"ITEMNAME\":\"肾功\",\"FEE\":13,"
+                    + "\"PERSONID\":\"PERSON-01\",\"PERSONNAME\":\"测试患者\","
+                    + "\"CREATETIME\":\"2026-09-24 09:30:00\",\"OPERATERID\":\"STAFF-01\","
+                    + "\"OPERATERNAME\":\"测试医生\",\"ORGID\":\"ORG-01\",\"ORGNAME\":\"测试卫生院\","
+                    + "\"DIAGNOSIS\":\"\",\"BWINFO\":\"\",\"BUSINESSID\":\"BUS-01\","
+                    + "\"JZCODE\":\"VISIT-01\",\"SOURCETYPE\":6,\"SOURCETYPENAME\":\"住院\","
+                    + "\"URGENCY\":null,\"OPERATERDEPTID\":\"DEPT-01\","
+                    + "\"OPERATERDEPTNAME\":\"全科\",\"CURRENTBEDID\":null,\"BEDCODE\":\"2\","
+                    + "\"BEDNAME\":\"2\",\"CARDTYPE\":\"01\",\"CARDTYPENAME\":\"居民身份证\","
+                    + "\"CARDID\":\"TEST-CARD\",\"TEL\":null,\"GENDER\":\"男\","
+                    + "\"BIRTHDAY\":\"1990-01-01\",\"ACTDEPTID\":\"DEPT-02\","
+                    + "\"ACTDEPTNAME\":\"检验科\"}]}"));
+        });
+
+        try {
+            PhisResponse<List<LisApplicationEntry>> response = client().queryLisApplication(
+                    context(server, "HIS-ORG-01"), new LisApplicationQuery(" APP-01 ", null, null, null));
+
+            assertTrue(response.success());
+            assertEquals("BILL-01", response.data().get(0).billId());
+            assertEquals("13", response.data().get(0).fee());
+            assertEquals("PERSON-01", response.data().get(0).personId());
+            assertEquals("6", response.data().get(0).sourceType());
+            assertEquals(null, response.data().get(0).telephone());
+            assertTrue(requestBody.get().contains("<TradeCode>600-002</TradeCode>"));
+            assertTrue(requestBody.get().contains("机构ID"));
+            assertTrue(requestBody.get().contains("HIS-ORG-01"));
+            assertTrue(requestBody.get().contains("申请单ID"));
+            assertTrue(requestBody.get().contains("APP-01"));
+            assertTrue(requestBody.get().contains("业务ID"));
+            assertTrue(requestBody.get().contains("门诊号"));
+            assertTrue(requestBody.get().contains("住院号"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 无查询标识时拒绝600-002，避免机构范围内宽泛患者申请读取。 */
+    @Test
+    void rejectsLisApplicationQueryWithoutSelectorBeforeSend() throws Exception {
+        var requestsReceived = new java.util.concurrent.atomic.AtomicInteger();
+        HttpServer server = startServer(exchange -> {
+            requestsReceived.incrementAndGet();
+            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[]}"));
+        });
+        try {
+            assertThrows(PhisRequestException.class,
+                    () -> client().queryLisApplication(context(server),
+                            new LisApplicationQuery(null, " ", null, null)));
+            assertEquals(0, requestsReceived.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 验证600-003将已编码报告原样放入入参，并解析目标保存消息。 */
+    @Test
+    void writesLisReportWithoutReencodingPayload() throws Exception {
+        String encodedReport = "eyJyZXNvdXJjZVR5cGUiOiJCdW5kbGUifQ==";
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startServer(exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            send(exchange, 200, soapResponse(
+                    "{\"Result\":1,\"Msg\":\"LIS报告保存成功\"}"));
+        });
+
+        try {
+            PhisResponse<String> response = client().writeLisReport(
+                    context(server), new LisReportWrite(encodedReport));
+
+            assertTrue(response.success());
+            assertEquals("LIS报告保存成功", response.data());
+            assertTrue(requestBody.get().contains("<TradeCode>600-003</TradeCode>"));
+            assertTrue(requestBody.get().contains("入参"));
+            assertTrue(requestBody.get().contains(encodedReport));
+            assertTrue(!requestBody.get().contains("resourceType"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 缺少报告内容时拒绝600-003，不对基层HIS发送写操作。 */
+    @Test
+    void rejectsEmptyLisReportBeforeSend() throws Exception {
+        var requestsReceived = new java.util.concurrent.atomic.AtomicInteger();
+        HttpServer server = startServer(exchange -> {
+            requestsReceived.incrementAndGet();
+            send(exchange, 200, soapResponse("{\"Result\":1,\"Msg\":\"saved\"}"));
+        });
+        try {
+            assertThrows(PhisRequestException.class,
+                    () -> client().writeLisReport(context(server), new LisReportWrite(" ")));
+            assertEquals(0, requestsReceived.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 缺少公版声明必填字段时拒绝整份600-001响应。 */
+    @Test
+    void rejectsLisItemEntryMissingRequiredField() throws Exception {
+        HttpServer server = startServer(exchange -> send(exchange, 200, soapResponse(
+                "{\"result\":\"1\",\"msg\":[{\"包名称\":\"乙肝标志物定量\"}]}")));
+        try {
+            assertThrows(PhisProtocolException.class,
+                    () -> client().queryLisItems(context(server), new LisItemQuery("ORG-01", "检验")));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** 非公版项目包类型在发送前拒绝，不触发目标HTTP调用。 */
+    @Test
+    void rejectsInvalidLisPackageTypeBeforeSend() throws Exception {
+        var requestsReceived = new java.util.concurrent.atomic.AtomicInteger();
+        HttpServer server = startServer(exchange -> {
+            requestsReceived.incrementAndGet();
+            send(exchange, 200, soapResponse("{\"result\":\"1\",\"msg\":[]}"));
+        });
+        try {
+            assertThrows(PhisRequestException.class,
+                    () -> client().queryLisItems(context(server), new LisItemQuery("ORG-01", "未知类型")));
+            assertEquals(0, requestsReceived.get());
+        } finally {
+            server.stop(0);
+        }
+    }
 
     /** 验证连接拒绝不再与其他通信失败混为同一条不可操作的摘要。 */
     @Test
@@ -457,6 +630,12 @@ class SoapPhisClientTest {
     private PhisInvocationContext context(HttpServer server) {
         return PhisInvocationContext.create(
                 serviceUri(server), 1_000, 3_000, "SYNTHETIC-AUTH");
+    }
+
+    /** 创建绑定合成HIS机构号的SOAP调用上下文。 */
+    private PhisInvocationContext context(HttpServer server, String sourceOrganizationId) {
+        return PhisInvocationContext.create(
+                serviceUri(server), 1_000, 3_000, "SYNTHETIC-AUTH", sourceOrganizationId);
     }
 
     /**
