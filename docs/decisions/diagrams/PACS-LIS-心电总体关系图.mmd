@@ -1,0 +1,15 @@
+%%{init: {'theme':'base','themeVariables': {'primaryColor':'#f3f3f3','primaryBorderColor':'#d6d6d6','primaryTextColor':'#303030','lineColor':'#9a9a9a','secondaryColor':'#ffffff','tertiaryColor':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#c9c9c9','fontFamily':'Arial, sans-serif'}}}%%
+flowchart LR
+    subgraph JC["基层侧"]
+        JX["基层系统<br/>基层HIS提供方系统"]
+    end
+
+    subgraph XYY["县人民医院侧"]
+        PT["中间接口平台<br/>接口适配、转换、追踪、对账"]
+        PDB[("平台数据库<br/>调用记录、状态、审计")]
+        HIS["县医院HIS及相关系统<br/>PACS / LIS / 心电"]
+        PT -->|"调用记录与状态"| PDB
+    end
+
+    JX <-->|"PHIS_Interface / TradeCode<br/>项目目录、申请单查询、报告回写"| PT
+    PT <-->|"项目查询、申请单获取<br/>检查完成后提交报告"| HIS

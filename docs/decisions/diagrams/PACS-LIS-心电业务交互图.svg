@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2600" height="790" viewBox="0 0 2600 790" role="img" aria-labelledby="title desc">
+  <title id="title">PACS / LIS / 心电：县医院与基层 HIS 业务交互</title>
+  <desc id="desc">基层HIS、县医院中间接口平台和县医院PACS、LIS、心电系统之间的业务关系，包含项目查询、申请单获取、报告回写、平台数据库及超时处理说明。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="11" markerHeight="11" refX="8" refY="5.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5.5 L0,11 z" fill="#aeb5b9"/></marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #353a3e; }
+      .boundary { fill: #fff; stroke: #cbd0d3; stroke-width: 2; }
+      .node { fill: #f1f2f3; stroke: #cbd0d3; stroke-width: 2; }
+      .card { fill: #fafafa; stroke: #cbd0d3; stroke-width: 2; }
+      .arrow { fill: none; stroke: #aeb5b9; stroke-width: 3; marker-end: url(#arrow); }
+      .label { fill: #fff; stroke: #d4d8db; stroke-width: 1.5; }
+      .muted { fill: #737b80; }
+    </style>
+  </defs>
+  <rect width="2600" height="790" fill="#fff"/>
+
+  <text x="1300" y="57" text-anchor="middle" font-size="40" font-weight="500">PACS / LIS / 心电：县医院与基层 HIS 业务交互</text>
+
+  <!-- system boundaries -->
+  <rect class="boundary" x="55" y="112" width="480" height="470" rx="20"/>
+  <text x="295" y="147" text-anchor="middle" font-size="22" class="muted">基层侧</text>
+  <rect class="boundary" x="610" y="95" width="1940" height="585" rx="20"/>
+  <text x="1580" y="132" text-anchor="middle" font-size="22" class="muted">县人民医院侧</text>
+
+  <!-- system nodes -->
+  <rect class="node" x="105" y="254" width="380" height="184" rx="22"/>
+  <text x="295" y="313" text-anchor="middle" font-size="30" font-weight="500">基层 HIS</text>
+  <text x="295" y="365" text-anchor="middle" font-size="22" class="muted">保存基层申请</text>
+  <text x="295" y="400" text-anchor="middle" font-size="22" class="muted">接收检查 / 检验报告</text>
+
+  <rect class="node" x="1215" y="232" width="500" height="210" rx="22"/>
+  <text x="1465" y="290" text-anchor="middle" font-size="30" font-weight="500">中间接口平台</text>
+  <text x="1465" y="348" text-anchor="middle" font-size="22" class="muted">机构校验 · 接口适配</text>
+  <text x="1465" y="383" text-anchor="middle" font-size="22" class="muted">调用追踪 · 结果记录</text>
+
+  <rect class="node" x="1995" y="220" width="465" height="228" rx="22"/>
+  <text x="2227.5" y="278" text-anchor="middle" font-size="28" font-weight="500">县医院 HIS 及相关系统</text>
+  <text x="2227.5" y="345" text-anchor="middle" font-size="22" class="muted">医技人员输入申请单号</text>
+  <text x="2227.5" y="383" text-anchor="middle" font-size="22" class="muted">PACS · LIS · 心电完成业务</text>
+
+  <rect class="node" x="1280" y="505" width="370" height="95" rx="18"/>
+  <text x="1465" y="545" text-anchor="middle" font-size="26" font-weight="500">平台数据库</text>
+  <text x="1465" y="577" text-anchor="middle" font-size="18" class="muted">仅记录调用事实与摘要</text>
+
+  <!--基层 ↔ platform-->
+  <path class="arrow" d="M1215 300 H550"/>
+  <rect class="label" x="675" y="164" width="415" height="46" rx="15"/>
+  <text x="882.5" y="194" text-anchor="middle" font-size="20" class="muted">调用 PHIS_Interface / TradeCode</text>
+  <path class="arrow" d="M550 386 H1215"/>
+  <rect class="label" x="770" y="406" width="380" height="46" rx="15"/>
+  <text x="960" y="436" text-anchor="middle" font-size="20" class="muted">申请数据 / HIS 处理结果</text>
+
+  <!-- county HIS ↔ platform -->
+  <path class="arrow" d="M1995 300 H1750"/>
+  <rect class="label" x="1753" y="164" width="300" height="46" rx="15"/>
+  <text x="1903" y="194" text-anchor="middle" font-size="20" class="muted">查询申请 / 回写报告</text>
+  <path class="arrow" d="M1750 386 H1995"/>
+  <rect class="label" x="1755" y="406" width="300" height="46" rx="15"/>
+  <text x="1905" y="436" text-anchor="middle" font-size="20" class="muted">申请信息 / HIS 处理结果</text>
+
+  <!-- platform database -->
+  <path class="arrow" d="M1465 442 V495"/>
+
+  <!-- transaction cards -->
+  <rect class="card" x="60" y="625" width="760" height="88" rx="16"/>
+  <text x="440" y="660" text-anchor="middle" font-size="23">项目目录查询</text>
+  <text x="440" y="694" text-anchor="middle" font-size="20" class="muted">500-001　/　600-001　/　700-001</text>
+
+  <rect class="card" x="920" y="625" width="760" height="88" rx="16"/>
+  <text x="1300" y="660" text-anchor="middle" font-size="23">按申请单获取业务</text>
+  <text x="1300" y="694" text-anchor="middle" font-size="20" class="muted">500-002　/　600-002　/　700-002</text>
+
+  <rect class="card" x="1780" y="625" width="760" height="88" rx="16"/>
+  <text x="2160" y="660" text-anchor="middle" font-size="23">FHIR 报告回写</text>
+  <text x="2160" y="694" text-anchor="middle" font-size="20" class="muted">500-003*　/　600-003　/　700-003*</text>
+
+  <text x="1300" y="766" text-anchor="middle" font-size="18" class="muted">超时 / 无响应：结果未知，先核实基层 HIS 是否已保存，不自动重发。　* PACS 与心电回写交易码在接口原件中有冲突，须由基层 HIS 提供方确认。</text>
+</svg>

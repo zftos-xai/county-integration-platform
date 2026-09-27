@@ -3,13 +3,74 @@ info:
   title: 县域系统集成平台管理接口
   version: 0.1.0
   description: >-
-    OpenAPI 是用机器可读文件说明 HTTP 接口的通用规范。本文件描述当前平台内部管理接口。
-    业务接口只有在接口规范、已删除或遮盖敏感字段的样例、网络条件和负责人均确认后才能开发。
+    OpenAPI 是用机器可读文件说明 HTTP 接口的通用规范。本文件描述当前平台管理端接口和集成接口实现候选。
+    集成业务接口尚未成为县医院确认契约，也不代表真实HIS已联调。
 servers:
   - url: /api/v1
 security:
   - hospitalIdentity: []
 paths:
+  /lis/item-packages/query:
+    servers:
+      - url: /api/integration/v1
+    post:
+      security: []
+      operationId: queryLisItemPackages
+      summary: 查询基层HIS的LIS项目包目录（平台候选接口）
+      description: >-
+        使用外部系统ID/Key识别调用方；organizationCode只用于平台机构路由，不做调用方机构范围授权。
+        基层HIS来源机构号由已验证端点配置派生。作为LIS专属入口，平台固定以“检验”调用600-001；县医院不能切换到PACS检查或体检目录。此平台请求和响应契约仍待县医院确认。
+        县医院负责在其LIS/配置系统维护基层外检项目与本地检验项目的对码；平台只提供目录数据，不维护或裁定映射。目录中的itemId与600-002申请ITEMCODE是否属于同一编码空间尚待目标HIS样例核实。
+      parameters:
+        - name: X-External-System-Id
+          in: header
+          required: true
+          schema: { type: string, maxLength: 64 }
+        - name: X-External-System-Key
+          in: header
+          required: true
+          schema: { type: string, format: password }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LisItemPackageQueryRequest' }
+      responses:
+        '200':
+          description: HIS明确成功或业务拒绝，查看data.outcome区分
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LisItemPackageQueryResponse' }
+        '400':
+          description: 请求字段不合法；业务操作尚未受理，只返回HTTP requestId
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401':
+          description: 外部系统ID/Key未识别或调用方已停用
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '404':
+          description: 目标基层机构不存在或未启用；响应包含平台operationId
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LisIntegrationError' }
+        '409':
+          description: 目标机构基层HIS端点或来源机构配置不可用
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LisIntegrationError' }
+        '503':
+          description: 平台机构路由或交换记录存储暂不可用；响应包含已分配编号
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LisIntegrationError' }
+        '502':
+          description: 基层HIS未响应或响应无法解析；需通过data.exchangeRequestId核实，不能据此判断目标未处理
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LisItemPackageQueryResponse' }
   /bootstrap/status:
     get:
       security: []
@@ -731,6 +792,31 @@ paths:
         '403': { description: 'configuration:write permission is required' }
         '404': { $ref: '#/components/responses/ResourceNotFound' }
         '409': { $ref: '#/components/responses/ResourceConflict' }
+  /configuration/external-systems/{systemId}/inbound-key:
+    parameters:
+      - { name: systemId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    post:
+      operationId: rotateExternalSystemInboundKey
+      summary: 轮换外部系统县医院入站调用Key
+      description: 明文仅在本次响应返回，响应禁止缓存；旧Key立即失效，Key只用于识别外部系统身份。
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RotateExternalSystemInboundKeyRequest' }
+      responses:
+        '200':
+          description: Key已轮换；响应包含本次唯一可见的明文
+          headers:
+            Cache-Control: { schema: { type: string, example: no-store } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExternalSystemInboundKeyResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'configuration:write permission is required' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+        '409': { $ref: '#/components/responses/ResourceConflict' }
   /configuration/external-systems/{systemId}/endpoints:
     parameters:
       - { name: systemId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
@@ -853,6 +939,55 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
   schemas:
+    LisItemPackageQueryRequest:
+      type: object
+      required: [organizationCode]
+      properties:
+        organizationCode: { type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9._-]+$', description: 平台机构路由代码 }
+    LisItemPackageQueryResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data:
+          type: object
+          required: [operationId, exchangeRequestId, outcome, message, items]
+          properties:
+            operationId: { type: string, format: uuid }
+            exchangeRequestId: { type: string, format: uuid }
+            outcome: { type: string, enum: [SUCCESS, FAILURE, NO_RESPONSE, INVALID_RESPONSE] }
+            targetResultCode: { type: string, nullable: true }
+            message: { type: string, description: 受控状态说明，不含HIS原始错误正文 }
+            items: { type: array, items: { $ref: '#/components/schemas/LisItemPackageEntry' } }
+    LisIntegrationError:
+      type: object
+      required: [code, message, operationId, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string, nullable: true, description: HTTP链路编号 }
+        operationId: { type: string, description: 平台本次业务操作编号 }
+        exchangeRequestId: { type: string, nullable: true, description: 已分配的基层HIS调用编号；未发起HIS请求时为空 }
+        timestamp: { type: string, format: date-time }
+    LisItemPackageEntry:
+      type: object
+      description: >-
+        600-001项目包与明细；字段按基层HIS适配模型透传，不含患者申请资料。
+        县医院负责据此维护本地项目对码；itemId与600-002的ITEMCODE是否可直接关联尚待目标HIS样例核实。
+      properties:
+        packageName: { type: string, nullable: true }
+        packageId: { type: string, nullable: true }
+        packageCode: { type: string, nullable: true }
+        packageType: { type: string, nullable: true }
+        packageTotalAmount: { type: string, nullable: true }
+        itemName: { type: string, nullable: true }
+        itemId: { type: string, nullable: true }
+        itemUnitPrice: { type: string, nullable: true }
+        itemQuantity: { type: string, nullable: true }
+        itemUnit: { type: string, nullable: true }
+        organizationName: { type: string, nullable: true }
+        organizationId: { type: string, nullable: true }
     BootstrapStatusResponse:
       type: object
       required: [code, message, data]
@@ -1350,15 +1485,29 @@ components:
         code: { type: string, example: SUCCESS }
         message: { type: string }
         data: { $ref: '#/components/schemas/ExternalSystem' }
+    ExternalSystemInboundKeyResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string }
+        data:
+          type: object
+          required: [systemCode, key, system]
+          properties:
+            systemCode: { type: string, maxLength: 64 }
+            key: { type: string, description: 新生成的明文Key；仅本次响应可见, minLength: 44, maxLength: 44 }
+            system: { $ref: '#/components/schemas/ExternalSystem' }
     ExternalSystem:
       type: object
-      required: [id, systemCode, systemName, description, enabled, createdAt, updatedAt, version]
+      required: [id, systemCode, systemName, description, enabled, inboundKeyConfigured, createdAt, updatedAt, version]
       properties:
         id: { type: integer, format: int64 }
         systemCode: { type: string, maxLength: 64 }
         systemName: { type: string, maxLength: 100 }
         description: { type: string, maxLength: 500 }
         enabled: { type: boolean }
+        inboundKeyConfigured: { type: boolean, description: 系统是否已设置入站调用Key，不包含Key正文 }
         createdAt: { type: string, format: date-time, description: UTC }
         updatedAt: { type: string, format: date-time, description: UTC }
         version: { type: string, format: byte }
@@ -1377,6 +1526,11 @@ components:
         description: { type: string, minLength: 1, maxLength: 500 }
         enabled: { type: boolean }
         version: { type: string, format: byte }
+    RotateExternalSystemInboundKeyRequest:
+      type: object
+      required: [version]
+      properties:
+        version: { type: string, format: byte, description: 当前外部系统SQL Server rowversion的Base64值 }
     ExternalEndpointListResponse:
       type: object
       required: [code, message, data]
