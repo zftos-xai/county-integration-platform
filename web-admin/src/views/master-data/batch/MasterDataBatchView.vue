@@ -15,6 +15,7 @@ import { useRouter } from 'vue-router';
 import AdminPagination from '@/components/AdminPagination.vue';
 import AdminTableFrame from '@/components/AdminTableFrame.vue';
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue';
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue';
 import DrawerFrame from '@/components/DrawerFrame.vue';
 import ListQueryToolbar from '@/components/ListQueryToolbar.vue';
 import ListRowActions from '@/components/ListRowActions.vue';
@@ -45,6 +46,7 @@ import type {
 import { listOrganizations } from '@/api/system/organization';
 import { authState, hasPermission } from '@/store/modules/auth';
 import { ApiClientError } from '@/utils/request';
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
 import StartBatchDrawer from './components/StartBatchDrawer.vue';
 import DirectorySyncResultPanel from './components/DirectorySyncResultPanel.vue';
 import Icd10SyncResultPanel from './components/Icd10SyncResultPanel.vue';
@@ -77,7 +79,6 @@ const medicalDirectoryResults = ref<MedicalDirectorySyncResult[]>([]);
 const icd10Results = ref<Icd10SyncResult[]>([]);
 const isDirectoryResultsLoading = ref(false);
 const isAdvancing = ref(false);
-const confirmCancelId = ref<number | null>(null);
 const actionError = ref<ApiClientError | null>(null);
 const isCreatorOpen = ref(false);
 const isSaving = ref(false);
@@ -93,6 +94,7 @@ const organizationOptions = ref<Array<{ code: string; name: string }>>([]);
 const syncOptions = ref<MasterDataSyncOptions>({ sources: [], businesses: [] });
 const isSyncSourceLoading = ref(true);
 const hasLoadedSyncSources = ref(false);
+const { request: confirmationRequest, confirm, resolve: resolveConfirmation } = useConfirmationDialog();
 const syncSourceError = ref<ApiClientError | null>(null);
 const currentTime = ref(Date.now());
 let listController: AbortController | null = null;
@@ -315,11 +317,14 @@ async function openInterfaceConfiguration() {
 
 /** 二次确认后取消尚未执行的批次，不删除历史记录。 */
 async function cancelBatch(item: MasterDataBatchSummary) {
-  if (confirmCancelId.value !== item.id) {
-    confirmCancelId.value = item.id;
-    return;
-  }
   if (isAdvancing.value) return;
+  const confirmed = await confirm({
+    title: '取消同步批次？',
+    message: `确认取消尚未执行的同步批次“${item.batchNo}”吗？取消后会保留历史记录。`,
+    confirmLabel: '取消批次',
+    danger: true,
+  });
+  if (!confirmed) return;
   isAdvancing.value = true;
   actionError.value = null;
   try {
@@ -337,7 +342,6 @@ async function cancelBatch(item: MasterDataBatchSummary) {
       actionError.value = apiError;
     }
   } finally {
-    confirmCancelId.value = null;
     isAdvancing.value = false;
     await loadBatches(true);
   }
@@ -894,7 +898,7 @@ onBeforeUnmount(() => {
                     :disabled="isAdvancing"
                     @click="cancelBatch(item)"
                   >
-                    {{ confirmCancelId === item.id ? '确认取消' : '取消' }}
+                    取消
                   </button>
                 </ListRowActions>
               </td>
@@ -1071,9 +1075,7 @@ onBeforeUnmount(() => {
             :disabled="isAdvancing"
             @click="cancelBatch(selected)"
           >
-            <XCircle :size="15" />{{
-              confirmCancelId === selected.id ? '确认取消批次' : '取消本批次'
-            }}
+            <XCircle :size="15" />取消本批次
           </button>
           <button
             v-if="canRunSelectedBatch"
@@ -1111,6 +1113,12 @@ onBeforeUnmount(() => {
       @reload="reloadCreatedBatch"
       @configure="openInterfaceConfiguration"
       @retry-sources="loadSyncSources"
+    />
+    <ConfirmationDialog
+      v-if="confirmationRequest"
+      :request="confirmationRequest"
+      @confirm="resolveConfirmation(true)"
+      @cancel="resolveConfirmation(false)"
     />
   </section>
 </template>
