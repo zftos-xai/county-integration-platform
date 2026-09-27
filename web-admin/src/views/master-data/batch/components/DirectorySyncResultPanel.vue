@@ -1,4 +1,4 @@
-<!-- 100-003同步结果组件：按目录类型展示已落库的取得、校验和当前数据更新事实。 -->
+<!-- 100-003同步结果组件：按目录类别展示取得、检查和当前数据更新结果。 -->
 <script setup lang="ts">
 import { AlertCircle, CheckCircle2, CircleHelp, LoaderCircle } from 'lucide-vue-next'
 import type { HospitalDirectorySyncResult } from '@/api/master-data/batch'
@@ -6,7 +6,7 @@ import type { HospitalDirectorySyncResult } from '@/api/master-data/batch'
 const props = defineProps<{
   /** 当前批次已落库的单目录类型处理结果。 */
   results: HospitalDirectorySyncResult[]
-  /** 分项事实是否仍在读取。 */
+  /** 是否仍在读取各类别的结果。 */
   loading: boolean
 }>()
 
@@ -20,11 +20,11 @@ const typeLabels = {
 
 /** @param result 单目录类型结果 @return 面向业务人员的处理结论 */
 function statusLabel(result: HospitalDirectorySyncResult) {
-  return result.status === 'COMPLETED'
+  if (result.status === 'RESULT_UNKNOWN') return '结果无法确认'
+  if (result.status !== 'COMPLETED') return '本类型未更新'
+  return result.createdCount + result.updatedCount + result.sourceMissingCount > 0
     ? '已更新当前数据'
-    : result.status === 'RESULT_UNKNOWN'
-      ? '结果无法确认'
-      : '本类型未更新'
+    : '已完成核对，当前数据无变化'
 }
 </script>
 

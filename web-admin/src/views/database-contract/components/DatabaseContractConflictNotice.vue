@@ -1,4 +1,4 @@
-<!-- 数据库契约写操作冲突提示：要求重新读取真实状态，不允许直接重复DDL请求。 -->
+<!-- 数据库结构维护的并发冲突提示：要求重新读取当前状态，避免重复提交DDL操作。 -->
 <script setup lang="ts">
 import { AlertTriangle, RefreshCw } from 'lucide-vue-next'
 import { ApiClientError } from '@/utils/request'

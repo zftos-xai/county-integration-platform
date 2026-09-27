@@ -13,7 +13,7 @@ export function emptyDictionaryTypeForm(): DictionaryTypeForm {
   return { typeCode: '', typeName: '', description: '', enabled: true, version: '' }
 }
 
-/** 将字典类型快照转换为编辑草稿。 */
+/** 将字典类型的API返回数据转换为编辑草稿。 */
 export function dictionaryTypeToForm(type: DictionaryType): DictionaryTypeForm {
   return { typeCode: type.typeCode, typeName: type.typeName, description: type.description, enabled: type.enabled, version: type.version }
 }
@@ -23,7 +23,7 @@ export function emptyDictionaryItemForm(): DictionaryItemForm {
   return { itemCode: '', itemLabel: '', sortOrder: '0', enabled: true, version: '' }
 }
 
-/** 将字典项快照转换为编辑草稿。 */
+/** 将字典项的API返回数据转换为编辑草稿。 */
 export function dictionaryItemToForm(item: DictionaryItem): DictionaryItemForm {
   return { itemCode: item.itemCode, itemLabel: item.itemLabel, sortOrder: String(item.sortOrder), enabled: item.enabled, version: item.version }
 }

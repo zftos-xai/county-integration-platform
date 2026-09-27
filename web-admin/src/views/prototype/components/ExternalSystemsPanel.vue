@@ -49,7 +49,7 @@ function addSystem(event?: MouseEvent) {
   void nextTick(() => drawerElement.value?.querySelector<HTMLElement>('button')?.focus())
 }
 function close() { selected.value = null; draft.value = null; isNew.value = false; void nextTick(() => drawerTrigger?.focus()) }
-/** 将键盘焦点约束在外部系统抽屉内，并支持 Escape 关闭。 */
+/** 将键盘焦点限制在外部系统侧边窗口内，并支持 Escape 关闭。 */
 function onDrawerKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') { event.preventDefault(); close(); return }
   if (event.key !== 'Tab' || !drawerElement.value) return

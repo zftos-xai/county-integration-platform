@@ -13,7 +13,7 @@ export function emptyRoleForm(): RoleForm {
   return { roleCode: '', roleName: '', enabled: true, version: '' }
 }
 
-/** 将角色 API 快照转换为独立编辑草稿。 */
+/** 将角色 API 返回的数据转换为独立编辑草稿。 */
 export function roleToForm(role: Role): RoleForm {
   return {
     roleCode: role.roleCode,

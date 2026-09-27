@@ -32,8 +32,6 @@ const Icd10DirectoryView = () =>
   import('@/views/master-data/directory/Icd10DirectoryView.vue');
 const MasterDataBatchView = () =>
   import('@/views/master-data/batch/MasterDataBatchView.vue');
-const MasterDataBatchDetailView = () =>
-  import('@/views/master-data/batch/MasterDataBatchDetailView.vue');
 
 /** 管理端页面地址表；正式业务页面统一挂载在登录后布局下。 */
 const router = createRouter({
@@ -62,7 +60,7 @@ const router = createRouter({
     {
       path: '/prototype/database-contract',
       component: DatabaseContractPrototypeView,
-      meta: { title: '数据库契约维护原型', public: true },
+      meta: { title: '数据库结构维护原型', public: true },
     },
     {
       path: '/',
@@ -132,7 +130,7 @@ const router = createRouter({
           path: 'database-contract',
           component: DatabaseContractMaintenanceView,
           meta: {
-            title: '数据库契约维护',
+            title: '数据库结构维护',
             public: false,
             requiredPermission: 'database-contract:read',
           },
@@ -176,12 +174,7 @@ const router = createRouter({
         },
         {
           path: 'master-data/batches/:id',
-          component: MasterDataBatchDetailView,
-          meta: {
-            title: '批次详情',
-            public: false,
-            requiredPermission: 'master-data:read',
-          },
+          redirect: '/master-data/batches',
         },
         {
           path: 'master-data/organization-mappings',

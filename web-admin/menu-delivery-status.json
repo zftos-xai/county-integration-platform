@@ -122,7 +122,7 @@
     },
     {
       "id": "database-contract",
-      "label": "数据库契约维护",
+      "label": "数据库结构维护",
       "route": "/database-contract",
       "permission": "database-contract:read",
       "writeCapable": true,
@@ -174,7 +174,7 @@
       "editor": "web-admin/src/views/configuration/external-system/components/ExternalEndpointEditorDrawer.vue",
       "tests": ["web-admin/tests/configurationApiPaths.test.mjs", "web-admin/tests/externalSystemForm.test.mjs"],
       "auditSource": "backend/src/main/java/cn/zqkj/platform/system/configuration/service/impl/ConfigurationServiceImpl.java",
-      "auditActions": ["EXTERNAL_SYSTEM_CREATED", "EXTERNAL_SYSTEM_UPDATED", "EXTERNAL_ENDPOINT_CREATED", "EXTERNAL_ENDPOINT_UPDATED"]
+      "auditActions": ["EXTERNAL_SYSTEM_CREATED", "EXTERNAL_SYSTEM_UPDATED", "EXTERNAL_SYSTEM_INBOUND_KEY_ROTATED", "EXTERNAL_ENDPOINT_CREATED", "EXTERNAL_ENDPOINT_UPDATED"]
     }
   ]
 }

@@ -1,4 +1,4 @@
-<!-- 数据库契约正式维护页：使用真实接口完成扫描、方案、双人审批、事务执行、复验和执行前取消。 -->
+<!-- 数据库结构维护页：检查实际结构与迁移脚本、Mapper和模型是否一致，并按审批方案安全修正可调整的差异。 -->
 <script setup lang="ts">
 import { AlertTriangle, CheckCircle2, Database, FileCode2, LoaderCircle, Play, RefreshCw, ShieldCheck, XCircle } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
@@ -17,6 +17,9 @@ import {
 import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError } from '@/utils/request'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
+import AdminPagination from '@/components/AdminPagination.vue'
+import AdminTableFrame from '@/components/AdminTableFrame.vue'
+import { useClientPagination } from '@/composables/useClientPagination'
 import DatabaseContractConflictNotice from './components/DatabaseContractConflictNotice.vue'
 import { databaseContractExecutionConfirmationMatches } from './form'
 
@@ -24,7 +27,7 @@ const inspection = ref<DatabaseContractInspection | null>(null)
 const plans = ref<DatabaseContractPlan[]>([])
 const selectedIssueKeys = ref<string[]>([])
 const selectedPlanId = ref<number | null>(null)
-const summary = ref('修复当前数据库与Flyway契约的可安全执行差异')
+const summary = ref('修复当前数据库与Flyway迁移脚本之间可安全调整的差异')
 const approvalNote = ref('已核对影响范围、执行窗口、备份点和事务回滚条件。')
 const executionConfirmation = ref('')
 const loading = ref(false)
@@ -35,6 +38,7 @@ const operationError = ref<ApiClientError | null>(null)
 const auditTargetId = ref('')
 
 const selectedPlan = computed(() => plans.value.find(item => item.id === selectedPlanId.value) ?? null)
+const { page: planPage, pageSize: planPageSize, pagedRows: pagedPlans } = useClientPagination(computed(() => plans.value))
 const canPlan = computed(() => hasPermission('database-contract:plan'))
 const canApprove = computed(() => hasPermission('database-contract:approve'))
 const canExecute = computed(() => hasPermission('database-contract:execute'))
@@ -67,7 +71,7 @@ async function load() {
 /** 重新扫描，不复用旧差异作为执行依据。 */
 async function rescan() {
   await load()
-  notice.value = '已重新读取数据库、Flyway、Mapper和模型契约。'
+  notice.value = '已重新读取数据库、Flyway迁移脚本、Mapper和数据模型的结构。'
 }
 
 /** 用实时差异键创建持久化方案。 */
@@ -149,7 +153,7 @@ onMounted(load)
 <template>
   <section class="contract-page" aria-labelledby="contract-page-title">
     <header class="contract-intro">
-      <div><span>正常维护</span><h2 id="contract-page-title">数据库契约维护</h2><p>扫描真实差异，生成受控方案；只有全部可安全执行且经非创建人审批的方案才能执行。</p></div>
+      <div><span>正常维护</span><h2 id="contract-page-title">数据库结构维护</h2><p>检查数据库实际结构与迁移脚本、Mapper和数据模型是否一致；只有所有差异都可安全调整且由非创建人审批后，才能执行方案。</p></div>
       <button class="prototype-secondary compact" :disabled="loading || Boolean(action)" @click="rescan"><RefreshCw :class="{ spinning: loading }" :size="17" />重新扫描</button>
     </header>
 
@@ -158,18 +162,18 @@ onMounted(load)
     <AuditAwareSuccess v-if="notice" :message="notice" target-type="DATABASE_CONTRACT_PLAN" :target-id="auditTargetId" @close="notice = ''; auditTargetId = ''" />
 
     <section v-if="inspection" class="contract-metrics" aria-label="扫描摘要">
-      <div><span>契约字段</span><strong>{{ inspection.expectedColumnCount }}</strong><small>Flyway迁移契约</small></div>
+      <div><span>迁移脚本定义的字段</span><strong>{{ inspection.expectedColumnCount }}</strong><small>按 Flyway 迁移记录统计</small></div>
       <div><span>发现差异</span><strong>{{ inspection.issueCount }}</strong><small>数据库、Mapper和模型</small></div>
       <div><span>可在线执行</span><strong>{{ inspection.executableCount }}</strong><small>仅扩大长度或放宽NULL</small></div>
       <div><span>扫描时间</span><strong class="time">{{ formatTime(inspection.scannedAt) }}</strong><small>只读实时检查</small></div>
     </section>
 
-    <div v-if="loading && !inspection" class="contract-state"><LoaderCircle class="spinning" :size="28" /><strong>正在扫描数据库契约</strong></div>
+    <div v-if="loading && !inspection" class="contract-state"><LoaderCircle class="spinning" :size="28" /><strong>正在检查数据库结构</strong></div>
     <template v-else-if="inspection">
       <section class="contract-card">
         <div class="contract-card-head"><div><h3>差异与方案</h3><p>不可执行项仍会明确告诉开发或DBA应该修改的位置，但不能进入在线DDL审批。</p></div><span>{{ selectedIssueKeys.length }} 项已选</span></div>
-        <div v-if="inspection.issues.length === 0" class="contract-state"><CheckCircle2 :size="30" /><strong>当前契约完全一致</strong><span>数据库字段、Mapper和模型没有发现差异。</span></div>
-        <div v-else class="prototype-table-wrap">
+        <div v-if="inspection.issues.length === 0" class="contract-state"><CheckCircle2 :size="30" /><strong>当前结构一致</strong><span>数据库字段、Mapper和数据模型没有发现差异。</span></div>
+        <AdminTableFrame v-else label="结构差异列表">
           <table class="work-table contract-issue-table"><thead><tr><th>选择</th><th>对象 / 差异</th><th>修改方向</th><th>执行边界</th><th>DDL</th></tr></thead><tbody>
             <tr v-for="item in inspection.issues" :key="item.issueKey">
               <td><input v-model="selectedIssueKeys" type="checkbox" :value="item.issueKey" :disabled="!canPlan" :aria-label="`选择${item.objectName}`" /></td>
@@ -179,7 +183,7 @@ onMounted(load)
               <td><span class="prototype-tag" :class="item.executable ? 'success' : 'neutral'">{{ item.executable ? '可生成' : '不执行' }}</span></td>
             </tr>
           </tbody></table>
-        </div>
+        </AdminTableFrame>
         <footer v-if="inspection.issues.length && canPlan" class="contract-create">
           <label><span>方案摘要</span><input v-model="summary" maxlength="500" /></label>
           <button class="prototype-primary" :disabled="!selectedIssueKeys.length || !summary.trim() || Boolean(action)" @click="createPlan"><FileCode2 :size="16" />{{ action === 'create' ? '生成中…' : '生成方案' }}</button>
@@ -189,10 +193,11 @@ onMounted(load)
       <div class="contract-plan-grid">
         <section class="contract-card plan-list">
           <div class="contract-card-head"><div><h3>维护方案</h3><p>最近100条，所有取消和失败记录都会保留。</p></div><span>{{ plans.length }} 条</span></div>
-          <button v-for="plan in plans" :key="plan.id" :class="{ active: selectedPlanId === plan.id }" @click="selectedPlanId = plan.id; executionConfirmation = ''">
+          <button v-for="plan in pagedPlans" :key="plan.id" :class="{ active: selectedPlanId === plan.id }" @click="selectedPlanId = plan.id; executionConfirmation = ''">
             <span><strong>{{ plan.planNo }}</strong><small>{{ plan.summary }}</small></span><span><em class="prototype-tag" :class="statusTone(plan.status)">{{ statusLabel(plan.status) }}</em><small>{{ formatTime(plan.updatedAt) }}</small></span>
           </button>
           <div v-if="plans.length === 0" class="contract-state compact-state">尚无维护方案</div>
+          <AdminPagination compact :total="plans.length" :page="planPage" :page-size="planPageSize" @update:page="planPage = $event" @update:page-size="planPageSize = $event" />
         </section>
 
         <section v-if="selectedPlan" class="contract-card plan-detail">

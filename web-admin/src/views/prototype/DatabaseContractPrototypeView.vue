@@ -1,4 +1,4 @@
-<!-- 数据库契约维护线交互原型：仅演示正常实例中的分析、审批、执行和撤销流程，不调用真实DDL。 -->
+<!-- 数据库结构维护交互原型：用示例数据演示检查、审批、执行和撤销流程，不连接真实数据库，也不执行DDL。 -->
 <script setup lang="ts">
 import {
   AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronRight, ClipboardCheck,
@@ -53,7 +53,7 @@ const issues = ref<ContractIssue[]>([
     id: 'DBCONTRACT-E106-1', code: 'DBCONTRACT-E106',
     objectName: 'dbo.md_organization.external_code', summary: '空值约束不一致',
     expected: 'nvarchar(64) NOT NULL', actual: 'nvarchar(64) NULL',
-    direction: 'MANUAL_REVIEW', risk: '高', action: '先处理现有空值并确认业务规则，再决定收紧数据库或调整迁移契约。',
+    direction: 'MANUAL_REVIEW', risk: '高', action: '先处理现有空值并确认业务规则，再决定收紧数据库限制或调整迁移脚本。',
     executable: false,
   },
 ])
@@ -71,7 +71,7 @@ const stepLabels: Record<WorkflowStep, string> = {
   scan: '分析', plan: '生成方案', approval: '审批', execution: '执行', verification: '复验',
 }
 
-/** 模拟重新读取同一套契约核心，始终不访问正式API。 */
+/** 使用同一组示例数据模拟重新检查，不访问正式接口。 */
 function rescan() {
   workflowStep.value = 'scan'
   scanTime.value = '刚刚'
@@ -116,9 +116,9 @@ function directionTone(direction: Direction) {
     <aside class="prototype-sidebar">
       <div class="prototype-brand">
         <span class="prototype-logo"><Database :size="20" /></span>
-        <span><strong>数据库契约中心</strong><small>维护机制交互原型</small></span>
+        <span><strong>数据库结构维护</strong><small>操作流程示例</small></span>
       </div>
-      <nav class="prototype-nav" aria-label="数据库契约导航">
+      <nav class="prototype-nav" aria-label="数据库结构维护导航">
         <div class="prototype-nav-group">
           <span class="prototype-nav-label">数据库维护</span>
           <button class="active" type="button"><Wrench :size="17" /><span>正常维护</span></button>
@@ -139,8 +139,8 @@ function directionTone(direction: Direction) {
       <header class="prototype-topbar">
         <button class="prototype-icon" type="button" aria-label="返回业务原型" title="返回业务原型" @click="router.push('/prototype')"><ArrowLeft :size="18" /></button>
         <div class="prototype-heading">
-          <span class="prototype-section-name">系统管理 / 数据库契约</span>
-          <div class="prototype-title-line"><h1>数据库契约维护</h1><p>在健康实例中分析差异并受控处理</p></div>
+          <span class="prototype-section-name">系统管理 / 数据库结构</span>
+          <div class="prototype-title-line"><h1>数据库结构维护</h1><p>查看结构差异并按审批流程处理</p></div>
         </div>
         <span class="prototype-demo">交互原型 · 不会执行真实 DDL</span>
       </header>
@@ -149,26 +149,29 @@ function directionTone(direction: Direction) {
         <div v-if="notice" class="work-toast" role="status"><Check :size="16" />{{ notice }}<button class="prototype-icon" type="button" aria-label="关闭提示" @click="notice = ''"><X :size="15" /></button></div>
 
         <section class="contract-boundary" aria-label="运行边界">
-          <span class="contract-health"><CheckCircle2 :size="20" /><strong>当前实例运行正常</strong></span>
-          <p>可以扫描数据库契约差异，并按审批流程生成和执行维护方案。</p>
+          <span class="contract-health"><CheckCircle2 :size="20" /><strong>示例：测试数据库连接正常</strong></span>
+          <p>可以检查数据库实际结构与迁移脚本的差异，再按审批流程生成和执行维护方案。</p>
           <button class="work-quiet-button" type="button" @click="rescan"><RefreshCw :size="15" />重新扫描</button>
         </section>
 
         <section class="contract-summary" aria-label="检查摘要">
-          <div><span>契约字段</span><strong>186</strong><small>来自 6 个 Flyway 主版本</small></div>
+          <div><span>迁移脚本定义的字段</span><strong>186</strong><small>示例数据：来自 6 份 Flyway 主迁移记录</small></div>
           <div><span>发现差异</span><strong class="warning-text">3</strong><small>数据库、映射与人工判断</small></div>
           <div><span>可生成 DDL</span><strong>{{ executableCount }}</strong><small>其余只生成修改建议</small></div>
           <div><span>最近扫描</span><strong class="time-value">{{ scanTime }}</strong><small>只读扫描 · SQL Server 2012</small></div>
         </section>
 
         <section class="contract-workflow" aria-label="维护流程">
-          <template v-for="(step, index) in stepOrder" :key="step">
-            <div :class="{ current: workflowStep === step, complete: stepOrder.indexOf(workflowStep) > index }">
-              <span><Check v-if="stepOrder.indexOf(workflowStep) > index" :size="13" />{{ index + 1 }}</span>
-              <small>{{ stepLabels[step] }}</small>
-            </div>
-            <ChevronRight v-if="index < stepOrder.length - 1" :size="15" />
-          </template>
+          <p class="contract-workflow-scroll-hint">窄屏可左右滚动查看完整流程。</p>
+          <div class="contract-workflow-steps" role="region" aria-label="维护流程步骤" tabindex="0">
+            <template v-for="(step, index) in stepOrder" :key="step">
+              <div :class="{ current: workflowStep === step, complete: stepOrder.indexOf(workflowStep) > index }">
+                <span><Check v-if="stepOrder.indexOf(workflowStep) > index" :size="13" />{{ index + 1 }}</span>
+                <small>{{ stepLabels[step] }}</small>
+              </div>
+              <ChevronRight v-if="index < stepOrder.length - 1" :size="15" />
+            </template>
+          </div>
         </section>
 
         <div class="contract-grid">
@@ -210,7 +213,7 @@ function directionTone(direction: Direction) {
               <h2>{{ selectedIssue.objectName }}</h2>
               <p class="detail-summary">{{ selectedIssue.summary }}</p>
               <div class="contract-compare">
-                <div><span>期望契约</span><code>{{ selectedIssue.expected }}</code></div>
+                <div><span>迁移脚本规定</span><code>{{ selectedIssue.expected }}</code></div>
                 <div><span>实际检测</span><code>{{ selectedIssue.actual }}</code></div>
               </div>
               <div class="contract-advice"><AlertTriangle :size="17" /><div><strong>应该改哪里</strong><p>{{ selectedIssue.action }}</p></div></div>
@@ -256,14 +259,16 @@ function directionTone(direction: Direction) {
 .contract-summary strong { display: block; margin: 6px 0; font-size: 24px; line-height: 1; }
 .contract-summary .time-value { font-size: 15px; line-height: 1.6; }
 .warning-text { color: #b16b16; }
-.contract-workflow { min-height: 60px; margin-bottom: 14px; padding: 10px 18px; border: 1px solid var(--line); border-radius: 5px; background: white; display: flex; align-items: center; justify-content: center; gap: 14px; }
-.contract-workflow > div { min-width: 74px; display: flex; align-items: center; gap: 7px; color: #7b898f; }
-.contract-workflow > div > span { width: 24px; height: 24px; border: 1px solid #ced9dc; border-radius: 50%; display: grid; place-items: center; font-size: 10px; }
-.contract-workflow > div.current { color: #12695d; font-weight: 700; }
-.contract-workflow > div.current > span { border-color: #147467; background: #147467; color: white; }
-.contract-workflow > div.complete { color: #39866b; }
-.contract-workflow > div.complete > span { border-color: #bfddce; background: #ecf7f0; }
-.contract-workflow > svg { color: #acb7ba; }
+.contract-workflow { min-height: 60px; margin-bottom: 14px; padding: 10px 18px; border: 1px solid var(--line); border-radius: 5px; background: white; }
+.contract-workflow-steps { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.contract-workflow-steps > div { min-width: 74px; display: flex; align-items: center; gap: 7px; color: #7b898f; }
+.contract-workflow-steps > div > span { width: 24px; height: 24px; border: 1px solid #ced9dc; border-radius: 50%; display: grid; place-items: center; font-size: 10px; }
+.contract-workflow-steps > div.current { color: #12695d; font-weight: 700; }
+.contract-workflow-steps > div.current > span { border-color: #147467; background: #147467; color: white; }
+.contract-workflow-steps > div.complete { color: #39866b; }
+.contract-workflow-steps > div.complete > span { border-color: #bfddce; background: #ecf7f0; }
+.contract-workflow-steps > svg { color: #acb7ba; }
+.contract-workflow-scroll-hint { display: none; margin: 0 0 6px; color: #687d84; font-size: 12px; }
 .contract-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(360px, .85fr); gap: 14px; align-items: start; }
 .contract-list .prototype-section-head > div, .contract-detail .prototype-section-head > div { min-width: 0; }
 .contract-list .prototype-section-head small, .contract-detail .prototype-section-head small { display: block; margin-top: 4px; color: #7c8a90; font-size: 10px; }
@@ -297,5 +302,5 @@ function directionTone(direction: Direction) {
 .contract-detail-actions { min-height: 62px; padding: 11px 18px; border-top: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: flex-end; }
 .contract-detail-actions > span { color: #7a898f; font-size: 10px; line-height: 1.5; text-align: right; }
 @media (max-width: 1100px) { .contract-grid { grid-template-columns: 1fr; }.contract-detail { position: static; }.contract-summary { grid-template-columns: repeat(2, 1fr); }.contract-summary > div:nth-child(2) { border-right: 0; }.contract-summary > div:nth-child(-n + 2) { border-bottom: 1px solid var(--line-soft); } }
-@media (max-width: 700px) { .contract-boundary { align-items: flex-start; flex-wrap: wrap; }.contract-boundary p { flex-basis: 100%; }.contract-summary { grid-template-columns: 1fr; }.contract-summary > div { border-right: 0; border-bottom: 1px solid var(--line-soft); }.contract-workflow { justify-content: flex-start; overflow-x: auto; }.contract-workflow > div { min-width: 60px; }.contract-workflow small { white-space: nowrap; } }
+@media (max-width: 700px) { .contract-boundary { align-items: flex-start; flex-wrap: wrap; }.contract-boundary p { flex-basis: 100%; }.contract-summary { grid-template-columns: 1fr; }.contract-summary > div { border-right: 0; border-bottom: 1px solid var(--line-soft); }.contract-workflow-steps { justify-content: flex-start; overflow-x: auto; }.contract-workflow-steps > div { min-width: 60px; }.contract-workflow-steps small { white-space: nowrap; }.contract-workflow-scroll-hint { display: block; } }
 </style>

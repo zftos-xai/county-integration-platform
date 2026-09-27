@@ -102,7 +102,7 @@ function addItem() {
 }
 function openNew(kind: Exclude<typeof drawer.value, null>, item: Editable) { drawer.value = kind; draft.value = item; drawerTab.value = kind === 'role' ? 'permissions' : kind === 'dictionary' ? 'items' : 'detail'; void nextTick(() => drawerElement.value?.querySelector<HTMLElement>('button')?.focus()) }
 function closeDrawer() { drawer.value = null; draft.value = null; isNew.value = false; void nextTick(() => drawerTrigger?.focus()) }
-/** 将键盘焦点约束在管理配置抽屉内，并支持 Escape 关闭。 */
+/** 将键盘焦点限制在管理配置侧边窗口内，并支持 Escape 关闭。 */
 function onDrawerKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') { event.preventDefault(); closeDrawer(); return }
   if (event.key !== 'Tab' || !drawerElement.value) return

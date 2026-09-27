@@ -1,4 +1,4 @@
-<!-- ICD10公共目录合成原型：验证无诊断版本时的类别、查询和同步事实层级，不读取或写入真实业务数据。 -->
+<!-- ICD10公共目录合成原型：验证没有诊断版本时类别、查询和同步结果如何展示，不读取或写入真实业务数据。 -->
 <script setup lang="ts">
 import { CheckCircle2, ChevronRight, Database, RefreshCw, Search, X } from 'lucide-vue-next'
 import { computed, ref } from 'vue'

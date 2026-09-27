@@ -7,6 +7,8 @@ import { listOrganizations, type Organization } from '@/api/system/organization'
 import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError } from '@/utils/request'
 import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
+import PageState from '@/components/PageState.vue'
+import DatasetTabs from '@/components/DatasetTabs.vue'
 
 const props = defineProps<{
   title: string
@@ -57,7 +59,6 @@ const visibleOrganizations = computed(() => {
 const selectedOrganization = computed(() => organizationOptions.value.find(item => item.organizationCode === organizationCode.value))
 const currentOrganizationTotal = computed(() => props.types.reduce((sum, type) => sum + props.counts[type], 0))
 const isBusy = computed(() => isInitializing.value || props.isLoading || props.isRefreshing)
-const navigationQuery = computed(() => organizationCode.value ? { organizationCode: organizationCode.value } : {})
 const statusText = computed(() => {
   if (!isInitializing.value && !selectedOrganization.value) return '未选择机构'
   if (isBusy.value) return '正在读取当前数据'
@@ -107,7 +108,7 @@ function clearFilters() {
   emit('search')
 }
 
-// URL只保存机构上下文，跨数据集切换和浏览器历史导航都使用同一个选择来源。
+// URL只保存当前所选机构，切换数据目录或使用浏览器前进后退时都按同一选择读取数据。
 watch(() => route.query.organizationCode, readOrganizationContext)
 onMounted(() => void initialize())
 onBeforeUnmount(() => request.abort())
@@ -115,11 +116,7 @@ onBeforeUnmount(() => request.abort())
 
 <template>
   <section class="content directory-layout">
-    <nav class="dataset-nav" aria-label="基础数据集">
-      <RouterLink :class="{ active: route.path === '/master-data/directory' }" :to="{ path: '/master-data/directory', query: navigationQuery }">综合目录</RouterLink>
-      <RouterLink :class="{ active: route.path === '/master-data/directory/medical' }" :to="{ path: '/master-data/directory/medical', query: navigationQuery }">三大目录</RouterLink>
-      <RouterLink :class="{ active: route.path === '/master-data/directory/icd10' }" to="/master-data/directory/icd10">ICD-10</RouterLink>
-    </nav>
+    <DatasetTabs :organization-code="organizationCode" />
     <aside class="organization-rail" aria-label="平台机构">
       <header><h2>平台机构</h2><span>{{ visibleOrganizations.length }} 家</span></header>
       <label class="organization-search"><Search :size="16" aria-hidden="true" /><input v-model="organizationQuery" aria-label="搜索机构名称或编码" placeholder="搜索机构名称或编码" /></label>
@@ -149,24 +146,25 @@ onBeforeUnmount(() => request.abort())
       <section class="directory-panel">
         <ListQueryToolbar
           class="directory-toolbar"
+          filters-layout="search-with-filter"
           :refreshing="isRefreshing"
           :disabled="isBusy || !organizationCode"
           @query="emit('search')"
           @reset="clearFilters"
           @refresh="emit('refresh')"
         >
-          <label class="directory-search"><Search :size="17" aria-hidden="true" /><input v-model="keyword" maxlength="50" aria-label="搜索名称、编码或助记码" placeholder="搜索名称、编码或助记码" /></label>
+          <label class="prototype-search directory-search"><Search :size="17" aria-hidden="true" /><input v-model="keyword" maxlength="50" aria-label="搜索名称、编码或助记码" placeholder="搜索名称、编码或助记码" /></label>
           <slot name="filters" />
         </ListQueryToolbar>
-        <p v-if="error" class="feedback danger" role="alert"><AlertCircle :size="18" aria-hidden="true" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="text-button" type="button" @click="emit('retry')">重试</button></p>
-        <div v-else-if="isInitializing" class="directory-state" role="status">正在读取机构…</div>
-        <div v-else-if="!organizationCode" class="directory-state" role="status">当前账号没有可查看的机构</div>
-        <div v-else-if="isLoading" class="directory-state" role="status">正在读取当前有效数据…</div>
-        <div v-else-if="isEmpty" class="directory-state" role="status">
-          <Database :size="28" aria-hidden="true" />
-          <template v-if="keyword.trim() || hasExtraFilters"><strong>没有符合查询条件的{{ typeLabels[directoryType] }}</strong><span>请调整条件或清除筛选。</span></template>
-          <template v-else><strong>当前机构没有{{ typeLabels[directoryType] }}有效数据</strong><span>请到“同步批次”查看最近一次{{ title }}同步结果。</span></template>
-        </div>
+        <PageState v-if="error" kind="error" title="无法读取数据目录" :description="`${error.message}${error.requestId ? `；请求编号：${error.requestId}` : ''}`" compact>
+          <template #actions><button class="work-quiet-button" type="button" @click="emit('retry')">重试读取</button></template>
+        </PageState>
+        <PageState v-else-if="isInitializing" kind="loading" title="正在读取机构" compact />
+        <PageState v-else-if="!organizationCode" kind="info" title="当前账号没有可查看的机构" compact />
+        <PageState v-else-if="isLoading" kind="loading" title="正在读取当前有效数据" compact />
+        <PageState v-else-if="isEmpty" kind="empty" :title="keyword.trim() || hasExtraFilters ? `没有符合查询条件的${typeLabels[directoryType]}` : `当前机构没有${typeLabels[directoryType]}有效数据`" :description="keyword.trim() || hasExtraFilters ? '请调整条件或清除筛选。' : `请到“同步批次”查看最近一次${title}同步结果。`" compact>
+          <template #icon><Database :size="28" aria-hidden="true" /></template>
+        </PageState>
         <slot v-else />
         <slot v-if="!isLoading && !error && total > 0" name="pagination" />
       </section>
@@ -176,18 +174,14 @@ onBeforeUnmount(() => request.abort())
 
 <style scoped>
 .directory-layout { display:grid; grid-template-columns:260px minmax(0,1fr); gap:14px; align-items:start; }
-.dataset-nav { grid-column:1/-1; padding:0; display:flex; gap:8px; border-bottom:1px solid var(--line); overflow-x:auto; }
-.dataset-nav a { flex:none; padding:11px 13px; border:1px solid transparent; border-bottom:0; border-radius:7px 7px 0 0; color:var(--muted); font-size:13px; text-decoration:none; }
-.dataset-nav a:hover { background:#f5f8f8; }
-.dataset-nav a.active { border-color:#d6e5e1; background:#eaf5f2; color:var(--accent); font-weight:650; }
 .organization-rail,.directory-workspace { min-width:0; border:1px solid var(--line); border-radius:8px; background:var(--surface); overflow:hidden; }
 .organization-rail { position:sticky; top:16px; }
 .organization-rail>header { height:54px; padding:0 14px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line-soft); }
 .organization-rail h2 { margin:0; color:var(--ink); font-size:15px; }
 .organization-rail>header span { color:var(--muted); font-size:12px; }
 .organization-search { height:38px; margin:12px; padding:0 10px; border:1px solid #d0dcdf; border-radius:6px; display:flex; align-items:center; gap:7px; color:var(--muted); }
-.organization-search input,.directory-search input { min-width:0; width:100%; border:0; outline:0; background:transparent; color:var(--ink); font-size:12px; }
-.organization-search:focus-within,.directory-search:focus-within { border-color:var(--accent); box-shadow:0 0 0 2px rgb(25 130 115 / 12%); }
+.organization-search input { min-width:0; width:100%; border:0; outline:0; background:transparent; color:var(--ink); font-size:12px; }
+.organization-search:focus-within { border-color:var(--accent); box-shadow:0 0 0 2px rgb(25 130 115 / 12%); }
 .organization-list { padding:0 8px 10px; max-height:620px; overflow:auto; }
 .organization-list button { width:100%; min-height:58px; padding:9px 8px; border:0; border-radius:6px; background:transparent; display:grid; grid-template-columns:18px minmax(0,1fr) auto; align-items:center; gap:7px; color:var(--muted); text-align:left; cursor:pointer; }
 .organization-list button:hover { background:#f4f8f7; }
@@ -215,14 +209,11 @@ onBeforeUnmount(() => request.abort())
 .directory-tabs button .directory-new-mark,.directory-tabs button.active .directory-new-mark { position:absolute; top:2px; right:0; margin:0; padding:0 3px; border-radius:3px; background:#b6432d; color:#fff; font-size:8px; font-weight:750; line-height:12px; letter-spacing:.02em; }
 .directory-panel { min-width:0; background:var(--surface); }
 .directory-toolbar { border:0; border-bottom:1px solid var(--line-soft); border-radius:0; box-shadow:none; }
-.directory-search { min-width:0; height:36px; padding:0 11px; border:1px solid #ccd9dc; border-radius:6px; display:flex; align-items:center; gap:8px; color:var(--muted); }
-.directory-toolbar :deep(.standard-list-toolbar__filters) { flex:1 1 230px; }
-.directory-toolbar :deep(.directory-search) { flex:1 1 230px; max-width:420px; }
 .directory-state { min-height:260px; padding:30px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; color:var(--muted); text-align:center; }
 .directory-state strong { color:var(--ink); }
 .directory-state span { font-size:12px; }
 button:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 @media(max-width:1100px) { .directory-layout { grid-template-columns:220px minmax(0,1fr); } .directory-context { flex-wrap:wrap; } }
 @media(max-width:780px) { .directory-layout { grid-template-columns:minmax(0,1fr); } .organization-rail { position:static; } .organization-list { max-height:210px; } }
-@media(max-width:520px) { .directory-context { display:grid; } .directory-tabs { gap:20px; } .directory-toolbar :deep(.directory-search) { flex-basis:100%; max-width:none; } }
+@media(max-width:520px) { .directory-context { display:grid; } .directory-tabs { gap:20px; } }
 </style>

@@ -11,10 +11,15 @@ import { listUsers } from '@/api/system/user'
 import type { ManagedUser } from '@/api/system/user'
 import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import AdminPagination from '@/components/AdminPagination.vue'
+import AdminTableFrame from '@/components/AdminTableFrame.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
 import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
+import ListRowActions from '@/components/ListRowActions.vue'
+import PageState from '@/components/PageState.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 import RoleEditorDrawer from './components/RoleEditorDrawer.vue'
 import { emptyRoleForm, roleToForm, toCreateRoleInput, toUpdateRoleInput, validateRoleForm } from './form'
 
@@ -73,6 +78,7 @@ const filteredRoles = computed(() => {
   })
 })
 const { page, pageSize, pagedRows } = useClientPagination(filteredRoles)
+const { request: confirmationRequest, confirm, resolve: resolveConfirmation } = useConfirmationDialog()
 
 function applyListFilters() {
   page.value = 1
@@ -84,6 +90,7 @@ function resetListFilters() {
   typeFilter.value = 'all'
   attentionFilter.value = 'all'
   page.value = 1
+  void router.replace({ path: route.path })
 }
 
 function asApiError(caught: unknown, message = '角色数据处理失败，请稍后重试') {
@@ -112,9 +119,14 @@ function permissionSummary(role: Role) {
   return `${names.slice(0, 3).join('、')}${names.length > 3 ? `等 ${names.length} 项` : ''}`
 }
 
-function closeEditor() {
+async function closeEditor() {
   if (isSaving.value) return
-  if (currentEditorSnapshot() !== editorSnapshot.value && !window.confirm('当前修改尚未保存，确定关闭吗？')) return
+  if (currentEditorSnapshot() !== editorSnapshot.value && !await confirm({
+    title: '放弃未保存的角色修改？',
+    message: '关闭后，本次修改的角色信息和权限不会保存。',
+    confirmLabel: '放弃修改',
+    danger: true,
+  })) return
   detailController?.abort()
   mode.value = 'closed'
   selected.value = null
@@ -285,7 +297,12 @@ async function removeRole(role: Role) {
     error.value = new ApiClientError('ROLE_IN_USE', `该角色仍分配给 ${assignedUsers} 个用户，请先在用户管理中调整这些用户的角色。`, 409)
     return
   }
-  if (!window.confirm(`确定删除角色“${role.roleName}”吗？删除后不能恢复。`)) return
+  if (!await confirm({
+    title: '删除角色？',
+    message: `确定删除角色“${role.roleName}”吗？删除后不能恢复。`,
+    confirmLabel: '删除角色',
+    danger: true,
+  })) return
   deletingRoleId.value = role.id
   error.value = null
   try {
@@ -318,18 +335,23 @@ onBeforeUnmount(() => {
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
 
-    <ListQueryToolbar :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
-      <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="角色名称或代码" aria-label="搜索角色" /></label>
-      <select v-model="statusFilter" aria-label="角色状态"><option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select>
-      <select v-model="typeFilter" aria-label="角色类型"><option value="all">全部类型</option><option value="system">系统保护角色</option><option value="custom">自定义角色</option></select>
-      <select v-model="attentionFilter" aria-label="需要处理的角色"><option value="all">全部情况</option><option value="needsAttention">只看需要处理</option></select>
+    <ListQueryToolbar class="role-toolbar" filters-layout="search-with-three-selects" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
+      <label class="prototype-search standard-list-filter--search"><Search :size="16" /><input v-model="query" type="search" placeholder="角色名称或代码" aria-label="搜索角色" /></label>
+      <select class="standard-list-filter--status" v-model="statusFilter" aria-label="角色状态"><option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select>
+      <select class="standard-list-filter--type" v-model="typeFilter" aria-label="角色类型"><option value="all">全部类型</option><option value="system">系统保护角色</option><option value="custom">自定义角色</option></select>
+      <select class="standard-list-filter--attention" v-model="attentionFilter" aria-label="需要处理的角色"><option value="all">全部情况</option><option value="needsAttention">只看需要处理</option></select>
       <template #actions><button v-if="canWrite" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增角色</button></template>
     </ListQueryToolbar>
 
-    <section class="prototype-section work-table-section role-panel action-column-table">
-      <div v-if="isLoading" class="page-state" aria-live="polite"><LoaderCircle class="spinning" :size="28" /><strong>正在加载角色权限</strong></div>
-      <div v-else-if="!error && roles.length === 0" class="page-state"><KeyRound :size="30" /><strong>平台暂无角色</strong></div>
-      <div v-else-if="roles.length" class="prototype-table-wrap">
+    <section class="prototype-section work-table-section role-panel">
+      <PageState v-if="isLoading" kind="loading" title="正在加载角色权限" />
+      <PageState v-else-if="!error && roles.length === 0" kind="empty" title="平台暂无角色">
+        <template #icon><KeyRound :size="30" /></template>
+      </PageState>
+      <PageState v-else-if="!error && filteredRoles.length === 0" kind="empty" title="没有符合当前筛选条件的角色" compact>
+        <template #icon><KeyRound :size="26" /></template>
+      </PageState>
+      <AdminTableFrame v-else-if="filteredRoles.length" label="角色列表" has-actions>
         <table class="work-table role-table">
           <thead><tr><th>角色</th><th>类型</th><th>功能权限</th><th>使用人数</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
           <tbody><tr v-for="role in pagedRows" :key="role.id">
@@ -339,26 +361,23 @@ onBeforeUnmount(() => {
             <td>{{ canReadUsers ? `${userCountByRoleId.get(role.id) ?? 0} 人` : '无权查看' }}</td>
             <td><span class="prototype-tag" :class="role.enabled ? 'success' : 'neutral'">{{ role.enabled ? '已启用' : '已停用' }}</span></td>
             <td>{{ formatTime(role.updatedAt) }}</td>
-            <td class="role-actions"><button v-if="canWrite && !role.systemManaged" class="prototype-icon" type="button" aria-label="修改角色" title="修改" @click="openRole(role, true)"><Pencil :size="15" /></button><button v-if="canWrite && !role.systemManaged" class="status-action" :class="{ confirm: confirmStatusId === role.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === role.id && role.enabled ? canReadUsers ? `停用后将影响 ${userCountByRoleId.get(role.id) ?? 0} 名用户` : '停用后会影响使用该角色的用户' : ''" @blur="confirmStatusId = null" @click="changeStatus(role)">{{ statusSavingId === role.id ? '处理中…' : confirmStatusId === role.id ? role.enabled ? '确认停用' : '确认启用' : role.enabled ? '停用' : '启用' }}</button><button v-if="canWrite && !role.systemManaged" class="work-danger-button" type="button" :disabled="deletingRoleId !== null" :title="canReadUsers && (userCountByRoleId.get(role.id) ?? 0) > 0 ? '请先调整使用该角色的用户' : '删除角色'" @click="removeRole(role)"><Trash2 :size="13" />{{ deletingRoleId === role.id ? '删除中…' : '删除' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看角色详情" title="查看详情" @click="openRole(role)"><ChevronRight :size="16" /></button></td>
+            <td><ListRowActions label="角色操作"><button v-if="canWrite && !role.systemManaged" class="prototype-icon" type="button" aria-label="修改角色" title="修改" @click="openRole(role, true)"><Pencil :size="15" /></button><button v-if="canWrite && !role.systemManaged" class="status-action" :class="{ confirm: confirmStatusId === role.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === role.id && role.enabled ? canReadUsers ? `停用后将影响 ${userCountByRoleId.get(role.id) ?? 0} 名用户` : '停用后会影响使用该角色的用户' : ''" @blur="confirmStatusId = null" @click="changeStatus(role)">{{ statusSavingId === role.id ? '处理中…' : confirmStatusId === role.id ? role.enabled ? '确认停用' : '确认启用' : role.enabled ? '停用' : '启用' }}</button><button v-if="canWrite && !role.systemManaged" class="work-danger-button" type="button" :disabled="deletingRoleId !== null" :title="canReadUsers && (userCountByRoleId.get(role.id) ?? 0) > 0 ? '请先调整使用该角色的用户' : '删除角色'" @click="removeRole(role)"><Trash2 :size="13" />{{ deletingRoleId === role.id ? '删除中…' : '删除' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看角色详情" title="查看详情" @click="openRole(role)"><ChevronRight :size="16" /></button></ListRowActions></td>
           </tr></tbody>
         </table>
-        <div v-if="filteredRoles.length === 0" class="prototype-empty">没有符合当前条件的角色</div>
-      </div>
-      <AdminPagination v-if="!isLoading && roles.length" :total="filteredRoles.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
+      </AdminTableFrame>
+      <AdminPagination v-if="!isLoading && filteredRoles.length" :total="filteredRoles.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
     </section>
 
     <RoleEditorDrawer v-if="mode !== 'closed'" v-model:form="form" v-model:permission-draft="permissionDraft" :mode="mode" :selected="selected" :permissions="permissions" :assigned-user-names="assignedUserNames" :user-assignment-known="canReadUsers" :can-write="canWrite" :is-saving="isSaving" :is-detail-loading="isDetailLoading" :operation-error="operationError" :form-error="formError" @close="closeEditor" @submit-base="submitBase" @save-permissions="savePermissions" @edit="mode = 'edit'; captureEditorSnapshot()" @reload="reloadDetail" />
+    <ConfirmationDialog v-if="confirmationRequest" :request="confirmationRequest" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" />
   </section>
 </template>
 
 <style scoped>
 .role-page { color: #263341; }
-.role-panel { min-height: 390px; --action-column-width: 196px; }
-.page-state { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55766d; }
+.role-panel { --action-column-width: 156px; }
 .role-table { min-width: 850px; }
 .role-table td small { display: block; margin-top: 3px; color: #7c8993; font-size: 10px; }
-.role-actions { text-align: right; white-space: nowrap; }
-.role-actions > button + button { margin-left: 6px; }
 .status-action { min-height: 32px; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 5px; background: white; color: #53636b; font-size: 11px; white-space: nowrap; }
 .status-action.confirm { border-color: #a94b42; background: #a94b42; color: white; }
 .feedback { min-height: 46px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
@@ -369,5 +388,7 @@ onBeforeUnmount(() => {
 .feedback.success > button { border: 0; background: transparent; color: inherit; }
 .spinning { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 560px) {
+}
 @media (prefers-reduced-motion: reduce) { .spinning { animation: none; } }
 </style>

@@ -11,10 +11,15 @@ import { listOrganizations } from '@/api/system/organization'
 import type { Organization } from '@/api/system/organization'
 import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import AdminPagination from '@/components/AdminPagination.vue'
+import AdminTableFrame from '@/components/AdminTableFrame.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
 import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
+import ListRowActions from '@/components/ListRowActions.vue'
+import PageState from '@/components/PageState.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 import { environmentLabel, parameterValueTypeLabel, formatLocalDateTime } from '@/utils/managementDisplay'
 import ParameterEditorDrawer from './components/ParameterEditorDrawer.vue'
 import { parameterToForm, toUpsertParameterInput, validateParameterForm } from './form'
@@ -71,6 +76,7 @@ const rows = computed(() => expandedRows.value.filter(row => {
 }))
 const configuredCount = computed(() => expandedRows.value.filter(row => row.value?.configured && row.value.enabled).length)
 const missingCount = computed(() => expandedRows.value.filter(row => !row.value?.configured).length)
+const summaryUnavailable = computed(() => isLoading.value || error.value !== null)
 const newConfigurationScope = computed<NewParameterScope | null>(() => {
   for (const definition of definitions.value) {
     const organizationIds = definition.organizationScoped
@@ -87,6 +93,7 @@ const newConfigurationScope = computed<NewParameterScope | null>(() => {
   return null
 })
 const { page, pageSize, pagedRows } = useClientPagination(rows)
+const { request: confirmationRequest, confirm, resolve: resolveConfirmation } = useConfirmationDialog()
 
 function applyListFilters() {
   page.value = 1
@@ -97,6 +104,7 @@ function resetListFilters() {
   environment.value = 'all'
   configurationStatus.value = 'all'
   page.value = 1
+  void router.replace({ path: route.path })
 }
 
 function asApiError(caught: unknown, message: string) {
@@ -167,9 +175,14 @@ function openNewConfiguration() {
   editorSnapshot.value = JSON.stringify(form.value)
 }
 
-function closeEditor() {
+async function closeEditor() {
   if (isSaving.value) return
-  if (JSON.stringify(form.value) !== editorSnapshot.value && !window.confirm('当前参数修改尚未保存，确定关闭吗？')) return
+  if (JSON.stringify(form.value) !== editorSnapshot.value && !await confirm({
+    title: '放弃未保存的参数修改？',
+    message: '关闭后，本次输入的参数值不会保存。',
+    confirmLabel: '放弃修改',
+    danger: true,
+  })) return
   selectedDefinition.value = null
   selectedValue.value = null
 }
@@ -183,7 +196,7 @@ async function reloadEditor() {
   if (error.value) return
   const latestDefinition = definitions.value.find(item => item.key === definition.key)
   if (!latestDefinition) {
-    closeEditor()
+    await closeEditor()
     return
   }
   const latestValue = values.value.find(value => value.parameterKey === definition.key
@@ -216,7 +229,12 @@ async function submit() {
 async function removeConfiguration(definition: ParameterDefinition, value: ParameterValue) {
   if (!canWrite.value || deletingValueId.value !== null) return
   const scope = `${environmentLabel(value.environment)} · ${organizationLabel(value, definition)}`
-  if (!window.confirm(`确定删除“${definition.name}”在${scope}的配置吗？删除后该范围会恢复为尚未配置。`)) return
+  if (!await confirm({
+    title: '删除参数配置？',
+    message: `确定删除“${definition.name}”在${scope}的配置吗？删除后该范围会恢复为尚未配置。`,
+    confirmLabel: '删除配置',
+    danger: true,
+  })) return
   deletingValueId.value = value.id
   operationError.value = null
   try {
@@ -256,25 +274,33 @@ onBeforeUnmount(() => { mounted = false; controller?.abort() })
   <section class="content parameter-page">
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}</span><button class="prototype-text-button" type="button" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
-    <div class="parameter-summary" aria-label="参数配置概况"><span><strong>{{ definitions.length }}</strong> 个参数</span><span><strong>{{ configuredCount }}</strong> 项已启用配置</span><span :class="{ warning: missingCount > 0 }"><strong>{{ missingCount }}</strong> 项尚未配置</span></div>
-    <ListQueryToolbar :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)"><label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="参数名称、键或机构" aria-label="搜索参数" /></label><select v-model="environment" aria-label="运行环境"><option value="all">全部环境</option><option value="DEVELOPMENT">开发环境</option><option value="TEST">测试环境</option><option value="PRODUCTION">生产环境</option></select><select v-model="configurationStatus" aria-label="配置状态"><option value="all">全部配置状态</option><option value="configured">已配置并启用</option><option value="missing">尚未配置</option><option value="disabled">已配置但停用</option></select><template #actions><button v-if="canWrite" class="prototype-button" type="button" :disabled="!newConfigurationScope" :title="newConfigurationScope ? '为尚未配置的环境或机构新增参数值' : '所有允许的环境和机构范围都已配置'" @click="openNewConfiguration"><Plus :size="15" />新增配置</button></template></ListQueryToolbar>
-    <section class="prototype-section work-table-section parameter-panel action-column-table">
-      <div v-if="isLoading" class="page-state"><LoaderCircle class="spinning" :size="28" /><strong>正在加载参数定义</strong></div>
-      <div v-else-if="!error && definitions.length === 0" class="page-state"><Settings2 :size="30" /><strong>尚无代码注册参数</strong><span>参数必须先在后端完成定义、约束和代码评审，管理页不会创建任意参数键。</span></div>
-      <div v-else class="prototype-table-wrap"><table class="work-table parameter-table"><thead><tr><th>参数</th><th>运行环境</th><th>适用机构</th><th>当前值</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead><tbody><tr v-for="row in pagedRows" :key="`${row.definition.key}-${row.targetEnvironment}-${row.value?.id ?? 'new'}`"><td><strong>{{ row.definition.name }}</strong><small>{{ row.definition.key }} · {{ parameterValueTypeLabel(row.definition.valueType) }}</small><small>{{ constraintLabel(row.definition) }}</small></td><td>{{ environmentLabel(row.targetEnvironment) }}</td><td>{{ organizationLabel(row.value, row.definition) }}</td><td><span v-if="row.value?.configured">{{ row.definition.sensitive ? '已设置（内容保密）' : row.value.value || '空值' }}</span><span v-else class="muted">尚未配置</span></td><td><span class="prototype-tag" :class="row.value?.enabled ? 'success' : 'neutral'">{{ row.value?.configured ? row.value.enabled ? '已启用' : '已停用' : '未配置' }}</span></td><td>{{ row.value ? formatLocalDateTime(row.value.updatedAt) : '—' }}</td><td><div v-if="canWrite" class="parameter-actions"><button class="work-quiet-button" type="button" @click="openEditor(row.definition, row.value, row.targetEnvironment)">{{ row.value?.configured ? '修改' : '新增配置' }}</button><button v-if="row.value?.configured" class="work-danger-button" type="button" :disabled="deletingValueId !== null" @click="removeConfiguration(row.definition, row.value)"><Trash2 :size="13" />{{ deletingValueId === row.value.id ? '删除中…' : '删除' }}</button></div></td></tr></tbody></table><div v-if="rows.length === 0" class="prototype-empty">没有符合当前条件的参数</div></div>
-      <AdminPagination v-if="!isLoading && definitions.length" :total="rows.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
+    <div class="parameter-summary" aria-label="参数配置概况" :aria-busy="isLoading || isRefreshing"><span><strong>{{ summaryUnavailable ? '—' : definitions.length }}</strong> 个参数</span><span><strong>{{ summaryUnavailable ? '—' : configuredCount }}</strong> 项已启用配置</span><span :class="{ warning: !summaryUnavailable && missingCount > 0 }"><strong>{{ summaryUnavailable ? '—' : missingCount }}</strong> 项尚未配置</span></div>
+    <div class="parameter-query-container">
+      <ListQueryToolbar filters-layout="search-with-selects" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)"><label class="prototype-search standard-list-filter--search"><Search :size="16" /><input v-model="query" type="search" placeholder="参数名称、键或机构" aria-label="搜索参数" /></label><select class="standard-list-filter--status" v-model="environment" aria-label="运行环境"><option value="all">全部环境</option><option value="DEVELOPMENT">开发环境</option><option value="TEST">测试环境</option><option value="PRODUCTION">生产环境</option></select><select class="standard-list-filter--type" v-model="configurationStatus" aria-label="配置状态"><option value="all">全部配置状态</option><option value="configured">已配置并启用</option><option value="missing">尚未配置</option><option value="disabled">已配置但停用</option></select><template #actions><button v-if="canWrite" class="prototype-button" type="button" :disabled="!newConfigurationScope" :title="newConfigurationScope ? '为尚未配置的环境或机构范围新增参数值' : '所有允许的环境和机构范围都已配置'" @click="openNewConfiguration"><Plus :size="15" />新增配置</button></template></ListQueryToolbar>
+    </div>
+    <section class="prototype-section work-table-section parameter-panel">
+      <PageState v-if="isLoading" kind="loading" title="正在加载参数定义" />
+      <PageState v-else-if="!error && definitions.length === 0" kind="empty" title="尚无代码注册参数" description="参数必须先在后端完成定义、约束和代码评审，管理页不会创建任意参数键。">
+        <template #icon><Settings2 :size="30" /></template>
+      </PageState>
+      <PageState v-else-if="!error && rows.length === 0" kind="empty" title="没有符合当前条件的参数" compact />
+      <AdminTableFrame v-else label="参数配置列表" has-actions><table class="work-table parameter-table"><thead><tr><th>参数</th><th>运行环境</th><th>适用机构</th><th>当前值</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead><tbody><tr v-for="row in pagedRows" :key="`${row.definition.key}-${row.targetEnvironment}-${row.value?.id ?? 'new'}`"><td><strong>{{ row.definition.name }}</strong><small>{{ row.definition.key }} · {{ parameterValueTypeLabel(row.definition.valueType) }}</small><small>{{ constraintLabel(row.definition) }}</small></td><td>{{ environmentLabel(row.targetEnvironment) }}</td><td>{{ organizationLabel(row.value, row.definition) }}</td><td><span v-if="row.value?.configured">{{ row.definition.sensitive ? '已设置（内容保密）' : row.value.value || '空值' }}</span><span v-else class="muted">尚未配置</span></td><td><span class="prototype-tag" :class="row.value?.enabled ? 'success' : 'neutral'">{{ row.value?.configured ? row.value.enabled ? '已启用' : '已停用' : '未配置' }}</span></td><td>{{ row.value ? formatLocalDateTime(row.value.updatedAt) : '—' }}</td><td><ListRowActions label="参数配置操作"><div v-if="canWrite" class="parameter-actions"><button class="work-quiet-button" type="button" @click="openEditor(row.definition, row.value, row.targetEnvironment)">{{ row.value?.configured ? '修改' : '新增配置' }}</button><button v-if="row.value?.configured" class="work-danger-button" type="button" :disabled="deletingValueId !== null" @click="removeConfiguration(row.definition, row.value)"><Trash2 :size="13" aria-hidden="true" />{{ deletingValueId === row.value.id ? '删除中…' : '删除' }}</button></div></ListRowActions></td></tr></tbody></table></AdminTableFrame>
+      <AdminPagination v-if="!isLoading && rows.length" :total="rows.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
     </section>
     <ParameterEditorDrawer v-if="selectedDefinition" v-model:form="form" :definition="selectedDefinition" :existing="selectedValue" :organizations="organizations" :can-write="canWrite" :is-saving="isSaving" :error="operationError" :form-error="formError" @close="closeEditor" @submit="submit" @reload="reloadEditor" />
+    <ConfirmationDialog v-if="confirmationRequest" :request="confirmationRequest" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" />
   </section>
 </template>
 
 <style scoped>
 .parameter-page { display: grid; gap: 0; }
-.parameter-summary { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 8px; }.parameter-summary span { padding: 8px 11px; border: 1px solid #dce4e6; border-radius: 5px; background: white; color: #62717a; font-size: 11px; }.parameter-summary strong { margin-right: 3px; color: #263b42; font-size: 15px; }.parameter-summary .warning { border-color: #e6cf9d; background: #fff9e9; color: #7b5c1f; }
+.parameter-query-container { min-width: 0; container-type: inline-size; }
+.parameter-summary { width: 100%; max-width: 900px; margin-bottom: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }.parameter-summary span { padding: 8px 11px; border: 1px solid #dce4e6; border-radius: 5px; background: white; color: #62717a; font-size: 11px; }.parameter-summary strong { margin-right: 3px; color: #263b42; font-size: 15px; }.parameter-summary .warning { border-color: #e6cf9d; background: #fff9e9; color: #7b5c1f; }
 .parameter-panel { --action-column-width: 156px; }
 .parameter-table { min-width: 1080px; }.parameter-table td small { display: block; margin-top: 3px; color: #78868e; font-size: 10px; }
 .parameter-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
 .feedback { min-height: 46px; margin-bottom: 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 9px; font-size: 12px; }
 .feedback span { flex: 1; }.feedback button { border: 0; background: transparent; }.feedback.success { border-color: #bfddce; background: #ecf7f0; color: #226c49; }.feedback.danger { border-color: #e1c0b7; background: #fbf1ee; color: #8d432e; }
-.page-state { min-height: 330px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; color: #33745c; text-align: center; }.page-state span { max-width: 520px; color: #75828c; font-size: 12px; line-height: 1.6; }.muted { color: #7b8b92; }.spinning { animation: spin .8s linear infinite; }@keyframes spin { to { transform: rotate(360deg); } }
+.muted { color: #7b8b92; }.spinning { animation: spin .8s linear infinite; }@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) { .parameter-summary span { display:flex; flex-direction:column; align-items:flex-start; gap:2px; }.parameter-summary strong { margin-right:0; line-height:1.1; } }
 </style>

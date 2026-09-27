@@ -1,5 +1,4 @@
 /* 两类目录共用表格、来源详情和滚动规则；列宽由各业务页面按实际字段定义。 */
-.directory-table-wrap { position:relative; max-width:100%; overflow:auto; }
 .directory-table { width:100%; min-width:980px; border-collapse:collapse; table-layout:fixed; }
 .directory-table th,.directory-table td { height:47px; padding:0 12px; border-bottom:1px solid var(--line-soft); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#415860; font-size:12px; }
 .directory-table th { height:40px; background:#f6f8f9; color:var(--muted); font-weight:650; }
@@ -10,12 +9,11 @@
 .batch-link { color:var(--accent); text-decoration:none; }
 .batch-link:hover { text-decoration:underline; }
 .directory-table th:last-child,.directory-table .directory-actions { text-align:right; }
-.directory-table th:last-child,.directory-table td.directory-actions { position:sticky; right:0; z-index:1; background:#f6f8f9; box-shadow:-1px 0 var(--line-soft); }
 .directory-table td.directory-actions { background:var(--surface); }
 .directory-table tr.expanded td.directory-actions { background:#f1f8f6; }
 .directory-actions button { height:32px; padding:0 9px; border:1px solid #70ae9f; border-radius:5px; background:var(--surface); display:inline-flex; align-items:center; gap:3px; color:var(--accent); font-size:12px; cursor:pointer; }
 .directory-table .directory-detail-row>td { height:auto; padding:0 12px 12px; background:#f1f8f6; white-space:normal; overflow:visible; }
-.directory-detail { --detail-line:#b9cdd0; width:100%; border:1px solid #d7e8e3; border-radius:6px; background:var(--surface); display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr); }
+.directory-detail { --detail-line:#b9cdd0; position:sticky; left:0; width:100%; border:1px solid #d7e8e3; border-radius:6px; background:var(--surface); display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr); }
 .directory-detail section { min-width:0; padding:7px 9px; }
 .directory-detail section+section { border-left:1px dashed var(--detail-line); }
 .directory-detail h3,.directory-detail h4 { margin:0 0 6px; color:var(--ink); font-size:12px; white-space:nowrap; }
@@ -52,6 +50,23 @@
 .directory-detail:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 .directory-actions button:focus-visible,.batch-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 @media (max-width:1100px) {
-  .directory-detail { grid-template-columns:minmax(0,1fr); }
+  .directory-detail { width:min(100%,calc(100vw - 64px)); grid-template-columns:minmax(0,1fr); }
   .directory-detail section+section { border-top:1px dashed var(--detail-line); border-left:0; }
+  .directory-detail.directory-detail--hospital section:first-child dl,
+  .directory-detail section:last-child dl { grid-template-columns:minmax(0,1fr); }
+  .directory-detail section:last-child dl div { grid-template-columns:minmax(82px,125px) minmax(0,1fr); }
+}
+/* 目录页还有机构侧栏；详情应按实际表格容器宽度切换布局，而不是只看浏览器窗口。 */
+@container (max-width:1100px) {
+  .directory-detail { width:min(100%,calc(100cqi - 24px)); grid-template-columns:minmax(0,1fr); }
+  .directory-detail section+section { border-top:1px dashed var(--detail-line); border-left:0; }
+  .directory-detail.directory-detail--hospital section:first-child dl,
+  .directory-detail section:last-child dl { grid-template-columns:minmax(0,1fr); }
+  .directory-detail section:last-child dl div { grid-template-columns:minmax(82px,125px) minmax(0,1fr); }
+}
+/* 窄详情卡片让每个字段独占一行，避免长编码被并排字段压成逐字换行。 */
+@container (max-width:560px) {
+  .directory-detail dl,
+  .directory-detail.directory-detail--hospital section:first-child dl { grid-template-columns:minmax(0,1fr); }
+  .directory-detail dl div { grid-template-columns:minmax(82px,125px) minmax(0,1fr); }
 }

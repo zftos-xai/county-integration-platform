@@ -1,10 +1,10 @@
 import { apiRequest, asUncertainWriteError, ApiClientError } from '@/utils/request'
 import { isRecord } from '@/utils/validation'
 
-/** 数据库契约差异建议修改方向。 */
+/** 数据库结构差异建议的修改方向。 */
 export type DatabaseContractDirection = 'DATABASE' | 'MAPPER_OR_MODEL' | 'MANUAL_REVIEW'
 
-/** 实时扫描发现的一项数据库契约差异。 */
+/** 实时检查发现的一项数据库结构差异。 */
 export type DatabaseContractIssue = {
   issueKey: string
   code: string
@@ -27,10 +27,10 @@ export type DatabaseContractInspection = {
   issues: DatabaseContractIssue[]
 }
 
-/** 数据库契约维护方案状态。 */
+/** 数据库结构维护方案状态。 */
 export type DatabaseContractPlanStatus = 'DRAFT' | 'APPROVED' | 'EXECUTING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
 
-/** 数据库契约维护方案中的差异快照。 */
+/** 数据库结构维护方案中保存的差异信息。 */
 export type DatabaseContractPlanItem = {
   id: number
   violationCode: string
@@ -46,7 +46,7 @@ export type DatabaseContractPlanItem = {
   verificationStatus: string
 }
 
-/** 持久化的数据库契约维护方案和完整处理事实。 */
+/** 已保存的数据库结构维护方案和完整处理记录。 */
 export type DatabaseContractPlan = {
   id: number
   planNo: string
@@ -117,12 +117,12 @@ function isPlanList(value: unknown): value is DatabaseContractPlan[] {
   return Array.isArray(value) && value.every(isPlan)
 }
 
-/** 实时扫描数据库、Flyway、Mapper与模型契约，不执行DDL。 */
+/** 实时检查数据库、Flyway迁移脚本、Mapper和模型的结构，不执行DDL。 */
 export function inspectDatabaseContract(signal?: AbortSignal) {
   return apiRequest<DatabaseContractInspection>('/database-contract/inspection', { signal }, isInspection)
 }
 
-/** 查询最近100条数据库契约维护方案。 */
+/** 查询最近100条数据库结构维护方案。 */
 export function listDatabaseContractPlans(signal?: AbortSignal) {
   return apiRequest<DatabaseContractPlan[]>('/database-contract/plans', { signal }, isPlanList)
 }

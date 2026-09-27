@@ -1,9 +1,9 @@
-<!-- 角色编辑抽屉：展示角色资料与代码注册权限，不直接访问后端。 -->
+<!-- 角色侧边编辑窗口：展示角色资料与系统登记的权限，不直接访问后端。 -->
 <script setup lang="ts">
-import { AlertCircle, LoaderCircle, LockKeyhole, X } from 'lucide-vue-next'
-import { computed, ref } from 'vue'
+import { AlertCircle, LoaderCircle, LockKeyhole } from 'lucide-vue-next'
+import { computed } from 'vue'
 import type { Permission, Role } from '@/api/system/role'
-import { useModalDialog } from '@/composables/useModalDialog'
+import DrawerFrame from '@/components/DrawerFrame.vue'
 import { isWriteResultUncertain } from '@/utils/request'
 import type { ApiClientError } from '@/utils/request'
 import type { RoleForm } from '../form'
@@ -25,9 +25,8 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; submitBase: []; savePermissions: []; edit: []; reload: [] }>()
 const form = defineModel<RoleForm>('form', { required: true })
 const permissionDraft = defineModel<string[]>('permissionDraft', { required: true })
-const isOpen = ref(true)
-const { dialogRef, handleDialogKeydown } = useModalDialog(isOpen, () => emit('close'))
 const canEditSelected = computed(() => props.canWrite && !props.selected?.systemManaged)
+const showBaseActions = computed(() => props.mode === 'create' || props.mode === 'edit' || canEditSelected.value)
 const permissionNameByCode = computed(() => new Map(props.permissions.map(item => [item.permissionCode, item.permissionName])))
 const addedPermissions = computed(() => permissionDraft.value
   .filter(code => !props.selected?.permissionCodes.includes(code))
@@ -51,25 +50,19 @@ const permissionGroups = computed(() => {
 </script>
 
 <template>
-  <div class="drawer-layer" @mousedown.self="emit('close')">
-    <section ref="dialogRef" class="role-drawer" role="dialog" aria-modal="true" aria-labelledby="role-editor-title" tabindex="-1" @keydown="handleDialogKeydown">
-      <header>
-        <div><span>{{ mode === 'create' ? '新增平台角色' : mode === 'edit' ? '编辑角色' : '角色详情' }}</span><h2 id="role-editor-title">{{ mode === 'create' ? '建立功能角色' : selected?.roleName }}</h2></div>
-        <button class="prototype-icon" type="button" aria-label="关闭" @click="emit('close')"><X :size="18" /></button>
-      </header>
-      <div v-if="isDetailLoading" class="drawer-loading"><LoaderCircle class="spinning" :size="22" />正在读取最新版本…</div>
+  <DrawerFrame panel-class="role-drawer" panel-width="min(680px, 100vw)" body-class="role-drawer-frame-body" body-padding="0" labelled-by="role-editor-title" @close="emit('close')">
+      <template #title><div><span>{{ mode === 'create' ? '新增平台角色' : mode === 'edit' ? '编辑角色' : '角色详情' }}</span><h2 id="role-editor-title">{{ mode === 'create' ? '建立功能角色' : selected?.roleName }}</h2></div></template>
+      <template #subheader><div v-if="isDetailLoading" class="drawer-loading"><LoaderCircle class="spinning" :size="22" />正在读取最新版本…</div></template>
       <div class="role-drawer-body">
         <div v-if="operationError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span><strong>{{ operationError.message }}</strong><small v-if="operationError.status === 409">数据已变化，请重新读取最新版本后再操作。</small><small v-if="operationError.requestId">请求编号：{{ operationError.requestId }}</small></span><button v-if="operationError.status === 409 || isWriteResultUncertain(operationError)" class="work-quiet-button" type="button" @click="emit('reload')">重新读取</button></div>
         <div v-if="formError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ formError }}</span></div>
         <div v-if="selected?.systemManaged" class="protected-note"><LockKeyhole :size="18" /><span><strong>系统保护角色</strong><small>角色资料与权限由系统预置并维护，管理页面只读。</small></span></div>
 
-        <form class="role-form" @submit.prevent="emit('submitBase')">
+        <form id="role-base-form" class="role-form" @submit.prevent="emit('submitBase')">
           <section><h3>基础信息</h3><p>角色代码创建后不可修改；停用角色会使使用该角色的旧会话在下一次请求时失效。</p></section>
           <label><span>角色代码 <b>*</b></span><input v-model="form.roleCode" :disabled="mode !== 'create'" maxlength="64" autocomplete="off" placeholder="例如 REPORT_REVIEWER" /></label>
           <label><span>角色名称 <b>*</b></span><input v-model="form.roleName" :disabled="mode === 'view' || selected?.systemManaged" maxlength="100" autocomplete="off" /></label>
           <label v-if="mode === 'edit'" class="role-enabled"><input v-model="form.enabled" type="checkbox" :disabled="selected?.systemManaged" />启用角色</label>
-          <footer v-if="mode === 'create' || mode === 'edit'"><button class="work-quiet-button" type="button" @click="emit('close')">取消</button><button class="prototype-button" type="submit" :disabled="isSaving || isDetailLoading || selected?.systemManaged">{{ isSaving ? '正在保存…' : '保存基础信息' }}</button></footer>
-          <footer v-else-if="canEditSelected"><button class="prototype-button" type="button" @click="emit('edit')">编辑基础信息</button></footer>
         </form>
 
         <section v-if="selected" class="permission-section">
@@ -81,13 +74,19 @@ const permissionGroups = computed(() => {
           <p v-else class="section-empty">后端当前没有可分配的注册权限。</p>
         </section>
       </div>
-    </section>
-  </div>
+      <template v-if="showBaseActions" #footer>
+        <template v-if="mode === 'create' || mode === 'edit'">
+          <button class="work-quiet-button" type="button" @click="emit('close')">取消</button>
+          <button class="prototype-button" type="submit" form="role-base-form" :disabled="isSaving || isDetailLoading || selected?.systemManaged">{{ isSaving ? '正在保存…' : '保存基础信息' }}</button>
+        </template>
+        <button v-else class="prototype-button" type="button" @click="emit('edit')">编辑基础信息</button>
+      </template>
+  </DrawerFrame>
 </template>
 
 <style scoped>
-.drawer-layer { position: fixed; inset: 0; z-index: 100; background: rgb(19 31 43 / 38%); display: flex; justify-content: flex-end; }
-.role-drawer { width: min(680px, 100%); height: 100%; overflow-y: auto; background: white; box-shadow: -12px 0 32px rgb(22 35 47 / 14%); }
+.role-drawer { width: min(680px, 100%); }
+.role-drawer-frame-body { padding: 0; }
 .role-drawer > header { min-height: 76px; padding: 15px 20px; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #dfe5ea; background: white; display: flex; align-items: center; justify-content: space-between; }
 .role-drawer > header span { color: #71808e; font-size: 11px; }
 .role-drawer > header h2 { margin: 3px 0 0; font-size: 18px; }
@@ -107,7 +106,6 @@ const permissionGroups = computed(() => {
 .role-form input:disabled { background: #f3f5f6; color: #67727d; }
 .role-enabled { display: flex; align-items: center; gap: 8px; color: #465565; font-size: 12px; }
 .role-enabled input, .permission-grid input { accent-color: #147467; }
-.role-form footer { display: flex; justify-content: flex-end; gap: 8px; }
 .permission-section { padding-top: 16px; border-top: 1px solid #e2e7e9; }
 .permission-section > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .permission-changes { margin-top: 12px; padding: 10px 12px; border: 1px solid #e0cf9c; border-radius: 5px; background: #fff9e8; color: #735b21; display: grid; gap: 4px; font-size: 11px; line-height: 1.5; }

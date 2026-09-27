@@ -29,6 +29,16 @@ test('正式页面不显示开发、原型或实现阶段说明', async () => {
   }
 })
 
+test('未开放路由使用共享页面状态组件承载说明', async () => {
+  const source = await readFile('web-admin/src/views/error/PlaceholderView.vue', 'utf8')
+  const baseStyles = await readFile('web-admin/src/assets/styles/base.css', 'utf8')
+
+  assert.match(source, /import PageState from '@\/components\/PageState\.vue'/)
+  assert.match(source, /<PageState class="placeholder-page-state" kind="info" title="当前功能暂未开放。">/)
+  assert.doesNotMatch(source, /class="empty-page"/)
+  assert.doesNotMatch(baseStyles, /\.empty-page/)
+})
+
 test('配置保存成功后直接关闭编辑器而不受保存中保护拦截', async () => {
   const parameterSource = await readFile('web-admin/src/views/configuration/parameter/ParameterView.vue', 'utf8')
   const dictionarySource = await readFile('web-admin/src/views/configuration/dictionary/DictionaryView.vue', 'utf8')
@@ -63,21 +73,28 @@ test('参数页仅在存在机构级参数时读取机构选项', async () => {
   assert.doesNotMatch(source, /Promise<Organization\[\]>/)
 })
 
-test('正式管理端采用参考图的宽侧栏、三层页面标题和全局底部信息', async () => {
+test('正式管理端保留紧凑面包屑与页面标题、可折叠侧栏和全局底部信息', async () => {
   const layout = await readFile('web-admin/src/layout/AppLayout.vue', 'utf8')
   const styles = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8')
 
-  assert.match(layout, /active-class="prototype-route-parent"\s+exact-active-class="router-link-active"/)
-  assert.match(layout, /prototype-breadcrumb[\s\S]*pageContext\.section[\s\S]*route\.meta\.title[\s\S]*<h1>\{\{ route\.meta\.title \}\}<\/h1>/)
+  assert.match(layout, /function isNavigationItemActive\(item: NavigationItem\)/)
+  assert.match(layout, /:aria-current="isNavigationItemActive\(item\) \? 'page' : undefined"/)
+  assert.match(layout, /prototype-breadcrumb[\s\S]*platformSettings\.title[\s\S]*pageSection[\s\S]*<h1>\{\{ route\.meta\.title \}\}<\/h1>/)
+  assert.doesNotMatch(layout, /prototype-page-title/)
   assert.match(layout, /prototype-main-footer/)
   assert.match(layout, /prototype-product-meta/)
-  assert.doesNotMatch(layout, /prototype-collapse-button|sidebar-collapsed/)
+  assert.match(layout, /'sidebar-collapsed': isSidebarCollapsed/)
+  assert.match(layout, /function toggleNavigation\(\)/)
+  assert.match(layout, /window\.matchMedia\('\(max-width: 900px\)'\)/)
+  assert.match(layout, /aria-controls="primary-navigation"/)
   assert.match(styles, /grid-template-columns:\s*280px minmax\(0, 1fr\)/)
   assert.match(styles, /\.prototype-brand \{[^}]*min-height:\s*96px/)
-  assert.match(styles, /\.prototype-topbar \{[^}]*min-height:\s*136px/)
-  assert.match(styles, /\.prototype-heading h1 \{[^}]*font-size:\s*28px/)
+  assert.match(styles, /\.prototype-topbar \{[^}]*min-height:\s*96px/)
+  assert.match(styles, /\.prototype-heading h1 \{[^}]*font-size:\s*24px/)
   assert.match(styles, /\.prototype-sidebar-foot \{[^}]*min-height:\s*82px/)
   assert.match(styles, /\.prototype-main-footer \{[^}]*min-height:\s*56px/)
+  assert.match(styles, /\.real-app \.prototype-main \.real-page-heading \{ min-height: 76px; padding: 18px 28px; \}/)
+  assert.match(styles, /\.real-app \.prototype-topbar \{ grid-template-columns: 32px minmax\(0, 1fr\); \}/)
 })
 
 test('窄屏导航使用完整抽屉并把关闭按钮固定在品牌区内部', async () => {
@@ -150,7 +167,7 @@ test('正式列表统一提供分页并在最小桌面宽度固定操作列', as
   for (const file of listFiles) {
     const source = await readFile(file, 'utf8')
     assert.match(source, /AdminPagination/, `${file} 缺少统一分页组件`)
-    assert.match(source, /action-column-table/, `${file} 缺少固定操作列边界`)
+    assert.match(source, /<AdminTableFrame[^>]*has-actions/, `${file} 缺少共享表格及操作列框架`)
   }
 })
 

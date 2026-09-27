@@ -1,4 +1,4 @@
-<!-- 同步记录详情：展示已落库事实，并允许有同步权限的人员受控结束中断批次；不提供人工发布。 -->
+<!-- 同步记录详情：展示已保存的处理结果，并允许有同步权限的人员按规定结束中断批次；不提供人工发布。 -->
 <script setup lang="ts">
 import { AlertCircle, CheckCircle2, RefreshCw } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -98,7 +98,7 @@ async function load() {
   finally { loading.value = false }
 }
 
-/** 读取机构目录批次的通用交换事实；失败不能覆盖已读取的同步结果。 */
+/** 读取机构目录批次关联的交换记录；读取失败时保留已取得的同步结果。 */
 async function loadExchangeRecords(summary: MasterDataBatchSummary) {
   exchangeRecords.value = []
   exchangeRecordError.value = ''
@@ -130,12 +130,12 @@ async function loadAuditEvents(summary: MasterDataBatchSummary) {
   }
 }
 
-/** 翻页读取已保存的ICD-10调用事实；查看不会重发HIS请求。 */
-async function changeHisInvocationPage(page: number) {
+/** 分页读取已保存的ICD-10调用记录；查看不会重发HIS请求。 */
+async function changeHisInvocationPage(page: number, pageSize = hisInvocations.value?.pageSize ?? 50) {
   if (!batch.value || batch.value.category !== 'ICD10_DIAGNOSIS' || hisInvocationLoading.value) return
   hisInvocationLoading.value = true
   try {
-    hisInvocations.value = await getIcd10HisInvocations(batch.value.id, page)
+    hisInvocations.value = await getIcd10HisInvocations(batch.value.id, page, pageSize)
   } catch (caught) {
     error.value = caught instanceof ApiClientError ? caught.message : '无法读取HIS调用记录'
   } finally {
@@ -143,7 +143,7 @@ async function changeHisInvocationPage(page: number) {
   }
 }
 
-/** 明确确认后结束当前版本的中断批次；请求结果未知时仅提示回读，不能自动重试。 */
+/** 经用户明确确认后结束当前中断批次；请求结果未知时只提示重新读取状态，不自动重试。 */
 async function recover() {
   const current = batch.value
   if (!current || !canRecover.value || !confirmedRecovery.value || loading.value || recovering.value) return
@@ -164,7 +164,7 @@ async function recover() {
 /** @param current 同步记录 @return 面向业务人员的状态名称 */
 function statusLabel(current: MasterDataBatchSummary) {
   if (current.status === 'FAILED' && current.failureCode === 'HIS_BUSINESS_FAILURE') return 'HIS 查询失败'
-  return ({ CREATED: '尚未开始', FETCHING: '正在从 HIS 取得', COMPLETED: '已完成对账',
+  return ({ CREATED: '尚未开始', FETCHING: '正在从 HIS 取得', COMPLETED: '同步完成',
     COMPLETED_WITH_ERRORS: '部分未完成', COMPLETED_WITH_UNKNOWN: '存在未知结果',
     FAILED: '同步失败', RESULT_UNKNOWN: '结果待确认' } satisfies Record<MasterDataBatchSummary['status'], string>)[current.status]
 }
@@ -227,12 +227,12 @@ onBeforeUnmount(() => {
       <div class="record-identity">
         <small>{{ batch ? categoryLabel(batch) : '同步记录' }}</small>
         <p v-if="batch">{{ scopeLabel(batch) }} · {{ batch.environment === 'PRODUCTION' ? '生产环境' : batch.environment === 'TEST' ? '测试环境' : '开发环境' }} · 批次号 {{ batch.batchNo }}</p>
-        <p v-else>读取已落库的同步运行事实；查看不会再次调用 HIS。</p>
+        <p v-else>读取已保存的同步结果；查看不会再次调用 HIS。</p>
       </div>
       <div class="record-heading-actions">
         <div v-if="batch?.status === 'COMPLETED'" class="record-complete" role="status">
           <CheckCircle2 :size="18" />
-          <div><strong>当前目录已完成对账</strong><span>本次同步已在 {{ formatBatchTime(batch.completedAt) }} 完成自动处理；可从数据目录查看当前数据。</span></div>
+          <div><strong>当前目录数量已核对</strong><span>本次同步已在 {{ formatBatchTime(batch.completedAt) }} 完成自动处理；可从数据目录查看当前数据。</span></div>
         </div>
         <button class="work-quiet-button" type="button" :disabled="loading || recovering" @click="load"><RefreshCw :size="16" />刷新</button>
       </div>
@@ -243,7 +243,7 @@ onBeforeUnmount(() => {
       <section v-if="canRecover" class="record-alert warning">
         <div>
           <strong>批次中断时可结束本次执行</strong>
-          <span>只汇总已提交事实，不再调用 HIS；尚未完成的类型标记为结果未知。收尾会阻止原执行者继续写入，不能用于重跑当前批次。</span>
+          <span>只汇总已提交的数据，不再调用 HIS；尚未完成的类别标记为结果未知。结束批次会阻止原执行者继续写入，不能用来重新运行当前批次。</span>
           <label><input v-model="confirmedRecovery" type="checkbox" :disabled="loading || recovering" />我已确认需要结束本次执行并保留已提交数据</label>
           <button class="work-quiet-button" type="button" :disabled="!confirmedRecovery || loading || recovering" @click="recover">{{ recovering ? '正在收尾…' : '结束中断批次' }}</button>
         </div>
@@ -266,10 +266,10 @@ onBeforeUnmount(() => {
         </div>
       </section>
       <section v-if="batch.counts.returned > 0 || batch.status === 'COMPLETED'" class="record-card">
-        <h3>取得与对账结果</h3>
-        <div class="batch-detail-grid-scroll record-counts-wrap" role="region" aria-label="取得与对账统计" tabindex="0">
-          <dl v-if="batch.category === 'MEDICAL_DIRECTORY' || batch.category === 'ICD10_DIAGNOSIS'" class="batch-detail-grid record-counts"><div><dt>来源声明行数</dt><dd>{{ batch.counts.declared ?? '未确认' }}</dd></div><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>自动拦截数</dt><dd>{{ batch.counts.invalid + batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
-          <dl v-else class="batch-detail-grid record-counts"><div><dt>HIS 返回行</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>展开重复</dt><dd>{{ batch.counts.duplicate }} 行</dd></div><div><dt>丢弃的无效关系</dt><dd>{{ batch.counts.invalid }} 条</dd></div><div><dt>主数据冲突</dt><dd>{{ batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
+        <h3>取得数量核对结果</h3>
+        <div class="batch-detail-grid-scroll record-counts-wrap" role="region" aria-label="取得数量核对结果" tabindex="0">
+          <dl v-if="batch.category === 'MEDICAL_DIRECTORY' || batch.category === 'ICD10_DIAGNOSIS'" class="batch-detail-grid record-counts"><div><dt>来源声明行数</dt><dd>{{ batch.counts.declared ?? '未确认' }}</dd></div><div><dt>HIS 返回记录</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>自动拦截数</dt><dd>{{ batch.counts.invalid + batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
+          <dl v-else class="batch-detail-grid record-counts"><div><dt>HIS 返回记录</dt><dd>{{ batch.counts.returned }} 条</dd></div><div><dt>关系展开后重复行</dt><dd>{{ batch.counts.duplicate }} 行</dd></div><div><dt>已丢弃的无效关联</dt><dd>{{ batch.counts.invalid }} 条</dd></div><div><dt>基础数据冲突</dt><dd>{{ batch.counts.conflict }} 条</dd></div><div><dt>新增 / 更新</dt><dd>{{ batch.counts.created }} / {{ batch.counts.updated }} 条</dd></div><div><dt>当前有效目录</dt><dd>{{ batch.counts.active === null ? '未完成' : `${batch.counts.active} 条` }}</dd></div></dl>
         </div>
         <p v-if="batch.status === 'COMPLETED'" class="record-directory-link"><RouterLink :to="directoryPath">查看当前数据目录</RouterLink></p>
       </section>
@@ -277,7 +277,7 @@ onBeforeUnmount(() => {
       <BatchExchangeRecordPanel v-if="batch.category === 'MEDICAL_DIRECTORY'" :records="exchangeRecords" :loading="exchangeRecordLoading" :error="exchangeRecordError" :organization-code="batch.organizationCode ?? ''" :source-record-id="batch.batchNo" />
       <template v-else-if="batch.category === 'ICD10_DIAGNOSIS'">
         <Icd10SyncResultPanel :results="icd10Results" :loading="loading" />
-        <Icd10HisInvocationPanel :page="hisInvocations" :loading="loading || hisInvocationLoading" @change-page="changeHisInvocationPage" />
+        <Icd10HisInvocationPanel :page="hisInvocations" :loading="loading || hisInvocationLoading" @change-page="changeHisInvocationPage" @change-page-size="changeHisInvocationPage(1, $event)" />
       </template>
       <template v-else>
         <DirectorySyncResultPanel :results="directoryResults" :loading="loading" />

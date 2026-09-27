@@ -17,10 +17,15 @@ import {
 import type { ManagedUser } from '@/api/system/user'
 import { authState, hasPermission } from '@/store/modules/auth'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import AdminPagination from '@/components/AdminPagination.vue'
+import AdminTableFrame from '@/components/AdminTableFrame.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
 import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
+import ListRowActions from '@/components/ListRowActions.vue'
+import PageState from '@/components/PageState.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 import UserEditorDrawer from './components/UserEditorDrawer.vue'
 import {
   emptyUserForm, toCreateUserInput, toUpdateUserInput, userToForm,
@@ -84,6 +89,7 @@ const filtered = computed(() => {
   })
 })
 const { page, pageSize, pagedRows } = useClientPagination(filtered)
+const { request: confirmationRequest, confirm, resolve: resolveConfirmation } = useConfirmationDialog()
 
 function applyListFilters() {
   page.value = 1
@@ -96,6 +102,7 @@ function resetListFilters() {
   roleFilter.value = 'all'
   attentionFilter.value = 'all'
   page.value = 1
+  void router.replace({ path: route.path })
 }
 function currentEditorSnapshot() {
   return JSON.stringify({ form: form.value, roles: roleDraft.value, scopes: scopeDraft.value, temporaryPassword: temporaryPassword.value })
@@ -137,9 +144,14 @@ function captureEditorSnapshot() {
   editorSnapshot.value = currentEditorSnapshot()
 }
 
-function closeEditor() {
+async function closeEditor() {
   if (isSaving.value) return
-  if (currentEditorSnapshot() !== editorSnapshot.value && !window.confirm('当前修改尚未保存，确定关闭吗？')) return
+  if (currentEditorSnapshot() !== editorSnapshot.value && !await confirm({
+    title: '放弃未保存的用户修改？',
+    message: '关闭后，本次修改的用户资料、角色和机构范围不会保存。',
+    confirmLabel: '放弃修改',
+    danger: true,
+  })) return
   detailController?.abort()
   mode.value = 'closed'
   selected.value = null
@@ -413,19 +425,24 @@ onBeforeUnmount(() => {
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
     <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
 
-    <ListQueryToolbar :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
-      <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="姓名、登录名或机构编码" aria-label="搜索用户" /></label>
-      <select v-model="statusFilter" aria-label="用户状态"><option value="all">全部状态</option><option value="enabled">正常使用</option><option value="disabled">已注销</option></select>
-      <select v-model="organizationFilter" aria-label="主要机构"><option value="all">全部主要机构</option><option v-for="organization in organizations" :key="organization.id" :value="String(organization.id)">{{ organization.organizationName }}</option></select>
-      <select v-model="roleFilter" aria-label="用户角色"><option value="all">全部角色</option><option v-for="role in roles" :key="role.id" :value="String(role.id)">{{ role.roleName }}</option></select>
-      <select v-model="attentionFilter" aria-label="需要处理的用户"><option value="all">全部情况</option><option value="needsAttention">只看需要处理</option></select>
+    <ListQueryToolbar filters-layout="search-with-four-selects" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
+      <label class="prototype-search standard-list-filter--search"><Search :size="16" /><input v-model="query" type="search" placeholder="姓名、登录名或机构编码" aria-label="搜索用户" /></label>
+      <select class="standard-list-filter--status" v-model="statusFilter" aria-label="用户状态"><option value="all">全部状态</option><option value="enabled">正常使用</option><option value="disabled">已注销</option></select>
+      <select class="standard-list-filter--organization" v-model="organizationFilter" aria-label="主要机构"><option value="all">全部主要机构</option><option v-for="organization in organizations" :key="organization.id" :value="String(organization.id)">{{ organization.organizationName }}</option></select>
+      <select class="standard-list-filter--role" v-model="roleFilter" aria-label="用户角色"><option value="all">全部角色</option><option v-for="role in roles" :key="role.id" :value="String(role.id)">{{ role.roleName }}</option></select>
+      <select class="standard-list-filter--attention" v-model="attentionFilter" aria-label="需要处理的用户"><option value="all">全部情况</option><option value="needsAttention">只看需要处理</option></select>
       <template #actions><button v-if="canCreate" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增用户</button></template>
     </ListQueryToolbar>
 
-    <section class="prototype-section work-table-section user-panel action-column-table">
-      <div v-if="isLoading" class="page-state" aria-live="polite"><LoaderCircle class="spinning" :size="28" /><strong>正在加载用户数据</strong></div>
-      <div v-else-if="!error && users.length === 0" class="page-state"><UserRound :size="30" /><strong>当前范围内暂无用户</strong></div>
-      <div v-else-if="users.length" class="prototype-table-wrap">
+    <section class="prototype-section work-table-section user-panel">
+      <PageState v-if="isLoading" kind="loading" title="正在加载用户数据" />
+      <PageState v-else-if="!error && users.length === 0" kind="empty" title="当前范围内暂无用户">
+        <template #icon><UserRound :size="30" /></template>
+      </PageState>
+      <PageState v-else-if="!error && filtered.length === 0" kind="empty" title="没有符合当前筛选条件的用户" compact>
+        <template #icon><UserRound :size="26" /></template>
+      </PageState>
+      <AdminTableFrame v-else-if="filtered.length" label="用户列表" has-actions>
         <table class="work-table user-table">
           <thead><tr><th>姓名 / 登录名</th><th>归属机构</th><th title="角色决定功能权限，数据范围单独授权">权限角色</th><th title="当前账号可访问的机构范围">数据范围</th><th>登录要求</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
           <tbody><tr v-for="user in pagedRows" :key="user.id">
@@ -436,12 +453,11 @@ onBeforeUnmount(() => {
             <td><span class="user-cell-text" :class="{ 'attention-text': loginRequirement(user) !== '无需处理' }" :title="loginRequirement(user)">{{ loginRequirement(user) }}</span></td>
             <td><span class="prototype-tag" :class="user.enabled ? 'success' : 'neutral'">{{ user.enabled ? '正常使用' : '已注销' }}</span></td>
             <td>{{ formatTime(user.updatedAt) }}</td>
-            <td class="user-actions"><button v-if="canWrite" class="prototype-icon" type="button" aria-label="修改用户" title="修改" @click="openUser(user, true)"><Pencil :size="15" /></button><button v-if="canWrite" class="status-action" :class="{ confirm: confirmStatusId === user.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === user.id && user.enabled ? user.id === authState.user?.userId ? '注销后当前账号会立即退出登录' : '注销后该用户将不能登录，历史记录继续保留' : ''" @blur="confirmStatusId = null" @click="changeStatus(user)">{{ statusSavingId === user.id ? '处理中…' : confirmStatusId === user.id ? user.enabled ? '确认注销' : '确认恢复' : user.enabled ? '注销账号' : '恢复使用' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看用户详情" title="查看详情" @click="openUser(user)"><ChevronRight :size="16" /></button></td>
+            <td><ListRowActions label="用户操作"><button v-if="canWrite" class="prototype-icon" type="button" aria-label="修改用户" title="修改" @click="openUser(user, true)"><Pencil :size="15" /></button><button v-if="canWrite" class="status-action" :class="{ confirm: confirmStatusId === user.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === user.id && user.enabled ? user.id === authState.user?.userId ? '注销后当前账号会立即退出登录' : '注销后该用户将不能登录，历史记录继续保留' : ''" @blur="confirmStatusId = null" @click="changeStatus(user)">{{ statusSavingId === user.id ? '处理中…' : confirmStatusId === user.id ? user.enabled ? '确认注销' : '确认恢复' : user.enabled ? '注销账号' : '恢复使用' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看用户详情" title="查看详情" @click="openUser(user)"><ChevronRight :size="16" /></button></ListRowActions></td>
           </tr></tbody>
         </table>
-        <div v-if="filtered.length === 0" class="prototype-empty">没有符合当前条件的用户</div>
-      </div>
-      <AdminPagination v-if="!isLoading && users.length" :total="filtered.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
+      </AdminTableFrame>
+      <AdminPagination v-if="!isLoading && filtered.length" :total="filtered.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
     </section>
 
     <UserEditorDrawer
@@ -470,13 +486,13 @@ onBeforeUnmount(() => {
       @submit-password-reset="submitPasswordReset"
       @reload="reloadDetail"
     />
+    <ConfirmationDialog v-if="confirmationRequest" :request="confirmationRequest" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" />
   </section>
 </template>
 
 <style scoped>
 .user-page { color: #263341; }
-.user-panel { min-height: 390px; --action-column-width: 140px; }
-.page-state { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55766d; }
+.user-panel { --action-column-width: 140px; }
 .user-table { min-width: 1120px; table-layout: fixed; }
 .user-table th:nth-child(1) { width: 12%; }
 .user-table th:nth-child(2) { width: 19%; }
@@ -491,8 +507,6 @@ onBeforeUnmount(() => {
 .user-inline-identity > span { min-width: 0; overflow: hidden; color: #72818d; font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; }
 .user-cell-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-table .attention-text { color: #a45437; }
-.user-actions { text-align: right; white-space: nowrap; }
-.user-actions > button + button { margin-left: 6px; }
 .status-action { min-height: 32px; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 5px; background: white; color: #53636b; font-size: 11px; white-space: nowrap; }
 .status-action.confirm { border-color: #a94b42; background: #a94b42; color: white; }
 .feedback { min-height: 46px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 10px; font-size: 12px; }

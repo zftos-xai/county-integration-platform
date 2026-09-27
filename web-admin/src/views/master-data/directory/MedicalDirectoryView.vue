@@ -4,6 +4,8 @@ import { ChevronDown, ChevronRight } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AdminPagination from '@/components/AdminPagination.vue'
+import AdminTableFrame from '@/components/AdminTableFrame.vue'
+import ListRowActions from '@/components/ListRowActions.vue'
 import {
   listMedicalDirectory,
   medicalDirectoryTypes,
@@ -50,7 +52,7 @@ const directoryType = ref<MedicalDirectoryType>('TRADITIONAL_MEDICINE')
 const keyword = ref('')
 const sourceEnabledFlag = ref<'' | '是' | '否'>('')
 const selectedItemId = ref<number | null>(null)
-const tableWrap = ref<HTMLElement | null>(null)
+const tableWrap = ref<{ resetHorizontalScroll: () => void } | null>(null)
 const isLoading = ref(true)
 const isRefreshing = ref(false)
 const error = ref<ApiClientError | null>(null)
@@ -94,7 +96,7 @@ const typeLabels: Record<MedicalDirectoryType, string> = {
   CONSUMABLE: '耗材',
 }
 
-/** 当前展开查看来源链路的目录记录。 */
+/** 当前展开查看来源信息的目录记录。 */
 const selectedItem = computed(() =>
   items.value.find((item) => item.id === selectedItemId.value) ?? null,
 )
@@ -177,7 +179,7 @@ async function load(background = false) {
   }
 }
 
-/** 机构上下文确定后，清除旧页码和数量再读取当前目录。 */
+/** 确定当前机构后，清除旧页码和数量再读取当前目录。 */
 function selectOrganization() {
   page.value = 1
   total.value = 0
@@ -209,7 +211,7 @@ function clearExtraFilters() {
 /** 展开目录时将横向滚动复位，让字段名从第一列开始可见。 */
 function toggleDetail(id: number) {
   selectedItemId.value = selectedItemId.value === id ? null : id
-  if (selectedItemId.value && tableWrap.value) tableWrap.value.scrollLeft = 0
+  if (selectedItemId.value) tableWrap.value?.resetHorizontalScroll()
 }
 
 /** 双击数据单元格查看详情，不拦截按钮和链接原有的操作。 */
@@ -292,8 +294,8 @@ onBeforeUnmount(() => {
         </select>
       </label>
     </template>
-    <div ref="tableWrap" class="directory-table-wrap">
-      <table class="directory-table action-column-table">
+    <AdminTableFrame ref="tableWrap" label="医疗目录列表" has-actions :pin-actions="false" action-column-width="88px">
+      <table class="directory-table">
         <thead>
           <tr>
             <th scope="col">名称 / 目录编码</th>
@@ -336,11 +338,13 @@ onBeforeUnmount(() => {
               </td>
               <td :title="item.sourceEnabledFlag">{{ item.sourceEnabledFlag }}</td>
               <td class="directory-actions">
+                <ListRowActions label="目录记录操作">
                 <button type="button" :aria-expanded="selectedItemId === item.id" @click="toggleDetail(item.id)">
                   <ChevronDown v-if="selectedItemId === item.id" :size="15" />
                   <ChevronRight v-else :size="15" />
                   {{ selectedItemId === item.id ? '收起' : '查看' }}
                 </button>
+                </ListRowActions>
               </td>
             </tr>
             <tr v-if="selectedItemId === item.id && selectedItem" class="directory-detail-row">
@@ -381,7 +385,7 @@ onBeforeUnmount(() => {
                       <div><dt>平台首次记录</dt><dd>{{ formatTime(selectedItem.firstSeenAt) }}</dd></div>
                       <div>
                         <dt>同步记录</dt>
-                        <dd><RouterLink class="batch-link" :to="`/master-data/batches/${selectedItem.latestBatchId}`">{{ selectedItem.latestBatchNo }}</RouterLink></dd>
+                        <dd>{{ selectedItem.latestBatchNo }}</dd>
                       </div>
                     </dl>
                   </section>
@@ -391,7 +395,7 @@ onBeforeUnmount(() => {
           </template>
         </tbody>
       </table>
-    </div>
+    </AdminTableFrame>
     <template #pagination>
       <AdminPagination
         :total="total"

@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="content dashboard-page">
     <div class="overview-commandbar">
-      <div><strong>{{ health === 'checking' ? '正在读取管理概况' : health === 'available' ? '后台服务可连接' : '后台服务连接失败' }}</strong><small>{{ checkedAt ? `最近检查 ${checkedAt}；业务是否正常请查看下方待处理事项` : '正在检查后台服务与业务数据' }}</small></div>
+      <div><strong>{{ health === 'checking' ? '正在读取管理概况' : '后台服务' }}</strong><small>{{ checkedAt ? `最近检查 ${checkedAt}` : '正在检查' }}</small></div>
       <div class="overview-commandbar-actions"><span class="prototype-tag overview-health-tag" :class="health === 'available' ? 'success' : health === 'unavailable' ? 'danger' : 'neutral'">{{ health === 'available' ? '服务可用' : health === 'unavailable' ? '连接失败' : '检查中' }}</span><button class="work-quiet-button overview-refresh" type="button" title="重新检查" :disabled="isLoading" @click="loadDashboard"><RefreshCw :size="14" :class="{ spinning: isLoading }" />刷新</button></div>
     </div>
 
@@ -158,15 +158,16 @@ onBeforeUnmount(() => {
 
     <div class="overview-work-grid">
       <section class="card overview-work-card dashboard-audit-card">
-        <div class="card-header"><div><h2 class="card-title">最近管理操作</h2><small>最近记录中有 {{ recentFailureCount }} 次失败；点击可查看具体原因</small></div><div class="audit-card-actions"><RouterLink v-if="canReadAudit && recentFailureCount" class="work-quiet-button" to="/audit?resultCode=FAILURE">只看失败</RouterLink><RouterLink v-if="canReadAudit" class="work-quiet-button" to="/audit">查看全部</RouterLink></div></div>
+        <div class="card-header"><div><h2 class="card-title">最近管理操作</h2></div><div class="audit-card-actions"><RouterLink v-if="canReadAudit && recentFailureCount" class="work-quiet-button" to="/audit?resultCode=FAILURE">只看失败</RouterLink><RouterLink v-if="canReadAudit" class="work-quiet-button" to="/audit">查看全部</RouterLink></div></div>
         <div v-if="isLoading && canReadAudit" class="empty-state"><RefreshCw class="spinning" :size="27" /><strong>正在读取审计记录</strong></div>
         <div v-else-if="!canReadAudit" class="empty-state"><ClipboardList :size="27" /><strong>当前账号无审计读取权限</strong></div>
+        <div v-else-if="failureLabels.includes('最近管理操作')" class="empty-state"><AlertCircle :size="27" /><strong>最近管理操作暂时无法读取</strong></div>
         <div v-else-if="recentAuditEvents.length === 0" class="empty-state"><CheckCircle2 :size="27" /><strong>当前范围内暂无管理操作</strong></div>
-        <ol v-else class="dashboard-audit-list"><li v-for="event in recentAuditEvents" :key="event.id"><span class="prototype-tag" :class="event.resultCode === 'SUCCESS' ? 'success' : 'danger'">{{ event.resultCode === 'SUCCESS' ? '成功' : '失败' }}</span><div><strong>{{ auditActionLabel(event.actionCode) }}</strong><p>{{ event.changeSummary }}</p><small>{{ auditTargetLabel(event.targetType) }} · {{ event.targetId }} · {{ event.actorLogin }} · {{ formatLocalDateTime(event.occurredAt) }}</small></div></li></ol>
+        <ol v-else class="dashboard-audit-list"><li v-for="event in recentAuditEvents" :key="event.id"><span class="prototype-tag" :class="event.resultCode === 'SUCCESS' ? 'success' : 'danger'">{{ event.resultCode === 'SUCCESS' ? '成功' : '失败' }}</span><div class="dashboard-audit-main"><strong>{{ auditActionLabel(event.actionCode) }}</strong><p>{{ event.changeSummary }}</p></div><small class="dashboard-audit-meta">{{ auditTargetLabel(event.targetType) }} · {{ event.targetId }} · {{ event.actorLogin }} · {{ formatLocalDateTime(event.occurredAt) }}</small></li></ol>
       </section>
 
       <section class="card overview-work-card dashboard-shortcuts">
-        <div class="card-header"><div><h2 class="card-title">基础配置</h2><small>查看参数和字典的当前配置情况</small></div></div>
+        <div class="card-header"><div><h2 class="card-title">基础配置</h2></div></div>
         <div v-if="canReadConfiguration" class="shortcut-grid"><RouterLink to="/parameters"><Settings2 :size="22" /><span><strong>参数配置</strong><small>{{ configuredParameterCount ?? '—' }} 个启用当前适用范围的值</small></span></RouterLink><RouterLink to="/dictionaries"><BookOpen :size="22" /><span><strong>数据字典</strong><small>{{ dictionaryTypeCount ?? '—' }} 个启用类型</small></span></RouterLink></div>
         <div v-else class="empty-state"><Settings2 :size="27" /><strong>当前账号无配置读取权限</strong></div>
       </section>
@@ -177,24 +178,28 @@ onBeforeUnmount(() => {
 <style scoped>
 .dashboard-page { display: grid; gap: 14px; }
 .overview-kpis { gap: 0; overflow: hidden; border: 1px solid #dfe5e8; border-radius: 4px; background: #fff; }
-.overview-kpis > a { min-width: 0; min-height: 108px; padding: 17px 22px; border-right: 1px solid #e3e8eb; color: #31434f; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-decoration: none; }
+.overview-kpis > a { min-width: 0; min-height: 96px; padding: 14px 18px; border-right: 1px solid #e3e8eb; color: #31434f; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: center; gap: 7px 12px; text-decoration: none; }
 .overview-kpis > a:last-child { border-right: 0; }
 .overview-kpis > a:hover { background: #f7fbfa; }
 .overview-kpis > a:focus-visible { outline: 2px solid #187a6d; outline-offset: -3px; }
-.overview-kpis span { color: #667482; font-size: 11px; font-weight: 600; }
-.overview-kpis strong { margin-top: 8px; color: #273746; font-size: 28px; font-weight: 650; line-height: 1; }
-.overview-kpis small { margin-top: 8px; color: #84909b; font-size: 10px; }
+.overview-kpis span { color: #53636f; font-size: 12px; font-weight: 600; }
+.overview-kpis strong { grid-column: 2; grid-row: 1 / 3; color: #273746; font-size: 28px; font-weight: 650; line-height: 1; }
+.overview-kpis small { grid-column: 1; color: #667580; font-size: 12px; }
 .dashboard-warning { min-height: 54px; padding: 10px 13px; border: 1px solid #e6cf9d; border-radius: 5px; background: #fff9e9; color: #7b5c1f; display: flex; align-items: center; gap: 10px; }
 .dashboard-warning span { display: grid; gap: 2px; }
 .dashboard-warning small { font-size: 11px; }
 .overview-work-card .card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.audit-card-actions { display: flex; gap: 7px; }
+.dashboard-audit-card .card-header > .audit-card-actions { display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 7px; }
+.dashboard-audit-card .audit-card-actions .work-quiet-button { white-space: nowrap; }
+.overview-work-grid { align-items: start; }
+.dashboard-shortcuts .shortcut-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dashboard-shortcuts .shortcut-grid small { color: #596b77; font-size: 12px; }
 .dashboard-audit-list { margin: 0; padding: 0; list-style: none; }
-.dashboard-audit-list li { padding: 13px 16px; border-top: 1px solid #e4e9ea; display: flex; align-items: flex-start; gap: 10px; }
-.dashboard-audit-list div { min-width: 0; }
+.dashboard-audit-list li { padding: 13px 16px; border-top: 1px solid #e4e9ea; display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, .8fr); align-items: start; gap: 8px 10px; }
+.dashboard-audit-list .dashboard-audit-main { min-width: 0; }
 .dashboard-audit-list strong, .dashboard-audit-list small { display: block; }
-.dashboard-audit-list p { margin: 3px 0; color: #53636d; font-size: 12px; }
-.dashboard-audit-list small { color: #7c8991; font-size: 10px; }
+.dashboard-audit-list p { margin: 3px 0; color: #465a66; font-size: 13px; }
+.dashboard-audit-list .dashboard-audit-meta { align-self: center; color: #596b77; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .shortcut-grid { padding: 16px; display: grid; gap: 10px; }
 .shortcut-grid a { min-height: 76px; padding: 14px; border: 1px solid #dce4e6; border-radius: 5px; color: #344853; display: flex; align-items: center; gap: 12px; text-decoration: none; }
 .shortcut-grid a:hover { border-color: #8fc3b5; background: #f3faf8; }
@@ -204,14 +209,21 @@ onBeforeUnmount(() => {
 .spinning { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinning { animation: none; } }
+@media (max-width: 1100px) {
+  .overview-work-grid { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 1050px) {
   .overview-kpis > a { border-bottom: 1px solid #e3e8eb; }
   .overview-kpis > a:nth-child(2n) { border-right: 0; }
   .overview-kpis > a:nth-last-child(-n + 2) { border-bottom: 0; }
 }
 @media (max-width: 480px) {
-  .overview-kpis > a { min-height: 92px; border-right: 0; }
-  .overview-kpis > a:nth-last-child(2) { border-bottom: 1px solid #e3e8eb; }
+  .overview-kpis > a { min-height: 78px; border-right: 0; }
+  .overview-kpis > a:not(:last-child) { border-bottom: 1px solid #e3e8eb; }
   .overview-kpis > a:last-child { border-bottom: 0; }
+}
+@media (max-width: 600px) {
+  .dashboard-audit-list li { grid-template-columns: auto minmax(0, 1fr); }
+  .dashboard-audit-list .dashboard-audit-meta { grid-column: 2; align-self: start; }
 }
 </style>

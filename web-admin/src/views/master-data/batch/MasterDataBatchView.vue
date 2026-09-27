@@ -1,4 +1,4 @@
-<!-- 同步批次正式页面：使用真实API查询、创建和回读基础数据同步批次。 -->
+<!-- 同步批次正式页面：使用真实API查询、创建并重新读取基础数据同步批次。 -->
 <script setup lang="ts">
 import {
   AlertCircle,
@@ -7,13 +7,18 @@ import {
   LoaderCircle,
   Plus,
   RefreshCw,
+  Search,
   XCircle,
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AdminPagination from '@/components/AdminPagination.vue';
+import AdminTableFrame from '@/components/AdminTableFrame.vue';
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue';
+import DrawerFrame from '@/components/DrawerFrame.vue';
 import ListQueryToolbar from '@/components/ListQueryToolbar.vue';
+import ListRowActions from '@/components/ListRowActions.vue';
+import PageState from '@/components/PageState.vue';
 import {
   cancelMasterDataBatch,
   getMasterDataBatch,
@@ -98,6 +103,11 @@ let detailPollTimer: ReturnType<typeof setTimeout> | null = null;
 let durationTimer: ReturnType<typeof setInterval> | null = null;
 
 const canStart = computed(() => hasPermission('master-data:sync'));
+const hasBatchRowActions = computed(
+  () =>
+    canStart.value &&
+    batches.value.some((item) => item.status === 'CREATED'),
+);
 const hasSyncOption = computed(
   () =>
     hasLoadedSyncSources.value &&
@@ -213,7 +223,7 @@ async function loadOrganizationOptions() {
   }
 }
 
-/** 读取真实可执行的基层HIS机构与环境，不以机构主数据代替接口配置。 */
+/** 读取当前可连接的基层HIS机构和环境；机构基本信息不能替代接口连接设置。 */
 async function loadSyncSources() {
   if (!canStart.value) {
     isSyncSourceLoading.value = false;
@@ -352,7 +362,7 @@ async function submitBatch() {
     isCreatorOpen.value = false;
     notice.value =
       updated.status === 'COMPLETED'
-        ? `${masterDataCategoryLabels[updated.category]}已完成自动对账，当前数据已更新。`
+        ? `${masterDataCategoryLabels[updated.category]}数量已自动核对，当前数据已更新。`
         : `${masterDataCategoryLabels[updated.category]}：${resultSummary(updated)}`;
     auditTarget.value = {
       targetType: 'MASTER_DATA_BATCH',
@@ -384,11 +394,11 @@ async function submitBatch() {
 }
 
 /**
- * 运行请求未返回时回读批次事实；HIS 已完成而浏览器断开时，不能把通信异常误报成业务失败。
+ * 运行请求未返回时重新读取批次结果；HIS 已完成而浏览器断开时，不能把通信异常误报成业务失败。
  *
  * @param created 已成功创建的批次
  * @param apiError 本次运行请求的通信或服务端异常
- * @returns 已回读终态或确认仍在执行并开始只读轮询时为true
+ * @returns 已读取到最终状态，或确认仍在执行并开始只读轮询时为true
  */
 async function recoverCompletedBatch(
   created: MasterDataBatchSummary,
@@ -413,15 +423,15 @@ async function recoverCompletedBatch(
     actionError.value = null;
     notice.value =
       latest.status === 'COMPLETED'
-        ? '已回读确认：本次同步已完成，当前目录已更新。'
-        : `已回读确认：本次同步已结束，${resultSummary(latest)}`;
+        ? '已重新读取并确认：本次同步已完成，当前目录已更新。'
+        : `已重新读取并确认：本次同步已结束，${resultSummary(latest)}`;
     auditTarget.value = {
       targetType: 'MASTER_DATA_BATCH',
       targetId: latest.batchNo,
     };
     return true;
   } catch (recoveryCaught) {
-    const recoveryError = asApiError(recoveryCaught, '无法回读同步批次');
+    const recoveryError = asApiError(recoveryCaught, '无法重新读取同步批次');
     if (!(await handleUnauthorized(recoveryError))) actionError.value = apiError;
     return false;
   }
@@ -443,7 +453,7 @@ async function openCurrentDirectory() {
   });
 }
 
-/** 发生冲突或结果未知时按原请求标识回读，避免直接重复提交。 */
+/** 发生冲突或结果未知时按原请求编号重新读取，避免直接重复提交。 */
 async function reloadCreatedBatch() {
   const requestKey = lastStartInput.value?.requestKey;
   if (!requestKey) return;
@@ -482,7 +492,7 @@ async function openDetail(item: MasterDataBatchSummary) {
     }
     if (item.status === 'FETCHING' && latest.status !== 'FETCHING' &&
         !controller.signal.aborted && selected.value?.id === item.id) {
-      notice.value = `已回读确认：${resultSummary(latest)}`;
+      notice.value = `已重新读取并确认：${resultSummary(latest)}`;
       await loadBatches(true);
     }
   } catch (caught) {
@@ -497,7 +507,7 @@ async function openDetail(item: MasterDataBatchSummary) {
       isDetailLoading.value = false;
     if (detailController === controller && mounted)
       isDirectoryResultsLoading.value = false;
-    // 只回读运行事实，不自动重发run；关闭详情、卸载或到达终态后停止。
+    // 只重新读取运行结果，不自动重发run；关闭详情、卸载或到达终态后停止。
     if (mounted && detailController === controller && !controller.signal.aborted &&
         selected.value?.id === item.id && selected.value.status === 'FETCHING' && !detailError.value) {
       detailPollTimer = setTimeout(() => {
@@ -505,11 +515,6 @@ async function openDetail(item: MasterDataBatchSummary) {
       }, 5000);
     }
   }
-}
-
-/** 打开读取本次同步事实与系统校验结论的批次详情页面。 */
-async function openReview(batchId: number) {
-  await router.push(`/master-data/batches/${batchId}`);
 }
 
 /** 取得当前选择业务并由服务端自动校验和更新当前数据，结果未知时不自动重试。 */
@@ -523,7 +528,7 @@ async function runSelectedBatch() {
     selected.value = updated;
     notice.value =
       updated.status === 'COMPLETED'
-        ? `${masterDataCategoryLabels[updated.category]}已完成自动对账，当前数据已更新。`
+        ? `${masterDataCategoryLabels[updated.category]}数量已自动核对，当前数据已更新。`
         : `${masterDataCategoryLabels[updated.category]}：${resultSummary(updated)}`;
     auditTarget.value = {
       targetType: 'MASTER_DATA_BATCH',
@@ -562,7 +567,7 @@ function statusPresentation(
     {
       CREATED: { label: '尚未开始', tone: 'neutral' },
       FETCHING: { label: '正在取得', tone: 'info' },
-      COMPLETED: { label: '已完成对账', tone: 'success' },
+      COMPLETED: { label: '已完成', tone: 'success' },
       COMPLETED_WITH_ERRORS: { label: '部分未完成', tone: 'warning' },
       COMPLETED_WITH_UNKNOWN: { label: '存在未知结果', tone: 'warning' },
       FAILED: { label: '同步失败', tone: 'danger' },
@@ -590,7 +595,7 @@ function resultSummary(item: MasterDataBatchSummary) {
     return `部分${business}类型未通过自动校验或被 HIS 拒绝；已完成类型已经更新，失败类型没有改动。`;
   }
   if (item.status === 'COMPLETED_WITH_UNKNOWN') {
-    return `${business}存在未确认结果；以分项事实为准，不要直接重复同步。`;
+    return `${business}的结果尚未确认；请先查看各项结果，不要直接重复同步。`;
   }
   return item.status === 'COMPLETED'
     ? '系统已完成自动校验，并更新本机构当前目录。'
@@ -669,9 +674,9 @@ function batchScopeDescription(item: MasterDataBatchSummary) {
 /** @param item 同步批次 @return 更新策略的准确业务说明 */
 function currentDataExplanation(item: MasterDataBatchSummary) {
   return item.category === 'ICD10_DIAGNOSIS'
-    ? '系统分别核对100-007声明数量并分页取得100-006西医、中医诊断数据；完整通过校验的类别直接更新平台公共目录。来源时间范围不证明为全量快照，因此本次不会按未返回数据标记无效。'
+    ? '系统分别核对100-007声明的数量，并分页取得100-006西医、中医诊断数据；完整通过检查的类别会直接更新平台公共目录。来源时间范围不能证明数据完整，因此本次不会把未返回的数据标记为无效。'
     : item.category === 'MEDICAL_DIRECTORY'
-    ? '系统先核对100-005声明数量，再分页取得100-004数据；完整通过校验的类型直接更新当前目录。来源时间范围未证明为全量快照，因此本次不会按未返回数据标记无效。'
+    ? '系统先核对100-005声明的数量，再分页取得100-004数据；完整通过检查的类别会直接更新当前目录。来源时间范围不能证明数据完整，因此本次不会把未返回的数据标记为无效。'
     : '本次读取科室、病区、床位和人员目录；完整返回且通过校验的部分已直接更新为当前数据。';
 }
 
@@ -703,21 +708,23 @@ onBeforeUnmount(() => {
       @close="closeNotice"
     />
     <ListQueryToolbar
-      class="batch-toolbar"
+      filters-layout="dense-grid"
       :refreshing="isRefreshing"
       @query="applyFilters"
       @reset="clearFilters"
       @refresh="reloadPage"
     >
-      <div class="batch-filter-row">
+      <label class="prototype-search standard-list-filter--span-2 standard-list-filter--full-tablet">
+        <Search :size="16" />
         <input
           v-model="requestKeyFilter"
-          class="batch-request-search"
+          type="search"
           maxlength="64"
           placeholder="请求标识"
           aria-label="请求标识"
         />
-        <select v-model="organizationFilter" aria-label="机构范围">
+      </label>
+      <select class="standard-list-filter--span-2" v-model="organizationFilter" aria-label="机构范围">
           <option value="">全部机构和公共目录</option>
           <option
             v-for="item in visibleOrganizationOptions"
@@ -726,8 +733,8 @@ onBeforeUnmount(() => {
           >
             {{ item.name }}
           </option>
-        </select>
-        <select v-model="categoryFilter" aria-label="数据类别">
+      </select>
+      <select class="standard-list-filter" v-model="categoryFilter" aria-label="数据类别">
           <option value="">全部数据类别</option>
           <option
             v-for="category in masterDataCategories"
@@ -736,8 +743,8 @@ onBeforeUnmount(() => {
           >
             {{ masterDataCategoryLabels[category] }}
           </option>
-        </select>
-        <select v-model="statusFilter" aria-label="批次状态">
+      </select>
+      <select class="standard-list-filter" v-model="statusFilter" aria-label="批次状态">
           <option value="">全部状态</option>
           <option
             v-for="status in masterDataBatchStatuses"
@@ -746,8 +753,7 @@ onBeforeUnmount(() => {
           >
             {{ statusPresentation(status).label }}
           </option>
-        </select>
-      </div>
+      </select>
       <template #actions>
         <button
           v-if="canStart"
@@ -820,20 +826,15 @@ onBeforeUnmount(() => {
         </div>
         <button class="work-quiet-button" type="button" @click="reloadPage">重试读取</button>
       </div>
-      <div v-if="isLoading" class="page-state" aria-live="polite">
-        <LoaderCircle class="spinning" :size="27" /><strong
-          >正在读取同步批次</strong
-        ><span>请稍候</span>
-      </div>
-      <div v-else-if="!error && total === 0" class="page-state">
-        <Database :size="29" /><strong>当前条件下没有同步批次</strong
-        ><span>{{
+      <PageState v-if="isLoading" kind="loading" title="正在读取同步批次" description="请稍候" />
+      <PageState v-else-if="!error && total === 0" kind="empty" title="当前条件下没有同步批次" compact :description="
           canStart && hasSyncOption
             ? '可选择已开放的业务发起新同步。'
             : '可调整筛选条件，或稍后刷新查看最新记录。'
-        }}</span>
-      </div>
-      <div v-else-if="!error && batches.length" class="table-scroll">
+        ">
+        <template #icon><Database :size="29" /></template>
+      </PageState>
+      <AdminTableFrame v-else-if="!error && batches.length" label="同步批次列表" :has-actions="hasBatchRowActions">
         <table class="work-table">
           <thead>
             <tr>
@@ -841,18 +842,13 @@ onBeforeUnmount(() => {
               <th>同步对象</th>
               <th>取得结果</th>
               <th>处理结果</th>
-              <th>操作</th>
+              <th v-if="hasBatchRowActions">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in batches" :key="item.id">
               <td>
-                <button
-                  class="work-row-link"
-                  type="button"
-                  @click="openReview(item.id)"
-                >
-                  {{ item.batchNo }}</button>
+                <strong>{{ item.batchNo }}</strong>
                 <small>
                   {{ item.startedAt ? `开始 ${formatTime(item.startedAt)}` : '尚未开始' }}
                 </small>
@@ -886,8 +882,8 @@ onBeforeUnmount(() => {
                   >{{ resultSummary(item) }}</small
                 >
               </td>
-              <td>
-                <div class="batch-row-actions">
+              <td v-if="hasBatchRowActions">
+                <ListRowActions label="同步批次操作">
                   <button
                     v-if="
                       hasPermission('master-data:sync') &&
@@ -900,18 +896,12 @@ onBeforeUnmount(() => {
                   >
                     {{ confirmCancelId === item.id ? '确认取消' : '取消' }}
                   </button>
-                  <button
-                    class="work-quiet-button"
-                    type="button"
-                    aria-label="查看批次详情"
-                    @click="openReview(item.id)"
-                  >详情</button>
-                </div>
+                </ListRowActions>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+      </AdminTableFrame>
       <AdminPagination
         v-if="!isLoading && !error && total > 0"
         :total="total"
@@ -922,32 +912,14 @@ onBeforeUnmount(() => {
       />
     </section>
 
-    <div
-      v-if="selected"
-      class="work-drawer-backdrop"
-      @mousedown.self="selected = null"
-    >
-      <aside
-        class="work-drawer batch-detail-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="batch-detail-title"
-      >
-        <header class="work-drawer-header">
+    <DrawerFrame v-if="selected" panel-class="batch-detail-drawer" panel-width="min(760px, 100vw)" body-padding="16px 22px 22px" labelled-by="batch-detail-title" @close="selected = null">
+        <template #title>
           <div>
             <small>同步记录 · {{ masterDataCategoryLabels[selected.category] }} · {{ selected.mode === 'FULL' ? '全量同步' : selected.mode === 'TIME_RANGE' ? '指定时间范围' : '目录同步' }}</small>
             <h2 id="batch-detail-title">同步结果</h2>
           </div>
-          <button
-            class="prototype-icon"
-            type="button"
-            aria-label="关闭"
-            @click="selected = null"
-          >
-            ×
-          </button>
-        </header>
-        <div class="work-drawer-sub">
+        </template>
+        <template #subheader><div class="work-drawer-sub">
           <span
             class="prototype-tag"
             :class="
@@ -958,13 +930,8 @@ onBeforeUnmount(() => {
             }}</span
           ><span>{{ scopeLabel(selected) }}</span><span>·</span><span>{{ environmentLabel(selected) }}</span
           ><span>·</span><span class="batch-reference">批次号 {{ selected.batchNo }}</span>
-        </div>
-        <div class="work-drawer-body">
-          <div v-if="isDetailLoading" class="page-state">
-            <LoaderCircle class="spinning" :size="24" /><span
-              >正在读取最新事实</span
-            >
-          </div>
+        </div></template>
+          <PageState v-if="isDetailLoading" kind="loading" title="正在读取最新结果" compact />
           <div v-else-if="detailError" class="feedback danger" role="alert">
             <AlertCircle :size="18" /><span>{{ detailError.message }}</span
             ><button
@@ -1077,7 +1044,6 @@ onBeforeUnmount(() => {
               </button>
             </section>
           </template>
-        </div>
         <div
           v-if="actionError"
           class="feedback danger batch-action-error"
@@ -1089,7 +1055,7 @@ onBeforeUnmount(() => {
             ><small>页面已重新读取最新批次状态，请勿直接重复操作。</small></span
           >
         </div>
-        <footer class="work-drawer-footer">
+        <template #footer>
           <button
             class="work-quiet-button"
             type="button"
@@ -1128,9 +1094,8 @@ onBeforeUnmount(() => {
           >
             查看当前数据
           </button>
-        </footer>
-      </aside>
-    </div>
+        </template>
+    </DrawerFrame>
 
     <StartBatchDrawer
       v-if="isCreatorOpen"
@@ -1153,42 +1118,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .master-batch-page {
   min-width: 0;
-  color: #293a43;
-}
-.batch-toolbar {
-  min-width: 0;
-  display: flex;
-  align-items: stretch;
-}
-.batch-toolbar :deep(.standard-list-toolbar__filters) { flex: 1 1 780px; }
-.batch-filter-row {
-  min-width: 0;
-  display: grid;
-  grid-template-columns:
-    minmax(150px, 1.1fr)
-    minmax(210px, 1.5fr)
-    minmax(145px, 0.85fr)
-    minmax(135px, 0.8fr);
-  gap: 9px;
-}
-.batch-filter-row > * {
-  min-width: 0;
-}
-.batch-request-search {
-  width: 100%;
-  min-width: 0;
-  height: 36px;
-  padding: 0 10px;
-  border: 1px solid #ccd7da;
-  border-radius: 5px;
-  font-size: 12px;
-}
-.batch-toolbar select {
-  width: 100%;
-  max-width: none;
+  color: var(--ui-color-text);
 }
 .batch-table-section {
-  min-height: 420px;
+  min-height: 0;
 }
 .sync-readiness-notice {
   margin: 10px 0 12px;
@@ -1278,17 +1211,6 @@ onBeforeUnmount(() => {
 }
 .batch-result-note.warning {
   color: #8a641f;
-}
-.page-state {
-  min-height: 300px;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 8px;
-  color: #6f8088;
-}
-.page-state strong {
-  color: #344953;
 }
 .batch-detail-section {
   margin-bottom: 18px;
@@ -1425,11 +1347,6 @@ onBeforeUnmount(() => {
   color: #176f61;
   font-weight: 650;
 }
-@media (max-width: 1180px) {
-  .batch-filter-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 @media (max-width: 640px) {
   .sync-readiness-notice,
   .batch-list-error { align-items: flex-start; flex-wrap: wrap; }
@@ -1437,9 +1354,6 @@ onBeforeUnmount(() => {
   .batch-list-error button { margin-left: 28px; }
   .batch-execution-section .batch-execution-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .batch-filter-row {
-    grid-template-columns: minmax(0, 1fr);
   }
   .count-grid {
     grid-template-columns: 1fr 1fr;

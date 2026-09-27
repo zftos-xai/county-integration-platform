@@ -95,7 +95,7 @@ test('基础数据旧原型已撤下，避免把人工映射和人工核查误�
 
   assert.doesNotMatch(view, /foundation-mappings|foundation-issues|FoundationDataPanel|FoundationOperationsPanel/)
   assert.match(plan, /配置即归属，不另建映射/)
-  assert.match(plan, /直接幂等更新平台当前目录/)
+  assert.match(plan, /直接更新平台当前目录；重复处理时按稳定编码识别已有记录，避免重复新增/)
   assert.match(plan, /不以人工确认代替程序校验/)
 })
 

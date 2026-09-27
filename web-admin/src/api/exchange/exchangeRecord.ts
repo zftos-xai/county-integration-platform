@@ -3,7 +3,7 @@ import { isRecord } from '@/utils/validation'
 import { exchangeRecordsPath } from './exchangeRecordApiPaths'
 import type { ExchangeRecordFilters } from './exchangeRecordApiPaths'
 
-/** HIS调用完成后可供管理端读取的脱敏运行事实。 */
+/** HIS调用完成后可供管理端读取的脱敏运行记录。 */
 export type ExchangeRecord = {
   id: number
   requestId: string

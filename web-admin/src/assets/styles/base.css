@@ -1,5 +1,24 @@
-/* 正式管理端的全局基础样式、应用外壳和业务工作区组件。 */
-:root { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; color: #20262e; background: #f4f6f8; font-synthesis: none; }
+/* 正式管理端的全局基础样式、页面整体布局和业务工作区组件。 */
+:root {
+  --ui-color-canvas: #f3f6f6;
+  --ui-color-surface: #ffffff;
+  --ui-color-text: #17272e;
+  --ui-color-muted: #66767d;
+  --ui-color-border: #d8e0e2;
+  --ui-color-border-subtle: #e8edef;
+  --ui-color-primary: #147467;
+  --ui-color-primary-hover: #0d6258;
+  --ui-color-success: #33745c;
+  --ui-color-warning: #9b6c20;
+  --ui-color-danger: #9b4438;
+  --ui-color-state-muted: #75828c;
+  --ui-radius-control: 5px;
+  --ui-radius-panel: 6px;
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  color: var(--ui-color-text);
+  background: var(--ui-color-canvas);
+  font-synthesis: none;
+}
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
 button, input { font: inherit; }
@@ -49,13 +68,11 @@ nav a.router-link-active { background: white; color: #17365d; font-weight: 700; 
 .metric-grid small { color: #8a949d; font-size: 11px; }
 .work-panel { margin-top: 18px; min-height: 330px; background: white; border: 1px solid #d8dee5; }
 .panel-heading { padding: 16px 19px; border-bottom: 1px solid #e1e6ea; }
-.panel-heading h2, .empty-page h2 { margin: 0; font-size: 16px; letter-spacing: 0; }
+.panel-heading h2 { margin: 0; font-size: 16px; letter-spacing: 0; }
 .panel-heading p { margin: 4px 0 0; color: #76818b; font-size: 12px; }
-.empty-state, .empty-page { min-height: 245px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #33745c; text-align: center; }
+.empty-state { min-height: 245px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #33745c; text-align: center; }
 .empty-state.warning { color: #9b5939; }
-.empty-state span, .empty-page p { color: #727e89; font-size: 13px; }
-.empty-page { min-height: calc(100vh - 150px); background: white; border: 1px solid #d8dee5; color: #395975; }
-.empty-page p { max-width: 520px; margin: 0; padding: 0 20px; }
+.empty-state span { color: #727e89; font-size: 13px; }
 .scrim { display: none; }
 .real-content > .content { max-width: none; padding: 0; }
 .prototype-nav a { position: relative; height: 42px; padding: 0 11px; display: flex; align-items: center; gap: 11px; border-radius: 6px; color: #4a5867; font-size: 13px; text-align: left; text-decoration: none; }

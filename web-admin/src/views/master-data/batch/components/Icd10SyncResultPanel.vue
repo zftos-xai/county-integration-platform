@@ -6,7 +6,7 @@ import type { Icd10SyncResult } from '@/api/master-data/batch'
 const props = defineProps<{
   /** 当前公共ICD-10批次已落库的诊断类别处理结果。 */
   results: Icd10SyncResult[]
-  /** 分项事实是否仍在读取。 */
+  /** 是否仍在读取各类别的结果。 */
   loading: boolean
 }>()
 

@@ -82,7 +82,15 @@ test('数据字典提供类型和字典项删除入口并说明使用关系限�
   assert.match(labels, /DICTIONARY_ITEM_DELETED: '删除字典项'/)
 })
 
-test('六个业务页明确体现各自停止使用规则和审计保留说明', async () => {
+test('数据字典类型筛选隐藏当前选择时同步清空详情和条目请求', async () => {
+  const source = await readFile('web-admin/src/views/configuration/dictionary/DictionaryView.vue', 'utf8')
+
+  assert.match(source, /watch\(filteredTypes, visibleTypes => \{/)
+  assert.match(source, /visibleTypes\.some\(type => type\.id === selected\.id\)/)
+  assert.match(source, /selectedType\.value = null[\s\S]*?selectedItem\.value = null[\s\S]*?items\.value = \[\][\s\S]*?itemController\?\.abort\(\)/)
+})
+
+test('审计页保持只读且其他业务页保留各自停止使用规则', async () => {
   const [audit, users, roles, parameters, dictionaries, organizations] = await Promise.all([
     readFile('web-admin/src/views/audit/management/AuditView.vue', 'utf8'),
     readFile('web-admin/src/views/system/user/UserView.vue', 'utf8'),
@@ -91,7 +99,7 @@ test('六个业务页明确体现各自停止使用规则和审计保留说明',
     readFile('web-admin/src/views/configuration/dictionary/DictionaryView.vue', 'utf8'),
     readFile('web-admin/src/views/system/organization/OrganizationView.vue', 'utf8'),
   ])
-  assert.match(audit, /不会自动清理/)
+  assert.doesNotMatch(audit, /审计记录不会自动清理；归档或清理须经审批。/)
   assert.doesNotMatch(audit, /新增审计|修改审计|删除审计/)
   assert.match(users, /注销本人（立即退出）/)
   assert.match(roles, /先在用户管理中调整/)

@@ -8,6 +8,7 @@ const pagePath = new URL(
   import.meta.url,
 )
 const apiPath = new URL('../src/api/master-data/medicalDirectory.ts', import.meta.url)
+const sharedDirectoryStylesPath = new URL('../src/views/master-data/directory/directory-records.css', import.meta.url)
 
 test('医疗目录地址携带机构、目录类型、HIS启用值和服务端分页', () => {
   const path = medicalDirectoryListPath({
@@ -48,7 +49,7 @@ test('医疗目录列表展示创建与记录时间及HIS启用值，仅以固�
   assert.match(page, /colspan="7"/)
 })
 
-test('今日新增来自服务端首次记录事实，分类保留每日提示，记录仅以浅色区分', async () => {
+test('今日新增数量来自服务端记录，分类保留每日提示，记录仅以浅色区分', async () => {
   const api = await readFile(apiPath, 'utf8')
   const page = await readFile(pagePath, 'utf8')
   const layout = await readFile(new URL('../src/views/master-data/directory/DirectoryLayout.vue', import.meta.url), 'utf8')
@@ -106,6 +107,11 @@ test('展开详情将短值放左列、长文本放右列且保留全部来源�
     '包装单位', '炮制方法', '转换系数', '包装材质', 'HIS 启用值', '地区',
     '来源类别', '备注',
   ])
+})
+
+test('展开详情按表格容器宽度堆叠，避免桌面窄工作区裁切字段', async () => {
+  const styles = await readFile(sharedDirectoryStylesPath, 'utf8')
+  assert.match(styles, /@container\s*\(max-width:1100px\)\s*\{[^}]*\.directory-detail\s*\{\s*width:min\(100%,calc\(100cqi - 24px\)\);\s*grid-template-columns:minmax\(0,1fr\);/)
 })
 
 test('列表将助记码放在厂家列，双击数据行可切换详情且不劫持按钮或链接', async () => {

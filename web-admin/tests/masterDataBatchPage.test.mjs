@@ -42,17 +42,15 @@ const layoutPath = new URL('../src/layout/AppLayout.vue', import.meta.url);
 const layoutStylePath = new URL('../src/assets/styles/prototype.css', import.meta.url);
 const detailGridStylePath = new URL('../src/views/master-data/batch/batch-detail-grid.css', import.meta.url);
 
-test('批次详情顶部只保留一个页面标题，完成状态与批次信息并排展示', async () => {
-  const [layout, detail, styles] = await Promise.all([
+test('批次详情入口已从正式导航流程移除，旧地址回到批次列表', async () => {
+  const [layout, router, list] = await Promise.all([
     readFile(layoutPath, 'utf8'),
-    readFile(detailPath, 'utf8'),
-    readFile(layoutStylePath, 'utf8'),
+    readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/views/master-data/batch/MasterDataBatchView.vue', import.meta.url), 'utf8'),
   ]);
-  assert.match(layout, /'batch-detail-page': route\.path\.startsWith\('\/master-data\/batches\/'\)/);
-  assert.match(detail, /<header class="record-heading">/);
-  assert.match(detail, /class="record-complete" role="status"/);
-  assert.doesNotMatch(detail, /<h2>同步结果<\/h2>|<section v-if="batch\.status === 'COMPLETED'" class="record-alert success">/);
-  assert.match(styles, /\.prototype-main\.batch-detail-page \.prototype-heading > p \{ display: none; \}/);
+  assert.match(router, /path: 'master-data\/batches\/:id',[\s\S]*?redirect: '\/master-data\/batches'/);
+  assert.doesNotMatch(layout, /MasterDataBatchDetailView|batch-detail-page/);
+  assert.doesNotMatch(list, /<button[^>]*>[^<]*详情|openReview/);
 });
 
 test('批次字段表使用独立的虚线栅格，不继承全局详情表留白', async () => {
@@ -68,7 +66,7 @@ test('批次字段表使用独立的虚线栅格，不继承全局详情表留�
   assert.doesNotMatch(styles, /(^|\n)\.detail-grid\s*\{/);
 });
 
-test('ICD10详情将同步结果、脱敏HIS调用事实和管理审计分区展示', async () => {
+test('ICD10详情分别展示同步结果、脱敏HIS调用记录和管理审计', async () => {
   const [detail, invocationPanel, auditPanel] = await Promise.all([
     readFile(detailPath, 'utf8'),
     readFile(icd10InvocationPanelPath, 'utf8'),
@@ -80,12 +78,12 @@ test('ICD10详情将同步结果、脱敏HIS调用事实和管理审计分区展
   assert.match(detail, /<BatchAuditPanel/);
   assert.match(detail, /hasPermission\('audit:read'\)/);
   assert.match(invocationPanel, /HIS 请求记录/);
-  assert.match(invocationPanel, /不保存或显示完整 SOAP 报文、端点和凭证/);
+  assert.match(invocationPanel, /不保存或显示完整 SOAP 报文、服务地址和凭证/);
   assert.match(auditPanel, /管理审计记录/);
   assert.match(auditPanel, /不包含 HIS 报文/);
 });
 
-test('机构目录批次读取通用交换事实，且读取失败不覆盖同步结果', async () => {
+test('机构目录批次读取交换记录，且读取失败不覆盖同步结果', async () => {
   const [detail, panel] = await Promise.all([
     readFile(detailPath, 'utf8'),
     readFile(exchangeRecordPanelPath, 'utf8'),
@@ -95,7 +93,7 @@ test('机构目录批次读取通用交换事实，且读取失败不覆盖同�
   assert.match(detail, /<BatchExchangeRecordPanel/);
   assert.match(detail, /exchangeRecordError/);
   assert.match(panel, /HIS 请求记录/);
-  assert.match(panel, /不保存或显示完整 SOAP 报文、端点和凭证/);
+  assert.match(panel, /不保存或显示完整 SOAP 报文、服务地址和凭证/);
 });
 
 test('医疗目录分项结果使用完整业务标签并显示批次起止与运行时长', async () => {
@@ -122,6 +120,37 @@ test('医疗目录分项结果使用完整业务标签并显示批次起止与�
   assert.match(time, /batch\.finishedAt \? new Date\(batch\.finishedAt\)\.getTime\(\) : now/);
 });
 
+test('批次分项区分完成无变更与实际更新，并翻译目录同步审计动作', async () => {
+  const [hospitalPanel, medicalPanel, auditPanel] = await Promise.all([
+    readFile(resultPanelPath, 'utf8'),
+    readFile(medicalResultPanelPath, 'utf8'),
+    readFile(auditPanelPath, 'utf8'),
+  ]);
+  for (const panel of [hospitalPanel, medicalPanel]) {
+    assert.match(panel, /result\.createdCount \+ result\.updatedCount \+ result\.sourceMissingCount > 0/);
+    assert.match(panel, /已完成核对，当前数据无变化/);
+  }
+  assert.match(auditPanel, /MASTER_DATA_HOSPITAL_DIRECTORY_SYNCED: '医院综合目录同步结束'/);
+  assert.match(auditPanel, /MASTER_DATA_MEDICAL_DIRECTORY_SYNCED: '医疗目录同步结束'/);
+});
+
+test('批次详情窄屏请求区标题独占一行，审计表保持列宽且不加滚动提示', async () => {
+  const [exchangePanel, auditPanel] = await Promise.all([
+    readFile(exchangeRecordPanelPath, 'utf8'),
+    readFile(auditPanelPath, 'utf8'),
+  ]);
+  assert.match(exchangePanel, /@media \(max-width: 760px\) \{ \.card-heading \{ align-items: stretch; flex-direction: column;/);
+  assert.match(exchangePanel, /\.card-heading > div:first-child \{ min-width: 0; flex: 1 1 240px; \}/);
+  assert.match(exchangePanel, /<AdminTableFrame[^>]*label="HIS 调用记录"/);
+  assert.match(auditPanel, /class="work-table audit-table"/);
+  assert.match(auditPanel, /<AdminTableFrame[^>]*label="管理审计记录"/);
+  assert.doesNotMatch(exchangePanel, /scroll-hint|hint-breakpoint|窄屏可左右滚动查看完整字段/);
+  assert.doesNotMatch(auditPanel, /scroll-hint|hint-breakpoint|窄屏可左右滚动查看完整字段/);
+  const sharedStyles = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8');
+  assert.match(sharedStyles, /\.standard-table-scroll \{ max-width: 100%; overscroll-behavior-inline: contain; \}/);
+  assert.match(auditPanel, /\.audit-table \{ min-width: 1040px; table-layout: fixed; \}/);
+});
+
 test('中断批次收尾要求权限、明确确认与当前版本，失败不自动重试', async () => {
   const source = await readFile(detailPath, 'utf8');
   assert.match(source, /hasPermission\('master-data:sync'\)/);
@@ -132,7 +161,7 @@ test('中断批次收尾要求权限、明确确认与当前版本，失败不�
   assert.doesNotMatch(source, /runMasterDataBatch\(/);
 });
 
-test('同步批次正式页面只使用真实API并提供结果未知回读', async () => {
+test('同步批次正式页面只使用真实API并在结果未知时重新读取状态', async () => {
   const source = await readFile(pagePath, 'utf8');
 
   assert.match(source, /listMasterDataBatches/);
@@ -155,11 +184,25 @@ test('同步批次列表保持单行省略并使用服务端分页', async () =>
   assert.match(source, /text-overflow: ellipsis/);
   assert.match(source, /white-space: nowrap/);
   assert.match(source, /changePageSize/);
-  assert.match(source, /<th>批次号 \/ 开始时间<\/th>[\s\S]*?<th>同步对象<\/th>[\s\S]*?<th>取得结果<\/th>[\s\S]*?<th>处理结果<\/th>[\s\S]*?<th>操作<\/th>/);
+  assert.match(source, /const hasBatchRowActions = computed\([\s\S]*?batches\.value\.some\(\(item\) => item\.status === 'CREATED'\)/);
+  assert.match(source, /<th>批次号 \/ 开始时间<\/th>[\s\S]*?<th>同步对象<\/th>[\s\S]*?<th>取得结果<\/th>[\s\S]*?<th>处理结果<\/th>[\s\S]*?<th v-if="hasBatchRowActions">操作<\/th>/);
+  assert.match(source, /<td v-if="hasBatchRowActions">\s*<ListRowActions label="同步批次操作">/);
   assert.match(source, /item\.startedAt \? `开始 \$\{formatTime\(item\.startedAt\)\}` : '尚未开始'/);
   assert.match(source, /<strong>\{\{ resultCountLabel\(item\) \}\}<\/strong>/);
-  assert.match(source, /<td>\s*<div class="batch-row-actions">/);
-  assert.doesNotMatch(source, /batch-table-section action-column-table|由系统自动校验；未完成类型不改变当前数据/);
+  assert.match(source, /<ListRowActions label="同步批次操作">/);
+  assert.match(source, /<AdminTableFrame[^>]*label="同步批次列表"[^>]*:has-actions="hasBatchRowActions"/);
+  assert.match(source, /<PageState v-else-if="!error && total === 0" kind="empty"[^>]*compact/);
+  assert.match(source, /\.batch-table-section\s*\{\s*min-height:\s*0;/);
+  assert.doesNotMatch(source, /由系统自动校验；未完成类型不改变当前数据/);
+});
+
+test('同步批次四项筛选使用共享密集查询布局', async () => {
+  const source = await readFile(pagePath, 'utf8');
+
+  assert.match(source, /<ListQueryToolbar\s+filters-layout="dense-grid"/);
+  assert.match(source, /prototype-search standard-list-filter--span-2 standard-list-filter--full-tablet/);
+  assert.match(source, /class="standard-list-filter--span-2" v-model="organizationFilter"/);
+  assert.doesNotMatch(source, /batch-filter-row|batch-request-search/);
 });
 
 test('统一同步入口明确当前业务对象和直接对账边界', async () => {
@@ -201,7 +244,7 @@ test('同步弹窗以简明分区组织字段，说明紧邻对应控件', async
   assert.match(source, /class="batch-start-form"/);
   assert.match(source, /form\.category === 'ICD10_DIAGNOSIS' \? 'HIS 调用端点机构' : 'HIS 来源机构'/);
   assert.match(source, /class="batch-setup-grid"/);
-  assert.match(source, /class="batch-range-grid"[\s\S]*?<small v-else>数量核对与目录查询使用同一范围/);
+  assert.match(source, /class="batch-range-grid"[\s\S]*?<small v-else>数量核对和目录查询使用同一范围/);
   assert.doesNotMatch(source, /work-form batch-start-form|batch-source-heading|batch-settings-heading/);
   assert.doesNotMatch(source, /class="batch-section-heading"|<span>1<\/span>|<span>2<\/span>/);
   assert.doesNotMatch(source, /class="batch-confirmation"/);
@@ -265,7 +308,7 @@ test('批次管理提供受控取消但不允许从失败记录直接重复提�
   assert.doesNotMatch(source, /deleteMasterDataBatch|删除批次/);
 });
 
-test('同步记录详情按数据集呈现失败闭环，不暴露HIS原始错误或提供人工复核', async () => {
+test('同步记录详情按数据集说明失败处理，不暴露HIS原始错误或提供人工复核', async () => {
   const source = await readFile(detailPath, 'utf8');
 
   assert.match(source, /HIS 拒绝目录查询/);
@@ -288,7 +331,7 @@ test('全失败不显示部分成功，长同步超时只读进度不重发运�
   assert.match(source, /item.status === 'FETCHING' && latest.status !== 'FETCHING'/);
 });
 
-test('同步结果按四类目录读取已落库事实，不以整批汇总推算明细', async () => {
+test('同步结果按四类目录读取已保存结果，不以整批汇总推算明细', async () => {
   const detail = await readFile(detailPath, 'utf8');
   const panel = await readFile(resultPanelPath, 'utf8');
 

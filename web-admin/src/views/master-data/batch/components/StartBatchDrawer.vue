@@ -3,11 +3,10 @@
 import {
   AlertCircle,
   LoaderCircle,
-  X,
 } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { watch } from 'vue'
-import { useModalDialog } from '@/composables/useModalDialog'
+import ModalFrame from '@/components/ModalFrame.vue'
 import type { ApiClientError } from '@/utils/request'
 import type {
   MasterDataEnvironment,
@@ -26,10 +25,6 @@ const props = defineProps<{
 const form = defineModel<MasterDataBatchForm>('form', { required: true })
 const fullRangePreview = ref(previewFullSyncRange(new Date()))
 const emit = defineEmits<{ close: []; submit: []; reload: []; configure: []; retrySources: [] }>()
-const isOpen = ref(true)
-const { dialogRef, handleDialogKeydown } = useModalDialog(isOpen, () =>
-  emit('close'),
-)
 /** 无法确认写入结果时，允许使用原请求编号回查，避免重复创建批次。 */
 const canRecoverResult = computed(
   () =>
@@ -108,30 +103,8 @@ watch(
 </script>
 
 <template>
-  <div class="batch-dialog-backdrop" @mousedown.self="emit('close')">
-    <section
-      ref="dialogRef"
-      class="batch-start-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="batch-start-title"
-      tabindex="-1"
-      @keydown="handleDialogKeydown"
-    >
-      <header class="batch-dialog-header">
-        <div>
-          <h2 id="batch-start-title">发起基础数据同步</h2>
-        </div>
-        <button
-          class="prototype-icon"
-          type="button"
-          aria-label="关闭"
-          @click="emit('close')"
-        >
-          <X :size="18" />
-        </button>
-      </header>
-      <div class="batch-dialog-body">
+  <ModalFrame panel-class="batch-start-dialog" panel-width="min(620px, 100%)" panel-max-height="calc(100vh - 48px)" body-padding="16px 22px 18px" labelled-by="batch-start-title" @close="emit('close')">
+      <template #title><h2 id="batch-start-title">发起基础数据同步</h2></template>
         <div v-if="error" class="feedback danger" role="alert">
           <AlertCircle :size="18" /><span
             ><strong>{{ error.message }}</strong
@@ -250,12 +223,11 @@ watch(
               </div>
               <small v-if="form.mode === 'FULL'">按创建时刻向前 20 年查询；以上为预览，实际范围以创建后的批次记录为准。更早或无时间记录不在范围内。</small>
               <small v-else-if="form.category === 'ICD10_DIAGNOSIS'">ICD-10 不使用来源未提供的版本条件；西医和中医类别会分别完成数量核对与分页取得。</small>
-              <small v-else>数量核对与目录查询使用同一范围，请按 HIS 提供方确认的口径填写。</small>
+              <small v-else>数量核对和目录查询使用同一范围，请按 HIS 提供方确认的计算方法填写。</small>
             </div>
           </section>
         </form>
-      </div>
-      <footer class="batch-dialog-footer">
+      <template #footer>
         <button
           class="work-quiet-button"
           type="button"
@@ -274,41 +246,11 @@ watch(
             isSaving ? '正在取得并校验' : '开始取得并校验'
           }}
         </button>
-      </footer>
-    </section>
-  </div>
+      </template>
+  </ModalFrame>
 </template>
 
 <style scoped>
-.batch-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  padding: 24px;
-  display: grid;
-  place-items: center;
-  background: rgb(19 31 43 / 42%);
-}
-.batch-start-dialog {
-  width: min(620px, 100%);
-  max-height: calc(100vh - 48px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 24px 70px rgb(20 34 44 / 24%);
-}
-.batch-dialog-header {
-  padding: 18px 22px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  border-bottom: 1px solid #e1e7e9;
-}
-.batch-dialog-header h2 { margin: 0; color: #1f3039; font-size: 20px; }
-.batch-dialog-body { padding: 16px 22px 18px; overflow-y: auto; }
 .sync-source-unavailable { padding: 14px; border: 1px solid #ead6a8; border-radius: 6px; background: #fffaf0; display: grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:start; gap:10px; color:#805819; }
 .sync-source-unavailable>div { display:grid; gap:4px; }.sync-source-unavailable strong { color:#6f4d16; font-size:14px; }.sync-source-unavailable span { font-size:12px; line-height:1.6; }.sync-source-unavailable button { white-space:nowrap; }
 .batch-start-form {
@@ -355,16 +297,6 @@ watch(
 .batch-range-field > strong { font-size: 12px; }
 .batch-range-field > strong span { color: #718089; font-weight: 500; }
 .batch-range-field > small { color: #718089; font-size: 11px; line-height: 1.5; }
-.batch-dialog-footer {
-  min-height: 64px;
-  padding: 12px 22px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 9px;
-  border-top: 1px solid #e1e7e9;
-  background: #fbfcfc;
-}
 .text-button {
   margin-left: auto;
   border: 0;
@@ -373,8 +305,6 @@ watch(
   font-weight: 650;
 }
 @media (max-width: 640px) {
-  .batch-dialog-backdrop { padding: 0; place-items: end center; }
-  .batch-start-dialog { width: 100%; max-height: 92vh; border-radius: 10px 10px 0 0; }
   .batch-setup-grid,
   .batch-range-grid { grid-template-columns: 1fr; }
 }

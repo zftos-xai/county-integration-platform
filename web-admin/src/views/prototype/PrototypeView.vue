@@ -209,11 +209,11 @@ const navGroups: NavGroup[] = [
   { label: '运行监控', items: [
     { key: 'overview', label: '运行总览', icon: Activity, roles: ['manager', 'operator'] },
   ] },
-  { label: '业务接口处理', items: [
+  { label: '接口管理', items: [
     { key: 'interfaces', label: '业务接口', icon: Settings2, roles: ['manager'] },
     { key: 'recovery', label: '交换记录', icon: ArrowLeftRight, roles: ['manager', 'operator'] },
   ] },
-  { label: '运行处理', items: [
+  { label: '运行与核查', items: [
     { key: 'alerts', label: '告警管理', icon: Bell, roles: ['manager', 'operator'] },
     { key: 'audit', label: '审计记录', icon: FileSearch, roles: ['manager', 'operator'] },
   ] },
@@ -290,13 +290,13 @@ const pageHeader = computed(() => ({
       ? '掌握基础数据同步、业务交换和待处理告警'
       : '掌握同步异常、交换异常和当前待办',
   },
-  organizations: { section: '系统管理', title: '机构管理', description: '维护机构主数据、层级、有效期和外部代码对应' },
-  interfaces: { section: '业务接口处理', title: '业务接口', description: '维护接口规则、版本以及当前是否允许新请求' },
-  exchanges: { section: '业务接口处理', title: '交换记录', description: '按业务单号追踪受理、发送、目标系统返回结果和处理进度' },
-  recovery: { section: '业务接口处理', title: '交换记录', description: '核查业务结果、数据保存状态和后续处理责任' },
-  exceptions: { section: '业务接口处理', title: '异常记录', description: '核查异常原因并登记处理结果和依据' },
-  alerts: { section: '运行处理', title: '告警管理', description: '处理结果未知、版本变化和数据到期等运行问题' },
-  audit: { section: '运行处理', title: '审计记录', description: '追溯配置变更、人工核查和告警处理记录' },
+  organizations: { section: '系统管理', title: '机构管理', description: '维护机构基本信息、层级、有效期和外部代码对应关系' },
+  interfaces: { section: '接口管理', title: '业务接口', description: '维护接口规则和版本，并控制是否允许新请求' },
+  exchanges: { section: '接口管理', title: '交换记录', description: '按业务单号查看平台受理、发送、目标系统返回结果和处理进度' },
+  recovery: { section: '接口管理', title: '交换记录', description: '核对业务结果和数据保存状态，并登记后续处理责任' },
+  exceptions: { section: '接口管理', title: '异常记录', description: '查看异常原因并登记处理结果和依据' },
+  alerts: { section: '运行与核查', title: '告警管理', description: '处理结果未知、版本变化和数据到期等运行问题' },
+  audit: { section: '运行与核查', title: '审计记录', description: '查看配置变更、人工核查和告警处理记录' },
   parameters: { section: '基础配置', title: '参数配置', description: '维护代码已注册参数在指定环境和机构范围内的取值' },
   dictionaries: { section: '基础配置', title: '数据字典', description: '维护平台通用代码、显示名称、顺序和启停状态' },
   'external-systems': { section: '基础配置', title: '外部系统', description: '维护外部系统及各环境、机构范围和接口接入信息' },
@@ -327,7 +327,7 @@ const interfaceImpact = computed(() => {
   const pending = relatedInterfaceScenarios.value.filter(item => !['处理成功', '重复已识别'].includes(item.status)).length
   return { changed, organizations, effectiveOrganizations, historyOrganizations, permissionMismatch: effectiveOrganizations < historyOrganizations, pending, history: relatedInterfaceScenarios.value.length,
     intake: changed.length ? `规则变更保存后进入“待联调”，新请求暂时停止` : interfaceAcceptsNew(draft) ? `当前新请求采用 ${draft.version}` : `当前新请求因“${draft.status}”被阻止`,
-    historyRule: `已有 ${relatedInterfaceScenarios.value.length} 笔交换继续使用各自受理时规则快照` }
+    historyRule: `已有 ${relatedInterfaceScenarios.value.length} 笔交换继续使用各自受理时保存的规则` }
 })
 const interfaceDiffRows = computed(() => {
   const current = selectedInterface.value
@@ -612,7 +612,7 @@ function runIntakeCheck() {
 function openInterfaceDefinition(interfaceId: string) {
   const item = interfaces.value.find(row => row.id === interfaceId)
   if (!item) { toast.value = '当前交换记录尚未关联接口定义'; return }
-  if (role.value !== 'manager') { toast.value = '运维可在记录中查看规则快照；接口定义由管理人员维护'; return }
+  if (role.value !== 'manager') { toast.value = '运维可在记录中查看当时使用的规则；接口定义由管理人员维护'; return }
   navigate('interfaces')
   editInterface(item)
 }
@@ -740,7 +740,7 @@ function saveInterface() {
   const summary = `状态：${saved.status}；版本：${saved.version || '待确认'}；编码映射：${saved.mappings.length} 项`
   const history = interfaceHistory.value[saved.id] ?? []
   interfaceHistory.value[saved.id] = [{ time: now(), actor: '平台管理', summary, reason: interfaceChangeReason.value.trim(), snapshot: { ...before, mappings: before.mappings.map(item => ({ ...item })) } }, ...history]
-  record('修改接口配置', saved.id, summary, { before: `状态：${before.status}；版本：${before.version}`, after: summary, evidenceRef: `SIM-INTF-CHANGE-${saved.id}`, impact: interfaceAcceptsNew(saved) ? `新请求采用 ${saved.version}` : '新请求被阻止；历史交换继续使用受理时快照' })
+  record('修改接口配置', saved.id, summary, { before: `状态：${before.status}；版本：${before.version}`, after: summary, evidenceRef: `SIM-INTF-CHANGE-${saved.id}`, impact: interfaceAcceptsNew(saved) ? `新请求采用 ${saved.version}` : '新请求被阻止；历史交换继续使用受理时保存的规则' })
   interfaceDraft.value = { ...saved, mappings: saved.mappings.map(item => ({ ...item })) }
   interfaceChangeReason.value = ''
   intakeCheckResult.value = ''
@@ -762,7 +762,7 @@ function activateInterface() {
   selectedInterface.value.status = '已启用'
   interfaceDraft.value.status = '已启用'
   interfaceHistory.value[selectedInterface.value.id] = [{ time: now(), actor: '平台管理', summary: `启用版本：${selectedInterface.value.version}`, reason: interfaceChangeReason.value.trim(), snapshot: previous }, ...(interfaceHistory.value[selectedInterface.value.id] ?? [])]
-  record('启用接口版本', selectedInterface.value.id, `${selectedInterface.value.version} · ${interfaceChangeReason.value.trim()}`, { before, after: '已启用；允许新请求', evidenceRef: `SIM-INTF-ACTIVATE-${selectedInterface.value.id}`, impact: `新请求采用 ${selectedInterface.value.version}；历史交换保持原规则快照` })
+  record('启用接口版本', selectedInterface.value.id, `${selectedInterface.value.version} · ${interfaceChangeReason.value.trim()}`, { before, after: '已启用；允许新请求', evidenceRef: `SIM-INTF-ACTIVATE-${selectedInterface.value.id}`, impact: `新请求采用 ${selectedInterface.value.version}；历史交换保留各自当时使用的规则` })
   interfaceChangeReason.value = ''
   toast.value = '当前版本已启用，新请求采用该版本'
 }
@@ -798,7 +798,7 @@ function saveOrganization() {
   const duplicate = organizations.value.some(item => item.id === draft.id && item.id !== selectedId.value)
   if (duplicate) { toast.value = '机构代码已存在'; return }
   const oldId = selectedId.value
-  const before = isNewOrganization.value ? '机构尚未建立' : `${organizations.value.find(item => item.id === oldId)?.status ?? '未知'}；机构主数据已登记`
+  const before = isNewOrganization.value ? '机构尚未建立' : `${organizations.value.find(item => item.id === oldId)?.status ?? '未知'}；机构信息已登记`
   if (isNewOrganization.value) organizations.value.push(draft)
   else {
     const index = organizations.value.findIndex(item => item.id === oldId)
@@ -806,7 +806,7 @@ function saveOrganization() {
   }
   selectedId.value = draft.id
   isNewOrganization.value = false
-  record(oldId === '__new__' ? '新增机构配置' : '修改机构配置', draft.id, organizationChangeReason.value.trim(), { before, after: `${draft.status}；机构主数据已保存`, evidenceRef: `SIM-ORG-CHANGE-${draft.id}`, impact: '后续机构选择和代码对应使用新配置；既有审计记录保留' })
+  record(oldId === '__new__' ? '新增机构配置' : '修改机构配置', draft.id, organizationChangeReason.value.trim(), { before, after: `${draft.status}；机构信息已保存`, evidenceRef: `SIM-ORG-CHANGE-${draft.id}`, impact: '后续机构选择和代码对应关系使用新配置；既有审计记录保留' })
   organizationChangeReason.value = ''
   toast.value = '机构配置已保存'
 }
@@ -1012,7 +1012,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
         </template>
 
         <template v-else-if="page === 'interfaces'">
-          <div class="business-interface-intro"><div><span>接口运行规则</span><strong>接口状态直接控制新请求能否进入</strong><small>新请求采用当前规则版本；历史交换记录保留受理时规则快照，不随配置修改。</small></div><div class="interface-summary"><em>{{ interfaces.length }} 项</em><em>{{ interfaces.filter(item => interfaceAcceptsNew(item)).length }} 项允许新请求</em><em>{{ interfaces.filter(item => item.status === '已停用').length }} 项已停用</em><em>{{ interfaces.filter(item => item.status === '接口资料不完整').length }} 项条件待确认</em></div></div>
+          <div class="business-interface-intro"><div><span>接口运行规则</span><strong>接口状态直接控制新请求能否进入</strong><small>新请求采用当前规则版本；历史交换记录保留受理时使用的规则，不随配置修改。</small></div><div class="interface-summary"><em>{{ interfaces.length }} 项</em><em>{{ interfaces.filter(item => interfaceAcceptsNew(item)).length }} 项允许新请求</em><em>{{ interfaces.filter(item => item.status === '已停用').length }} 项已停用</em><em>{{ interfaces.filter(item => item.status === '接口资料不完整').length }} 项条件待确认</em></div></div>
           <div class="work-toolbar"><label class="prototype-search"><Search :size="16" /><input v-model="query" aria-label="搜索业务接口" placeholder="交易码、名称、系统或业务场景" /></label><span>{{ interfaceRows.length }} 项业务接口</span></div>
           <section class="prototype-section work-table-section business-interface-table action-column-table"><div class="prototype-table-wrap"><table class="work-table"><thead><tr><th>接口 / 业务场景 / 状态</th><th>数据方向</th><th>调用与处理规则</th><th>操作</th></tr></thead><tbody><tr v-for="item in interfacePagedRows" :key="item.id"><td><button class="work-row-link" @click="editInterface(item)">{{ item.name }}</button><small>{{ item.id }} · {{ item.domain }}</small><div class="interface-inline-state"><span class="prototype-tag" :class="interfaceStatusClass(item.status)">{{ interfaceStatusLabel(item.status) }}</span><small :class="{ blocked: !interfaceAcceptsNew(item) }">{{ interfaceAcceptsNew(item) ? `允许新请求 · ${item.version}` : '阻止新请求' }}</small><button :disabled="!interfaceScenarioCount(item.id)" @click="editInterface(item, 'related')">{{ interfaceScenarioCount(item.id) }} 笔</button></div></td><td><strong>{{ item.sourceSystem }} → {{ item.targetSystem }}</strong><small>提供：{{ item.provider }} · 调用：{{ item.caller }}</small></td><td><strong>{{ item.channelType }} · {{ item.tradeCode }}</strong><small :title="`${item.exchangeMode} · ${item.retention}`">{{ item.exchangeMode }} · {{ item.retention }}</small></td><td><button class="btn btn-outline-primary btn-sm" @click="editInterface(item)">查看详情</button></td></tr></tbody></table><div v-if="!interfaceRows.length" class="prototype-empty">没有符合条件的业务接口</div></div><AdminPagination :total="interfaceRows.length" :page="listPage" :page-size="listPageSize" @update:page="listPage = $event" @update:page-size="listPageSize = $event" /></section>
         </template>
@@ -1104,7 +1104,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
         <div class="work-tabs"><button v-for="tab in [{ key: 'overview', label: '接口规则' }, { key: 'related', label: `关联交换 ${relatedInterfaceScenarios.length}` }, { key: 'work', label: '编码对应' }, { key: 'trace', label: '变更记录' }]" :key="tab.key" :class="{ active: drawerTab === tab.key }" @click="drawerTab = tab.key as DrawerTab">{{ tab.label }}</button></div>
         <div class="work-drawer-body">
           <template v-if="drawerTab === 'overview'">
-            <div class="work-inline-note interface-version-rule"><ShieldCheck :size="16" /><span><strong>版本启用规则</strong><small>规则修改先保存为“待联调”并停止新请求；核对通过后再单独启用。出现异常可立即暂停新请求，历史交换始终保留原规则快照。</small></span></div>
+            <div class="work-inline-note interface-version-rule"><ShieldCheck :size="16" /><span><strong>版本启用规则</strong><small>规则修改先保存为“待联调”并停止新请求；核对通过后再单独启用。出现异常可立即暂停新请求，历史交换始终保留当时使用的规则。</small></span></div>
             <div class="interface-direction-card"><span>{{ interfaceDraft.sourceSystem }}</span><ArrowLeftRight :size="17" /><strong>中间接口平台</strong><ArrowLeftRight :size="17" /><span>{{ interfaceDraft.targetSystem }}</span></div>
             <div class="work-section-label">运行角色</div>
             <dl class="work-facts interface-facts"><div><dt>接口提供方</dt><dd>{{ interfaceDraft.provider }}</dd></div><div><dt>接口调用方</dt><dd>{{ interfaceDraft.caller }}</dd></div><div><dt>源系统</dt><dd>{{ interfaceDraft.sourceSystem }}</dd></div><div><dt>目标系统</dt><dd>{{ interfaceDraft.targetSystem }}</dd></div></dl>
@@ -1147,7 +1147,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
             <div class="prototype-section-head work-embedded-head"><div><h3>关联交换记录</h3><small>按交易码关联；历史记录显示受理时规则版本。</small></div><span>{{ relatedInterfaceScenarios.length }} 笔</span></div>
             <div v-if="!relatedInterfaceScenarios.length" class="prototype-empty">暂无使用该接口的交换记录</div>
             <div v-else class="interface-related-records"><button v-for="item in relatedInterfaceScenarios" :key="item.id" @click="openRelatedInterfaceScenario(item)"><span><strong>{{ item.sourceRecordId }}</strong><small>{{ item.requestId }} · {{ item.organization }}</small></span><span><em>{{ businessResultLabel(item.status) }}</em><small>{{ item.interfaceVersion }}<template v-if="item.interfaceVersion !== selectedInterface.version"> · 与当前版本不同</template><template v-else> · 当前版本</template><br />{{ item.occurredAt }}</small></span><ArrowUpRight :size="15" /></button></div>
-            <div class="work-data-boundary"><ShieldCheck :size="17" /><span><strong>历史记录采用规则快照</strong><small>修改当前接口定义不会覆盖既有交换记录保存的接口名称、交易码和规则版本。</small></span></div>
+            <div class="work-data-boundary"><ShieldCheck :size="17" /><span><strong>历史记录保留当时的接口规则</strong><small>修改当前接口定义不会覆盖既有交换记录保存的接口名称、交易码和规则版本。</small></span></div>
           </template>
           <template v-else-if="drawerTab === 'work'">
             <div class="prototype-section-head work-embedded-head"><div><h3>编码对应</h3><small>仅对当前接口和规则版本生效，不跨接口复用。</small></div><button class="work-quiet-button" :disabled="!mappingFields(interfaceDraft).length" @click="addCodeMapping"><Plus :size="14" />新增对应</button></div>
@@ -1186,7 +1186,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
           <section class="incident-followup"><h3>技术恢复与业务后续</h3><div class="incident-followup-fields"><label>后续责任人<select v-model="alertFollowupOwner" class="form-select" :disabled="role !== 'operator'"><option>李强</option><option>张建国</option><option>当前运维</option></select></label><label>完成期限<input v-model="alertDueAt" class="form-control" :disabled="role !== 'operator'" /></label><label>下次检查<input v-model="alertNextCheckAt" class="form-control" :disabled="role !== 'operator'" /></label><label class="incident-note">处理依据<input v-model="alertNote" class="form-control" maxlength="200" placeholder="记录恢复验证依据和遗留业务安排" :disabled="role !== 'operator'" /></label></div><div class="alert alert-info mb-2">技术告警恢复后，{{ interfaceIncidentCounts.unknown }} 笔结果未知记录继续按独立核查事项处理，不会被批量改写。</div><footer><span>{{ interfaceIncidentFollowupReady ? '结果未知记录均已形成独立核查事项' : '仍有结果未知记录未形成独立核查事项' }}</span><div v-if="role === 'operator'"><button class="btn btn-outline-secondary" @click="saveIncidentProgress(false)">保存处理进展</button><button class="btn btn-outline-primary" @click="saveIncidentProgress(true)">转入持续观察</button><button class="btn btn-primary" :disabled="!canCompleteInterfaceIncident" @click="completeInterfaceIncident">完成技术告警</button></div><span v-else class="text-secondary">管理角色仅查看处理安排</span></footer></section>
           <div v-if="role === 'manager'" class="work-inline-note">管理视角只读；运行控制、接口探测和状态登记由运维角色执行。 <button class="btn btn-primary btn-sm" @click="role = 'operator'">切换运维视角</button></div>
         </div>
-        <div v-else-if="drawerTab === 'overview'" class="work-drawer-body alert-process"><div class="work-section-label">基本信息</div><dl class="work-facts"><div><dt>问题类型</dt><dd>{{ selectedAlert.type }}</dd></div><div><dt>业务对象</dt><dd>{{ selectedAlertRow.relatedInterface?.name || selectedAlertRow.relatedScenario?.organization || selectedAlert.object }}</dd></div><div><dt>业务结果</dt><dd>{{ businessResultLabel(selectedAlertRow.businessResult) }}</dd></div><div><dt>当前责任人</dt><dd>{{ selectedAlertRow.owner }}</dd></div><div><dt>数据状态</dt><dd>{{ dataStatusLabel(selectedAlertRow.dataStatus) }}</dd></div><div><dt>等待时长</dt><dd class="text-red">{{ selectedAlertRow.wait }}</dd></div><div><dt>首次发生</dt><dd>{{ selectedAlertRow.firstOccurredAt }}</dd></div><div><dt>最近发生</dt><dd>{{ selectedAlertRow.lastOccurredAt }}</dd></div><div><dt>合并事件数</dt><dd>{{ selectedAlertRow.occurrences }} 次</dd></div><div><dt>合并条件</dt><dd>{{ selectedAlert.type }} + {{ selectedAlert.object }}</dd></div><div><dt>应处理时间</dt><dd>{{ selectedAlertRow.dueAt }}</dd></div></dl><div class="work-section-label work-spaced-label">处理步骤</div><ol class="alert-steps"><li v-for="(step, index) in selectedAlertSteps" :key="step[0]" :class="{ done: index === 0 || index === 1 && selectedAlert.status !== '待确认' }"><span>{{ index + 1 }}</span><div><strong>{{ step[0] }}</strong><p>{{ step[1] }}</p></div><em v-if="index === 0">已确认</em><button v-else-if="index === 1 && selectedAlert.status === '待确认' && role === 'operator'" class="btn btn-primary btn-sm" @click="updateAlert('处理中')">确认并领取</button></li></ol><div class="alert alert-info">{{ selectedAlert.type.includes('到期') || selectedAlert.type.includes('清理') ? '清理操作只删除临时数据，不会改变业务结果；业务结果仍需由业务方根据实际情况确认。' : '处理告警只更新运行处理进度；业务结果必须根据目标系统返回结果或有效查询记录单独确认。' }}</div><button v-if="selectedAlertRow.relatedTask" class="btn btn-primary" @click="openRecovery(selectedAlertRow.relatedTask.id)">进入关联数据处理</button><div v-if="selectedAlert.note" class="work-finding"><Check :size="16" /><span>{{ selectedAlert.note }}</span></div><div v-if="role === 'manager'" class="work-inline-note">管理角色只读，告警确认和恢复由运维角色处理。</div><div v-else-if="selectedAlert.status !== '已恢复'" class="work-form alert-followup-form"><label for="alert-owner">后续责任人</label><select id="alert-owner" v-model="alertFollowupOwner"><option>当前运维</option><option>李强</option><option>张建国</option></select><label for="alert-due">完成期限</label><input id="alert-due" v-model="alertDueAt" /><label for="alert-next-check">下次检查</label><input id="alert-next-check" v-model="alertNextCheckAt" /><label for="alert-note">处理依据与安排</label><textarea id="alert-note" v-model="alertNote" rows="3" maxlength="200" placeholder="记录核查依据、当前结论和下次检查事项"></textarea><div class="work-inline-actions"><button class="btn btn-outline-secondary" :disabled="!alertNote.trim()" @click="saveGeneralAlertProgress(false)">保存处理进展</button><button class="btn btn-primary" :disabled="!alertNote.trim()" @click="saveGeneralAlertProgress(true)">完成告警处理</button></div></div></div>
+        <div v-else-if="drawerTab === 'overview'" class="work-drawer-body alert-process"><div class="work-section-label">基本信息</div><dl class="work-facts"><div><dt>问题类型</dt><dd>{{ selectedAlert.type }}</dd></div><div><dt>业务对象</dt><dd>{{ selectedAlertRow.relatedInterface?.name || selectedAlertRow.relatedScenario?.organization || selectedAlert.object }}</dd></div><div><dt>业务结果</dt><dd>{{ businessResultLabel(selectedAlertRow.businessResult) }}</dd></div><div><dt>当前责任人</dt><dd>{{ selectedAlertRow.owner }}</dd></div><div><dt>数据状态</dt><dd>{{ dataStatusLabel(selectedAlertRow.dataStatus) }}</dd></div><div><dt>等待时长</dt><dd class="text-red">{{ selectedAlertRow.wait }}</dd></div><div><dt>首次发生</dt><dd>{{ selectedAlertRow.firstOccurredAt }}</dd></div><div><dt>最近发生</dt><dd>{{ selectedAlertRow.lastOccurredAt }}</dd></div><div><dt>同类事件次数</dt><dd>{{ selectedAlertRow.occurrences }} 次</dd></div><div><dt>归在一起的条件</dt><dd>{{ selectedAlert.type }} + {{ selectedAlert.object }}</dd></div><div><dt>应处理时间</dt><dd>{{ selectedAlertRow.dueAt }}</dd></div></dl><div class="work-section-label work-spaced-label">处理步骤</div><ol class="alert-steps"><li v-for="(step, index) in selectedAlertSteps" :key="step[0]" :class="{ done: index === 0 || index === 1 && selectedAlert.status !== '待确认' }"><span>{{ index + 1 }}</span><div><strong>{{ step[0] }}</strong><p>{{ step[1] }}</p></div><em v-if="index === 0">已确认</em><button v-else-if="index === 1 && selectedAlert.status === '待确认' && role === 'operator'" class="btn btn-primary btn-sm" @click="updateAlert('处理中')">确认并领取</button></li></ol><div class="alert alert-info">{{ selectedAlert.type.includes('到期') || selectedAlert.type.includes('清理') ? '清理操作只删除临时数据，不会改变业务结果；业务结果仍需由业务方根据实际情况确认。' : '处理告警只更新告警处理进度；业务结果必须根据目标系统返回结果或有效查询记录单独确认。' }}</div><button v-if="selectedAlertRow.relatedTask" class="btn btn-primary" @click="openRecovery(selectedAlertRow.relatedTask.id)">进入关联数据处理</button><div v-if="selectedAlert.note" class="work-finding"><Check :size="16" /><span>{{ selectedAlert.note }}</span></div><div v-if="role === 'manager'" class="work-inline-note">管理角色只读，告警确认和恢复由运维角色处理。</div><div v-else-if="selectedAlert.status !== '已恢复'" class="work-form alert-followup-form"><label for="alert-owner">后续责任人</label><select id="alert-owner" v-model="alertFollowupOwner"><option>当前运维</option><option>李强</option><option>张建国</option></select><label for="alert-due">完成期限</label><input id="alert-due" v-model="alertDueAt" /><label for="alert-next-check">下次检查</label><input id="alert-next-check" v-model="alertNextCheckAt" /><label for="alert-note">处理依据与安排</label><textarea id="alert-note" v-model="alertNote" rows="3" maxlength="200" placeholder="记录核查依据、当前结论和下次检查事项"></textarea><div class="work-inline-actions"><button class="btn btn-outline-secondary" :disabled="!alertNote.trim()" @click="saveGeneralAlertProgress(false)">保存处理进展</button><button class="btn btn-primary" :disabled="!alertNote.trim()" @click="saveGeneralAlertProgress(true)">完成告警处理</button></div></div></div>
         <div v-else-if="drawerTab === 'work' && isInterfaceFailureAlert" class="work-drawer-body incident-records-tab"><div class="prototype-section-head work-embedded-head"><div><h3>受影响交换记录</h3><small>接口恢复与历史记录处理互不影响；每笔记录根据结果采用对应处理方式。</small></div><span>{{ interfaceIncidentScenarios.length }} 笔</span></div><div class="table-responsive"><table class="table incident-record-table"><thead><tr><th>业务记录</th><th>机构</th><th>当前结果</th><th>失败位置</th><th>处理方式</th><th>操作</th></tr></thead><tbody><tr v-for="row in interfaceIncidentRoutes" :key="row.item.id"><td><strong>{{ row.item.sourceRecordId }}</strong><small>{{ row.item.requestId }}</small></td><td>{{ row.item.organization }}</td><td><span class="prototype-tag" :class="row.tone">{{ row.result }}</span></td><td>{{ row.stage }}</td><td>{{ row.route }}</td><td><button class="btn btn-outline-primary btn-sm" @click="openRelatedInterfaceScenario(row.item)">{{ row.action }}</button></td></tr></tbody></table></div></div>
         <div v-else-if="drawerTab === 'work'" class="work-drawer-body"><div class="work-section-label">处理记录</div><ol class="work-timeline"><li><span><Check :size="13" /></span><p><strong>系统生成待处理事项</strong>{{ selectedAlert.type }}<small>{{ selectedAlert.occurredAt }} · {{ selectedAlert.id }}</small></p></li><li v-if="selectedAlert.status !== '待确认'"><span><Check :size="13" /></span><p><strong>运维已确认</strong>{{ selectedAlert.note || '已领取并开始处理' }}<small>当前运维 · {{ selectedAlert.status }}</small></p></li></ol></div>
         <div v-else class="work-drawer-body"><div class="work-section-label">相关日志</div><dl class="work-facts"><div><dt>告警编号</dt><dd>{{ selectedAlert.id }}</dd></div><div><dt>关联对象</dt><dd>{{ selectedAlert.object }}</dd></div><div><dt>错误摘要</dt><dd>{{ selectedAlert.note || selectedAlert.type }}</dd></div><div><dt>数据范围</dt><dd>仅显示合成交换摘要</dd></div></dl><button v-if="selectedAlertRow.relatedInterface && role === 'manager'" class="work-related-link" @click="openInterfaceDefinition(selectedAlertRow.relatedInterface.id)">查看接口定义 <ArrowUpRight :size="14" /></button><button v-else-if="selectedAlertRow.relatedScenario" class="work-related-link" @click="showRelated(selectedAlertRow.relatedScenario.id)">查看关联发送过程 <ArrowUpRight :size="14" /></button></div>
@@ -1217,7 +1217,7 @@ watch([recoveryTasks, organizations, organizationInterfaceAccess, organizationPe
       <template v-else-if="drawer === 'audit' && selectedAuditEvent">
         <div class="work-drawer-sub"><span class="prototype-tag neutral">{{ selectedAuditEvent.actor.startsWith('SIM-SVC') ? '系统事件' : '人工操作' }}</span><span>{{ selectedAuditEvent.time }}</span></div>
         <div class="work-drawer-body">
-          <section class="detail-section"><h3>事件事实</h3><dl class="work-facts"><div><dt>操作人</dt><dd>{{ selectedAuditEvent.actor }}</dd></div><div><dt>发生时间</dt><dd>{{ selectedAuditEvent.time }}</dd></div><div><dt>业务对象</dt><dd>{{ selectedAuditEvent.object }}</dd></div><div><dt>动作</dt><dd>{{ selectedAuditEvent.action }}</dd></div></dl></section>
+          <section class="detail-section"><h3>事件记录</h3><dl class="work-facts"><div><dt>操作人</dt><dd>{{ selectedAuditEvent.actor }}</dd></div><div><dt>发生时间</dt><dd>{{ selectedAuditEvent.time }}</dd></div><div><dt>业务对象</dt><dd>{{ selectedAuditEvent.object }}</dd></div><div><dt>动作</dt><dd>{{ selectedAuditEvent.action }}</dd></div></dl></section>
           <section class="detail-section"><h3>变更记录</h3><dl class="work-facts"><div><dt>处理摘要</dt><dd>{{ selectedAuditEvent.detail || '该事件未登记补充说明' }}</dd></div><div><dt>相关记录编号</dt><dd>{{ selectedAuditEvent.evidenceRef || '历史记录未登记独立记录编号' }}</dd></div><div><dt>业务影响</dt><dd>{{ selectedAuditEvent.impact || '请结合关联对象的当前状态判断' }}</dd></div><div><dt>关联标识</dt><dd>{{ selectedAuditEvent.object }}</dd></div></dl><div v-if="auditDiffRows.length" class="table-responsive mt-3"><table class="table table-sm interface-diff-table"><thead><tr><th>字段</th><th>变更前</th><th>变更后</th></tr></thead><tbody><tr v-for="row in auditDiffRows" :key="row.field"><td><strong>{{ row.field }}</strong></td><td>{{ row.before }}</td><td>{{ row.after }}</td></tr></tbody></table></div><div v-else class="prototype-empty">该历史事件未保存字段级差异</div></section>
           <div class="work-data-boundary"><ShieldCheck :size="17" /><span><strong>审计记录只读</strong><small>事件详情用于追溯操作人、时间、对象和动作；业务正文和敏感凭据不在此展示。</small></span></div>
         </div>

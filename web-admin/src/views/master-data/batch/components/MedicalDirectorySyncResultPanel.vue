@@ -1,4 +1,4 @@
-<!-- 100-004/100-005同步结果组件：按目录类型展示同范围数量核对、分页取得和当前数据更新事实。 -->
+<!-- 100-004/100-005同步结果组件：按目录类别展示同一范围的数量核对、分页取得和当前数据更新结果。 -->
 <script setup lang="ts">
 import { AlertCircle, CheckCircle2, CircleHelp, LoaderCircle } from 'lucide-vue-next'
 import type { MedicalDirectorySyncResult } from '@/api/master-data/batch'
@@ -6,7 +6,7 @@ import type { MedicalDirectorySyncResult } from '@/api/master-data/batch'
 const props = defineProps<{
   /** 当前批次已落库的单目录类型处理结果。 */
   results: MedicalDirectorySyncResult[]
-  /** 分项事实是否仍在读取。 */
+  /** 是否仍在读取各类别的结果。 */
   loading: boolean
 }>()
 
@@ -15,7 +15,11 @@ const typeLabels = { TRADITIONAL_MEDICINE: '中药', WESTERN_MEDICINE: '西药',
 
 /** @param result 单目录类型结果 @return 面向业务人员的处理结论 */
 function statusLabel(result: MedicalDirectorySyncResult) {
-  return result.status === 'COMPLETED' ? '已更新当前数据' : result.status === 'RESULT_UNKNOWN' ? '结果无法确认' : '本类型未更新'
+  if (result.status === 'RESULT_UNKNOWN') return '结果无法确认'
+  if (result.status !== 'COMPLETED') return '本类型未更新'
+  return result.createdCount + result.updatedCount + result.sourceMissingCount > 0
+    ? '已更新当前数据'
+    : '已完成核对，当前数据无变化'
 }
 </script>
 

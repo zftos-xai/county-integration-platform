@@ -58,7 +58,7 @@ export const masterDataBatchStatuses = [
 /** 基础数据同步批次状态代码。 */
 export type MasterDataBatchStatus = (typeof masterDataBatchStatuses)[number]
 
-/** 一次同步运行从来源取得到当前目录对账的数量事实。 */
+/** 保存一次同步的来源声明数、实际取得数和目录处理数量。 */
 export type MasterDataBatchCounts = {
   declared: number | null
   returned: number
@@ -78,7 +78,7 @@ export type HospitalDirectorySyncResultStatus =
   | 'FAILED'
   | 'RESULT_UNKNOWN'
 
-/** 100-003按科室、医生、病区或床位保存的处理事实。 */
+/** 保存100-003按科室、医生、病区或床位处理的结果。 */
 export type HospitalDirectorySyncResult = {
   directoryType: HospitalDirectoryType
   status: HospitalDirectorySyncResultStatus
@@ -110,7 +110,7 @@ export type Icd10SyncResult = {
   failureSummary: string | null
 }
 
-/** 一次已落库的100-006或100-007脱敏调用事实。 */
+/** 一条已保存的100-006或100-007脱敏调用记录。 */
 export type Icd10HisInvocation = {
   id: number
   diagnosisCategory: Icd10DiagnosisCategory
@@ -128,7 +128,7 @@ export type Icd10HisInvocation = {
   completedAt: string
 }
 
-/** ICD-10批次的有界HIS调用事实页。 */
+/** ICD-10批次的分页HIS调用记录。 */
 export type Icd10HisInvocationPage = {
   items: Icd10HisInvocation[]
   total: number
@@ -136,7 +136,7 @@ export type Icd10HisInvocationPage = {
   pageSize: number
 }
 
-/** 一次机构目录批次关联的通用脱敏HIS调用事实。 */
+/** 机构目录批次关联的一条脱敏HIS调用记录。 */
 export type BatchExchangeRecord = {
   id: number
   requestId: string
@@ -207,7 +207,7 @@ export type MasterDataSyncSource = {
   environments: MasterDataEnvironment[]
 }
 
-/** 平台当前已经具备完整执行闭环的基础数据业务。 */
+/** 平台当前已经具备完整处理流程的基础数据业务。 */
 export type MasterDataSyncBusiness = {
   category: MasterDataCategory
   name: string
@@ -308,7 +308,7 @@ export function isMasterDataBatchCounts(
   )
 }
 
-/** 校验单目录类型运行事实，禁止页面将缺失字段伪装成零。 */
+/** 检查单个目录类别的运行结果，避免把缺失字段误当成零。 */
 export function isHospitalDirectorySyncResult(
   value: unknown,
 ): value is HospitalDirectorySyncResult {
@@ -359,7 +359,7 @@ export function isIcd10SyncResult(value: unknown): value is Icd10SyncResult {
   )
 }
 
-/** 校验ICD-10调用事实，禁止把缺失摘要或未知终态带入详情页。 */
+/** 检查ICD-10调用记录，避免在详情页展示缺失摘要或未知状态。 */
 export function isIcd10HisInvocation(value: unknown): value is Icd10HisInvocation {
   if (!isRecord(value)) return false
   return typeof value.id === 'number'
@@ -378,13 +378,13 @@ export function isIcd10HisInvocation(value: unknown): value is Icd10HisInvocatio
     && typeof value.requestedAt === 'string' && typeof value.completedAt === 'string'
 }
 
-/** 校验ICD-10调用事实分页响应。 */
+/** 检查ICD-10调用记录的分页响应。 */
 export function isIcd10HisInvocationPage(value: unknown): value is Icd10HisInvocationPage {
   return isRecord(value) && Array.isArray(value.items) && value.items.every(isIcd10HisInvocation)
     && typeof value.total === 'number' && typeof value.page === 'number' && typeof value.pageSize === 'number'
 }
 
-/** 校验机构目录批次关联的通用交换事实，避免将不完整响应作为调用记录展示。 */
+/** 检查机构目录批次关联的交换记录，避免展示不完整的调用信息。 */
 export function isBatchExchangeRecord(value: unknown): value is BatchExchangeRecord {
   if (!isRecord(value)) return false
   const results = ['SUCCESS', 'FAILURE', 'NO_RESPONSE', 'INVALID_RESPONSE']
@@ -469,7 +469,7 @@ export function getMasterDataSyncOptions(signal?: AbortSignal) {
   )
 }
 
-/** 读取一条同步批次的最新事实，不触发重新执行。 */
+/** 读取一条同步批次的最新结果，不重新执行批次。 */
 export function getMasterDataBatch(batchId: number, signal?: AbortSignal) {
   return apiRequest<MasterDataBatchSummary>(
     masterDataBatchDetailPath(batchId),
@@ -491,7 +491,7 @@ export function getHospitalDirectorySyncResults(
   )
 }
 
-/** 读取一个100-004/100-005批次的分项事实；查看不会再次调用HIS。 */
+/** 读取一个100-004/100-005批次各类别的结果；查看不会再次调用HIS。 */
 export function getMedicalDirectorySyncResults(
   batchId: number,
   signal?: AbortSignal,
@@ -504,7 +504,7 @@ export function getMedicalDirectorySyncResults(
   )
 }
 
-/** 读取一个100-006/100-007批次的西医、中医分项事实；查看不会再次调用HIS。 */
+/** 读取一个100-006/100-007批次的西医、中医分类结果；查看不会再次调用HIS。 */
 export function getIcd10SyncResults(
   batchId: number,
   signal?: AbortSignal,
@@ -517,7 +517,7 @@ export function getIcd10SyncResults(
   )
 }
 
-/** 读取已落库的ICD-10 HIS调用事实；不会重发100-006或100-007。 */
+/** 读取已保存的ICD-10 HIS调用记录；不会重发100-006或100-007。 */
 export function getIcd10HisInvocations(
   batchId: number,
   page = 1,
@@ -531,7 +531,7 @@ export function getIcd10HisInvocations(
   )
 }
 
-/** 读取机构目录批次关联的100-003、100-004或100-005调用事实；不会重新调用HIS。 */
+/** 读取机构目录批次关联的100-003、100-004或100-005调用记录；不会重新调用HIS。 */
 export function getBatchExchangeRecords(batchId: number, signal?: AbortSignal) {
   return apiRequest<BatchExchangeRecord[]>(
     masterDataBatchExchangeRecordsPath(batchId),
@@ -542,7 +542,7 @@ export function getBatchExchangeRecords(batchId: number, signal?: AbortSignal) {
 
 /**
  * 发起一次有明确业务范围的同步批次。
- * 网络失败或超时时要求调用方先按请求标识回读，不能直接再次提交。
+ * 网络失败或超时时，要求调用方先按请求编号重新读取结果，不能直接再次提交。
  */
 export async function startMasterDataBatch(input: StartMasterDataBatchInput) {
   try {
@@ -573,7 +573,7 @@ export async function cancelMasterDataBatch(batchId: number, version: string) {
   }
 }
 
-/** 使用最近读取版本执行所选目录业务；长批次超时只回读结果，不自动再次运行。 */
+/** 使用最近读取的版本执行所选目录处理；长批次超时只重新读取结果，不自动再次运行。 */
 export async function runMasterDataBatch(batchId: number, version: string) {
   try {
     return await apiRequest<MasterDataBatchSummary>(
@@ -601,7 +601,7 @@ export async function recoverMasterDataBatch(batchId: number, version: string) {
   }
 }
 
-/** 100-004/100-005按医疗目录类型保存的处理事实。 */
+/** 保存100-004/100-005按医疗目录类别处理的结果。 */
 export type MedicalDirectorySyncResult = {
   directoryType: 'TRADITIONAL_MEDICINE' | 'WESTERN_MEDICINE' | 'TREATMENT' | 'CONSUMABLE'
   status: HospitalDirectorySyncResultStatus

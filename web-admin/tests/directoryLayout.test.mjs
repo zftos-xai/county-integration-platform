@@ -59,6 +59,32 @@ async function mountLayout(t, { query = {}, codes = ['ORG-A', 'ORG-B'], organiza
         },
       },
     },
+    '@/components/PageState.vue': {
+      default: {
+        props: ['kind', 'title', 'description', 'compact'],
+        setup(props, { slots }) {
+          return () => Vue.h('section', { class: ['page-state', props.kind] }, [
+            Vue.h('strong', props.title),
+            props.description ? Vue.h('span', props.description) : null,
+            slots.actions?.(),
+          ])
+        },
+      },
+    },
+    '@/components/DatasetTabs.vue': {
+      default: {
+        props: ['organizationCode'],
+        setup(props) {
+          const organizationCode = Vue.unref(props.organizationCode)
+          const query = organizationCode ? { organizationCode } : {}
+          return () => Vue.h('nav', { 'aria-label': '基础数据集' }, [
+            Vue.h('a', { to: { path: '/master-data/directory', query } }, '综合目录'),
+            Vue.h('a', { to: { path: '/master-data/directory/medical', query } }, '三大目录'),
+            Vue.h('a', { to: '/master-data/directory/icd10' }, 'ICD-10'),
+          ])
+        },
+      },
+    },
   }
   const module = { exports: {} }
   new Function('require', 'module', 'exports', outputText)(name => {
@@ -98,32 +124,46 @@ test('两个页面使用同一布局和表格样式，不再独立定义机构�
   assert.ok(!staticClasses.includes('empty'))
   assert.doesNotMatch(source, /\{ empty:/)
   assert.match(source, /'is-empty':/)
+  assert.match(source, /filters-layout="search-with-filter"/)
+  assert.match(source, /class="prototype-search directory-search"/)
+  assert.doesNotMatch(source, /directory-toolbar :deep\(\.standard-list-toolbar/)
+  assert.doesNotMatch(source, /\.directory-search\s*\{[^}]*flex/)
 })
 
 test('两个目录的展开详情共用带单元格边界的字段栅格', async () => {
   const styles = await readFile(new URL('directory-records.css', directory), 'utf8')
   const hospital = await readFile(new URL('HospitalDirectoryView.vue', directory), 'utf8')
+  const medical = await readFile(new URL('MedicalDirectoryView.vue', directory), 'utf8')
   assert.match(styles, /\.directory-detail dl\s*\{[^}]*border-top:1px dashed var\(--detail-line\)/s)
   assert.match(styles, /\.directory-detail dt\s*\{[^}]*border-right:1px dashed var\(--detail-line\)/s)
-  assert.match(styles, /\.directory-table th:last-child,\.directory-table td\.directory-actions\s*\{[^}]*position:sticky/s)
+  const sharedStyles = await readFile(new URL('../../../assets/styles/prototype.css', directory), 'utf8')
+  assert.match(hospital, /<AdminTableFrame[^>]*has-actions/)
+  assert.match(hospital, /<AdminTableFrame[^>]*:pin-actions="false"/)
+  assert.match(medical, /<AdminTableFrame[^>]*:pin-actions="false"/)
+  assert.match(sharedStyles, /\.action-column-table th:last-child,[\s\S]*?\.action-column-table td:last-child:not\(\[colspan\]\) \{[^}]*position: sticky/)
   assert.match(styles, /\.directory-detail--hospital section:first-child dl\s*\{ grid-template-columns:max-content; \}/)
   assert.match(hospital, /directory-detail directory-detail--hospital/)
   assert.match(styles, /\.directory-detail dt,\.directory-detail dd\s*\{[^}]*line-height:1\.35;/s)
   assert.doesNotMatch(styles, /\.directory-detail dl div\s*\{[^}]*min-height:/s)
+  assert.match(styles, /\.directory-detail\s*\{[^}]*position:sticky; left:0;/s)
   assert.match(styles, /\.directory-detail\s*\{[^}]*width:100%;[^}]*grid-template-columns:minmax\(0,1\.15fr\) minmax\(0,\.85fr\);/s)
   assert.match(styles, /\.directory-detail dl\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/s)
   assert.match(styles, /\.directory-detail dd\s*\{[^}]*overflow-wrap:anywhere/s)
   assert.match(styles, /\.directory-detail section:last-child dl\s*\{ grid-template-columns:max-content; \}/)
-  assert.match(styles, /@media\s*\(max-width:1100px\)\s*\{[^}]*\.directory-detail\s*\{ grid-template-columns:minmax\(0,1fr\); \}/s)
+  assert.match(styles, /@media\s*\(max-width:1100px\)\s*\{[^}]*\.directory-detail\s*\{[^}]*grid-template-columns:minmax\(0,1fr\); \}/s)
+  assert.match(styles, /@media\s*\(max-width:1100px\)\s*\{[^}]*\.directory-detail\s*\{ width:min\(100%,calc\(100vw - 64px\)\); grid-template-columns:minmax\(0,1fr\); \}/s)
+  assert.match(styles, /@media\s*\(max-width:1100px\)[\s\S]*?\.directory-detail\.directory-detail--hospital section:first-child dl,[\s\S]*?\.directory-detail section:last-child dl \{ grid-template-columns:minmax\(0,1fr\); \}/)
+  assert.match(styles, /@container\s*\(max-width:560px\)[\s\S]*?\.directory-detail dl div \{ grid-template-columns:minmax\(82px,125px\) minmax\(0,1fr\); \}/)
 })
 
 test('数据目录页头和页签去除通用导航内边距造成的多余留白', async () => {
   const layout = await readFile(new URL('../../../layout/AppLayout.vue', directory), 'utf8')
   const shellStyles = await readFile(new URL('../../../assets/styles/prototype.css', directory), 'utf8')
+  const tabs = await readFile(new URL('../../../components/DatasetTabs.vue', directory), 'utf8')
   assert.match(layout, /'directory-page': route\.path\.startsWith\('\/master-data\/directory'\)/)
   assert.match(shellStyles, /\.prototype-main\.directory-page \.prototype-breadcrumb\s*\{[^}]*padding:\s*0;/s)
-  assert.match(shellStyles, /\.prototype-main\.directory-page \.prototype-content\s*\{[^}]*padding:\s*12px 20px 28px;/s)
-  assert.match(source, /\.dataset-nav\s*\{[^}]*padding:\s*0;/s)
+  assert.match(shellStyles, /\.prototype-main\.directory-page \.prototype-content\s*\{[^}]*padding:\s*8px 20px 28px;/s)
+  assert.match(tabs, /\.dataset-nav\s*\{[^}]*padding:\s*0;/s)
 })
 
 test('类型页签已说明目录种类，结果数不在查询区重复展示；刷新仍在查询区可用', async t => {
@@ -144,7 +184,7 @@ test('URL中已授权机构优先于默认机构，机构目录页签携带同�
   const links = descendants(root).filter(item => item.type === 'a')
   assert.equal(links.length, 3)
   assert.deepEqual(links.map(text), ['综合目录', '三大目录', 'ICD-10'])
-  assert.ok(links.slice(0, 2).every(item => item.props.to.query.organizationCode === 'ORG-B'))
+  assert.deepEqual(links.slice(0, 2).map(item => item.props.to.path), ['/master-data/directory', '/master-data/directory/medical'])
   assert.equal(links[2].props.to, '/master-data/directory/icd10')
   assert.match(text(root), /机构编码：ORG-B/)
 })
@@ -184,6 +224,7 @@ test('无匹配、清除、失败和加载状态保留共用结构，不伪装�
   await flush()
   assert.match(text(root), /当前数据读取失败/)
   assert.doesNotMatch(text(root), /尚无当前有效数据|当前机构没有科室/)
+  assert.equal(descendants(root).find(item => item.type === 'button' && text(item) === '重试读取')?.props.class, 'work-quiet-button')
   props.error = null
   props.isLoading = true
   await flush()

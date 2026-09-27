@@ -44,13 +44,13 @@ test('当前有效数据目录只读展示来源、当前数量和来源批次',
   assert.doesNotMatch(source, /localStorage|模拟数据|编辑目录|删除目录/)
 })
 
-test('医院综合目录批次详情区分HIS返回行、展开重复、无效关系和主数据冲突', async () => {
+test('医院综合目录批次详情区分返回记录、重复行、无效关联和基础数据冲突', async () => {
   const source = await readFile(detailPath, 'utf8')
 
-  assert.match(source, /HIS 返回行/)
-  assert.match(source, /展开重复/)
-  assert.match(source, /丢弃的无效关系/)
-  assert.match(source, /主数据冲突/)
+  assert.match(source, /HIS 返回记录/)
+  assert.match(source, /关系展开后重复行/)
+  assert.match(source, /已丢弃的无效关联/)
+  assert.match(source, /基础数据冲突/)
   assert.match(source, /\/master-data\/directory/)
   assert.match(source, /batch\.category === 'MEDICAL_DIRECTORY'/)
   assert.match(source, /MedicalDirectorySyncResultPanel/)

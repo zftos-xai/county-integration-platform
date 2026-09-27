@@ -55,3 +55,21 @@
   color: #3a515a;
   font-size: 12px;
 }
+
+@media (max-width: 760px) {
+  .batch-detail-grid-scroll .batch-detail-grid {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .batch-detail-grid-scroll .batch-detail-grid > div {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(90px, 30%) minmax(0, 1fr);
+  }
+
+  .batch-detail-grid-scroll .batch-detail-grid dt,
+  .batch-detail-grid-scroll .batch-detail-grid dd {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

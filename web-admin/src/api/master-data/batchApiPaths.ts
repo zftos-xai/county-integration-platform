@@ -28,13 +28,13 @@ export function masterDataBatchIcd10ResultsPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/icd10-results`
 }
 
-/** @param batchId 平台批次主键 @param page 从一开始页码 @param pageSize 每页调用事实数 @return ICD-10脱敏HIS调用事实地址 */
+/** @param batchId 平台批次主键 @param page 从一开始页码 @param pageSize 每页显示的调用记录数 @return ICD-10脱敏HIS调用记录地址 */
 export function masterDataBatchIcd10HisInvocationsPath(batchId: number, page: number, pageSize: number) {
   const parameters = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   return `${masterDataBatchDetailPath(batchId)}/his-invocations?${parameters.toString()}`
 }
 
-/** @param batchId 平台批次主键 @return 机构目录批次关联的通用脱敏HIS调用事实地址 */
+/** @param batchId 平台批次主键 @return 机构目录批次关联的脱敏HIS调用记录地址 */
 export function masterDataBatchExchangeRecordsPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/exchange-records`
 }
@@ -44,7 +44,7 @@ export function masterDataBatchCancelPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/cancel`
 }
 
-/** @param batchId 平台批次主键 @return 100-003整体取得、校验和直接对账地址 */
+/** @param batchId 平台批次主键 @return 100-003整体取得、检查和更新地址 */
 export function masterDataBatchRunPath(batchId: number) {
   return `${masterDataBatchDetailPath(batchId)}/run`
 }

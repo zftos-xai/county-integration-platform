@@ -4,6 +4,7 @@ import {
   Activity,
   BookOpen,
   Building2,
+  CheckCircle2,
   ClipboardList,
   Clock3,
   Database,
@@ -37,7 +38,17 @@ type NavigationGroup = {
 // 布局只展示已经接入真实 API 的业务入口，未完成页面不进入正式导航。
 const route = useRoute();
 const router = useRouter();
+const isSidebarCollapsed = ref(false);
 const isMobileOpen = ref(false);
+const pageSection = computed(() => {
+  const path = route.path;
+  if (path.startsWith('/master-data/')) return '基础数据';
+  if (['/users', '/roles', '/organizations'].includes(path)) return '系统管理';
+  if (['/parameters', '/dictionaries', '/external-systems'].includes(path)) return '基础配置';
+  if (['/database-contract', '/exchanges', '/audit'].includes(path)) return '运行与核查';
+  if (path === '/') return '运行监控';
+  return '平台管理';
+});
 // 角色名称只用于辨认账号；菜单与操作仍只依据服务端权限代码。
 const currentRoleNames = computed(() => authState.user?.roleNames.join('、') || '未分配角色');
 const authorizedOrganizationCount = computed(() => authState.user?.organizationCodes.length ?? 0);
@@ -111,11 +122,11 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    label: '运行处理',
+    label: '运行与核查',
     items: [
       {
         to: '/database-contract',
-        label: '数据库契约维护',
+        label: '数据库结构维护',
         icon: Database,
         permission: 'database-contract:read',
       },
@@ -145,95 +156,32 @@ const visibleNavigationGroups = computed(() =>
     .filter((group) => group.items.length > 0),
 );
 
-const pageContext = computed(() => {
-  const context: Record<string, { section: string; description: string }> = {
-    '/': {
-      section: '运行监控',
-      description: '掌握基础数据同步、业务交换和待处理告警',
-    },
-    '/data-review': {
-      section: '基础数据处理',
-      description: '核查机构与基础数据的同步状态',
-    },
-    '/master-data/batches': {
-      section: '基础数据',
-      description: '查看每次同步取得、校验和更新当前有效数据的结果',
-    },
-    '/master-data/batches/:id': {
-      section: '基础数据',
-      description: '查看一次同步的调用范围、数量和当前有效数据结果',
-    },
-    '/master-data/directory': {
-      section: '基础数据',
-      description: '按机构查看当前有效的医院综合目录、药品、诊疗和耗材目录',
-    },
-    '/master-data/directory/icd10': {
-      section: '基础数据',
-      description: '按机构查看当前有效目录，并查看按来源类别管理的平台公共 ICD-10 诊断目录',
-    },
-    '/interfaces': {
-      section: '业务接口处理',
-      description: '维护业务接口、版本与运行边界',
-    },
-    '/exchanges': {
-      section: '运行处理',
-      description: '按机构核查已发生的HIS调用终态和受控摘要',
-    },
-    '/exceptions': {
-      section: '运行处理',
-      description: '确认影响范围并推进异常处置',
-    },
-    '/audit': {
-      section: '运行处理',
-      description: '查询管理操作与安全审计记录',
-    },
-    '/database-contract': {
-      section: '运行处理',
-      description: '扫描契约差异并完成受控方案、审批、执行和复验',
-    },
-    '/parameters': {
-      section: '基础配置',
-      description: '维护平台注册参数及环境取值',
-    },
-    '/dictionaries': {
-      section: '基础配置',
-      description: '维护平台受控字典与字典项',
-    },
-    '/external-systems': {
-      section: '基础配置',
-      description: '维护外部系统及各机构的接口配置',
-    },
-    '/users': {
-      section: '系统管理',
-      description: '维护平台账号、角色和机构范围',
-    },
-    '/roles': { section: '系统管理', description: '维护角色及其功能权限' },
-    '/organizations': {
-      section: '系统管理',
-      description: '维护机构档案、层级和启停状态',
-    },
-    '/forbidden': {
-      section: '访问控制',
-      description: '当前账号没有访问该功能的权限',
-    },
-  };
-  if (route.path.startsWith('/master-data/batches/'))
-    return context['/master-data/batches/:id']!;
-  if (route.path === '/master-data/directory/medical')
-    return context['/master-data/directory']!;
-  return context[route.path] ?? { section: '平台管理', description: '' };
-});
+/** 只高亮当前正式路由对应的菜单，根路由不会因共享父路由而一直处于选中态。 */
+function isNavigationItemActive(item: NavigationItem) {
+  if (item.to === '/') return route.path === '/';
+  if (item.to === '/master-data/directory') return route.path.startsWith('/master-data/directory');
+  return route.path === item.to || route.path.startsWith(`${item.to}/`);
+}
 
 async function logout() {
   await endSession();
   isMobileOpen.value = false;
   await router.replace('/login');
 }
+
+/** 桌面端折叠侧栏，窄屏端打开导航抽屉。 */
+function toggleNavigation() {
+  if (window.matchMedia('(max-width: 900px)').matches) {
+    isMobileOpen.value = true;
+    return;
+  }
+  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+}
 </script>
 
 <template>
-  <div class="prototype-app real-app">
-    <aside class="prototype-sidebar" :class="{ open: isMobileOpen }">
+  <div class="prototype-app real-app" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+    <aside id="primary-navigation" class="prototype-sidebar" :class="{ open: isMobileOpen, collapsed: isSidebarCollapsed }">
       <div class="prototype-brand">
         <span class="prototype-logo"><Database :size="20" /></span>
         <span class="prototype-brand-copy"
@@ -260,9 +208,12 @@ async function logout() {
             v-for="item in group.items"
             :key="item.to"
             :to="item.to"
-            :class="{ 'router-link-active': item.to === '/master-data/directory' && route.path === '/master-data/directory/medical' }"
-            active-class="prototype-route-parent"
-            exact-active-class="router-link-active"
+            :aria-label="item.label"
+            :aria-current="isNavigationItemActive(item) ? 'page' : undefined"
+            :title="item.label"
+            active-class="prototype-router-match"
+            exact-active-class="prototype-router-exact"
+            :class="{ 'prototype-route-parent': isNavigationItemActive(item) }"
             @click="isMobileOpen = false"
           >
             <component :is="item.icon" :size="17" /><span>{{
@@ -293,29 +244,31 @@ async function logout() {
       @click="isMobileOpen = false"
     />
 
-    <main class="prototype-main" :class="{ 'directory-page': route.path.startsWith('/master-data/directory'), 'batch-detail-page': route.path.startsWith('/master-data/batches/') }">
-      <header class="prototype-topbar">
+    <main class="prototype-main" :class="{ 'dashboard-page-shell': route.path === '/', 'directory-page': route.path.startsWith('/master-data/directory') }">
+      <header class="prototype-topbar real-page-heading">
         <button
           class="prototype-icon prototype-menu"
-          aria-label="打开导航"
-          title="打开导航"
-          @click="isMobileOpen = true"
+          aria-label="切换导航"
+          title="切换导航"
+          aria-controls="primary-navigation"
+          @click="toggleNavigation"
         >
           <Menu :size="20" />
         </button>
         <div class="prototype-heading">
-          <!-- 顶部按“面包屑、页面标题、说明”分层，便于快速确认所在模块与当前任务。 -->
+          <!-- 当前页面名称作为面包屑末项，页头与菜单保持同一行。 -->
           <nav class="prototype-breadcrumb" aria-label="页面层级">
-            <span>{{ pageContext.section }}</span
-            ><span aria-hidden="true">/</span
-            ><strong>{{ route.meta.title }}</strong>
-          </nav>
-          <div class="prototype-page-title">
+            <span>{{ platformSettings.title }}</span>
+            <span aria-hidden="true">/</span>
+            <span>{{ pageSection }}</span>
+            <span aria-hidden="true">/</span>
             <h1>{{ route.meta.title }}</h1>
-            <span v-if="route.meta.catalogScope === 'PUBLIC'" class="public-catalog-badge">平台公共目录</span>
-          </div>
-          <p>{{ pageContext.description }}</p>
+          </nav>
         </div>
+        <span class="prototype-session-status" role="status" :title="`当前登录账号：${authState.user?.loginName || '未知'}`">
+          <CheckCircle2 :size="15" aria-hidden="true" />
+          <span>会话正常</span>
+        </span>
       </header>
       <div class="prototype-content real-content"><RouterView /></div>
       <footer class="prototype-main-footer">

@@ -1,7 +1,7 @@
 <!-- 机构管理页面：接入真实列表、详情、创建、修改和启停接口。 -->
 <script setup lang="ts">
 import {
-  AlertCircle, Building2, ChevronRight, CircleOff, LoaderCircle,
+  AlertCircle, Building2, ChevronRight, LoaderCircle,
   Pencil, Plus, RefreshCw, Search,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -16,10 +16,15 @@ import type { Organization } from '@/api/system/organization'
 import { listUsers } from '@/api/system/user'
 import type { ManagedUser } from '@/api/system/user'
 import { authState, hasPermission } from '@/store/modules/auth'
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import AdminPagination from '@/components/AdminPagination.vue'
+import AdminTableFrame from '@/components/AdminTableFrame.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
 import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
+import ListRowActions from '@/components/ListRowActions.vue'
+import PageState from '@/components/PageState.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 import { organizationTypeLabel } from '@/utils/managementDisplay'
 import {
   emptyOrganizationForm, organizationToForm, toCreateInput, toUpdateInput,
@@ -84,6 +89,7 @@ const filtered = computed(() => {
   })
 })
 const { page, pageSize, pagedRows } = useClientPagination(filtered)
+const { request: confirmationRequest, confirm, resolve: resolveConfirmation } = useConfirmationDialog()
 function applyListFilters() {
   page.value = 1
 }
@@ -93,6 +99,7 @@ function resetListFilters() {
   statusFilter.value = 'all'
   typeFilter.value = 'all'
   page.value = 1
+  void router.replace({ path: route.path })
 }
 const unavailableParentIds = computed(() => {
   const ids = new Set<number>()
@@ -117,9 +124,14 @@ function captureEditorSnapshot() {
   editorSnapshot.value = JSON.stringify(form.value)
 }
 
-function closeEditor() {
+async function closeEditor() {
   if (isSaving.value) return
-  if (JSON.stringify(form.value) !== editorSnapshot.value && !window.confirm('当前修改尚未保存，确定关闭吗？')) return
+  if (JSON.stringify(form.value) !== editorSnapshot.value && !await confirm({
+    title: '放弃未保存的机构修改？',
+    message: '关闭后，本次修改的机构资料不会保存。',
+    confirmLabel: '放弃修改',
+    danger: true,
+  })) return
   detailController?.abort()
   mode.value = 'closed'
   selected.value = null
@@ -346,18 +358,25 @@ onBeforeUnmount(() => {
       <button class="text-button" type="button" :disabled="isRefreshing" @click="loadOrganizations(true)"><RefreshCw :size="15" />重试</button>
     </div>
 
-    <ListQueryToolbar :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadOrganizations(true)">
-      <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="机构名称、编码或类型" aria-label="搜索机构" /></label>
-      <label class="status-field"><span class="visually-hidden">有效状态</span><select v-model="statusFilter" aria-label="机构有效状态"><option value="all">全部有效状态</option><option value="attention">只看需要处理</option><option value="active">正常使用</option><option value="future">尚未生效</option><option value="expired">已过期</option><option value="disabled">已撤销</option></select></label>
-      <select v-model="typeFilter" aria-label="机构类型"><option value="all">全部机构类型</option><option v-for="type in organizationTypes" :key="type" :value="type">{{ organizationTypeLabel(type) }}（{{ type }}）</option></select>
-      <template #actions><button v-if="canWrite" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增机构</button></template>
-    </ListQueryToolbar>
+    <div class="organization-query-container">
+      <ListQueryToolbar filters-layout="search-with-selects" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadOrganizations(true)">
+        <label class="prototype-search standard-list-filter--search"><Search :size="16" /><input v-model="query" type="search" placeholder="机构名称、编码或类型" aria-label="搜索机构" /></label>
+        <label class="status-field standard-list-filter--status"><span class="visually-hidden">有效状态</span><select v-model="statusFilter" aria-label="机构有效状态"><option value="all">全部有效状态</option><option value="attention">只看需要处理</option><option value="active">正常使用</option><option value="future">尚未生效</option><option value="expired">已过期</option><option value="disabled">已撤销</option></select></label>
+        <select class="standard-list-filter--type" v-model="typeFilter" aria-label="机构类型"><option value="all">全部机构类型</option><option v-for="type in organizationTypes" :key="type" :value="type">{{ organizationTypeLabel(type) }}（{{ type }}）</option></select>
+        <template #actions><button v-if="canWrite" class="prototype-button" type="button" @click="openCreate"><Plus :size="15" />新增机构</button></template>
+      </ListQueryToolbar>
+    </div>
 
-    <section class="organization-panel prototype-section work-table-section action-column-table">
+    <section class="organization-panel prototype-section work-table-section">
 
-      <div v-if="isLoading" class="page-state" aria-live="polite"><LoaderCircle class="spinning" :size="28" /><strong>正在加载机构数据</strong><span>请稍候</span></div>
-      <div v-else-if="!error && organizations.length === 0" class="page-state"><Building2 :size="30" /><strong>当前范围内暂无机构</strong><span>{{ canWrite ? '可新增下级机构，或联系管理员核对机构范围。' : '请联系管理员核对账号的机构范围。' }}</span></div>
-      <div v-else-if="organizations.length" class="table-scroll">
+      <PageState v-if="isLoading" kind="loading" title="正在加载机构数据" description="请稍候" />
+      <PageState v-else-if="!error && organizations.length === 0" kind="empty" title="当前账号可访问的机构中没有机构" :description="canWrite ? '可新增下级机构，或请管理员确认您的机构访问权限。' : '请联系管理员确认您的机构访问权限。'">
+        <template #icon><Building2 :size="30" /></template>
+      </PageState>
+      <PageState v-else-if="!error && filtered.length === 0" kind="empty" title="没有符合当前筛选条件的机构" compact>
+        <template #icon><Building2 :size="26" /></template>
+      </PageState>
+      <AdminTableFrame v-else-if="filtered.length" label="机构列表" has-actions>
         <table class="work-table">
           <thead><tr><th>机构与隶属关系</th><th>机构类型</th><th>使用情况</th><th>有效期</th><th>有效状态</th><th>最近更新</th><th>操作</th></tr></thead>
           <tbody>
@@ -368,17 +387,18 @@ onBeforeUnmount(() => {
               <td><span class="compact-time">{{ formatTime(item.validFrom) }}<br />至 {{ formatTime(item.validTo) }}</span></td>
               <td><span class="prototype-tag" :class="effectiveStatus(item).style">{{ effectiveStatus(item).label }}</span></td>
               <td>{{ formatTime(item.updatedAt) }}</td>
-              <td class="row-actions">
+              <td>
+                <ListRowActions label="机构操作">
                 <button v-if="canWrite" class="icon-button" type="button" aria-label="修改机构" title="修改" @click="openOrganization(item, true)"><Pencil :size="15" /></button>
                 <button v-if="canWrite" class="status-action" :class="{ confirm: confirmStatusId === item.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === item.id && item.enabled ? `撤销前检查：${childCountByOrganizationId.get(item.id) ?? 0} 个直接下级，${canReadUsers ? `${primaryUserCountByOrganizationId.get(item.id) ?? 0} 个关联用户` : '关联用户数无权查看'}；历史数据继续保留` : ''" @blur="confirmStatusId = null" @click="changeStatus(item)">{{ statusSavingId === item.id ? '处理中…' : confirmStatusId === item.id ? item.enabled ? '确认撤销' : '确认恢复' : item.enabled ? '撤销机构' : '恢复使用' }}</button>
                 <button v-else class="icon-button" type="button" aria-label="查看机构详情" title="查看详情" @click="openOrganization(item)"><ChevronRight :size="16" /></button>
+                </ListRowActions>
               </td>
             </tr>
           </tbody>
         </table>
-        <div v-if="filtered.length === 0" class="filtered-empty"><CircleOff :size="22" /><span>没有符合当前筛选条件的机构</span></div>
-      </div>
-      <AdminPagination v-if="!isLoading && organizations.length" :total="filtered.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
+      </AdminTableFrame>
+      <AdminPagination v-if="!isLoading && filtered.length" :total="filtered.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
     </section>
 
     <OrganizationEditorDrawer
@@ -402,27 +422,28 @@ onBeforeUnmount(() => {
       @reload="reloadDetail"
       @edit="mode = 'edit'"
     />
+    <ConfirmationDialog v-if="confirmationRequest" :request="confirmationRequest" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" />
   </section>
 </template>
 
 <style scoped>
-.organization-page { color: #263341; }
+.organization-page { color: var(--ui-color-text); }
+.organization-query-container { min-width: 0; }
 .organization-toolbar { min-height: 64px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .organization-toolbar h2 { margin: 0; font-size: 19px; }
 .organization-toolbar p { margin: 5px 0 0; color: #6b7783; font-size: 12px; }
 .text-button, .status-action { min-height: 36px; padding: 0 13px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 600; font-size: 13px; }
 .text-button { min-height: 30px; padding: 0 8px; border: 0; background: transparent; color: inherit; }
 button:disabled { cursor: wait; opacity: .6; }
-.organization-panel { min-height: 390px; --action-column-width: 142px; }
+.organization-panel { --action-column-width: 142px; }
 .organization-panel td small { display: block; margin-top: 3px; color: #7c8993; font-size: 10px; }.organization-panel .organization-path { max-width: 360px; color: #58736b; white-space: normal; }
 .organization-work-toolbar > span:first-of-type { margin-left: auto; }
 .filter-bar { padding: 13px 15px; border-bottom: 1px solid #e1e6ea; display: flex; align-items: center; gap: 10px; }
 .search-field { width: min(380px, 100%); height: 38px; padding: 0 11px; border: 1px solid #cfd7df; border-radius: 5px; display: flex; align-items: center; gap: 8px; color: #71808e; }
 .search-field:focus-within { border-color: #5b9b90; box-shadow: 0 0 0 2px rgba(76,155,141,.12); }
 .search-field input { min-width: 0; flex: 1; border: 0; outline: 0; color: #263341; }
-.status-field { margin-left: auto; display: flex; align-items: center; gap: 7px; color: #65717d; font-size: 12px; }
+.status-field { min-width: 0; display: flex; align-items: center; gap: 7px; color: #65717d; font-size: 12px; }
 select { min-height: 38px; border: 1px solid #cfd7df; border-radius: 5px; background: white; color: #263341; padding: 0 10px; }
-.table-scroll { overflow-x: auto; }
 table { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 12px; }
 th { padding: 10px 13px; background: #f6f8fa; color: #63717f; text-align: left; font-weight: 600; white-space: nowrap; }
 td { padding: 12px 13px; border-top: 1px solid #e8ecef; vertical-align: middle; }
@@ -432,13 +453,8 @@ code { padding: 3px 6px; border-radius: 3px; background: #eef2f5; color: #3d5267
 .record-link strong { font-size: 13px; }
 .record-link small { color: #75818d; }
 .compact-time { color: #687580; line-height: 1.65; white-space: nowrap; }
-.row-actions { text-align: right; white-space: nowrap; }
-.row-actions > button + button { margin-left: 6px; }
 .status-action { min-height: 34px; padding: 0 10px; border: 1px solid #ccd5dd; background: white; color: #52606d; white-space: nowrap; }
 .status-action.confirm { border-color: #a54b34; background: #a54b34; color: white; }
-.page-state { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #55718b; }
-.page-state span, .filtered-empty { color: #77838e; font-size: 12px; }
-.filtered-empty { min-width: 980px; padding: 24px; border-top: 1px solid #e8ecef; display: flex; justify-content: center; align-items: center; gap: 8px; }
 .feedback { min-height: 48px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .feedback > span { min-width: 0; display: grid; gap: 2px; }
 .feedback small { display: block; }

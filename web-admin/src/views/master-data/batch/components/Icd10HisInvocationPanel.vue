@@ -1,17 +1,20 @@
-<!-- ICD-10批次详情的脱敏HIS调用事实区块：分页展示100-006和100-007，不重发来源请求。 -->
+<!-- ICD-10批次详情的脱敏HIS调用记录区块：分页展示100-006和100-007，不重发来源请求。 -->
 <script setup lang="ts">
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronRight as ChevronRightIcon, FileWarning } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, ChevronRight as ChevronRightIcon, FileWarning } from 'lucide-vue-next'
 import { ref } from 'vue'
 import type { Icd10HisInvocationPage } from '@/api/master-data/batch'
+import AdminPagination from '@/components/AdminPagination.vue'
+import AdminTableFrame from '@/components/AdminTableFrame.vue'
 import { formatBatchTime } from '../batchTime'
 
-const props = defineProps<{
+defineProps<{
   page: Icd10HisInvocationPage | null
   loading: boolean
 }>()
 
 const emit = defineEmits<{
   changePage: [page: number]
+  changePageSize: [pageSize: number]
 }>()
 
 const isSectionExpanded = ref(true)
@@ -26,23 +29,19 @@ function outcomeLabel(value: Icd10HisInvocationPage['items'][number]['outcomeSta
   return ({ SUCCESS: '成功', FAILURE: 'HIS明确失败', NO_RESPONSE: '结果未知', INVALID_RESPONSE: '响应不可确认' })[value]
 }
 
-/** 由页码和页大小确定是否还能读取下一页。 */
-function canAdvance() {
-  return props.page !== null && props.page.page * props.page.pageSize < props.page.total
-}
 </script>
 
 <template>
   <section class="record-card his-invocation-card">
     <div class="card-heading">
-      <div><h3>HIS 请求记录</h3><p>仅展示脱敏请求参数与受控响应摘要，不保存或显示完整 SOAP 报文、端点和凭证。</p></div>
+      <div><h3>HIS 请求记录</h3><p>仅展示脱敏请求参数与受控响应摘要，不保存或显示完整 SOAP 报文、服务地址和凭证。</p></div>
       <div class="card-heading-actions"><span v-if="page" class="record-total">{{ page.total }} 次调用</span><button class="section-toggle-button" type="button" :aria-expanded="isSectionExpanded" @click="isSectionExpanded = !isSectionExpanded"><ChevronDown v-if="isSectionExpanded" :size="15" /><ChevronRightIcon v-else :size="15" />{{ isSectionExpanded ? '收起' : '展开' }}</button></div>
     </div>
     <template v-if="isSectionExpanded">
-      <div v-if="loading" class="panel-state" role="status">正在读取已保存的 HIS 调用事实…</div>
+      <div v-if="loading" class="panel-state" role="status">正在读取已保存的 HIS 调用记录…</div>
       <div v-else-if="page && page.total === 0" class="panel-state"><FileWarning :size="18" />该历史批次没有调用追踪记录；不能据此推断 HIS 未被调用。</div>
       <template v-else-if="page">
-      <div class="table-scroll" role="region" aria-label="HIS调用记录" tabindex="0">
+      <AdminTableFrame label="HIS 调用记录">
         <table class="work-table invocation-table">
           <thead><tr><th>请求时间</th><th>交易 / 类别</th><th>请求范围</th><th>结果</th><th>数量 / 耗时</th><th>请求与响应摘要</th></tr></thead>
           <tbody>
@@ -56,12 +55,8 @@ function canAdvance() {
             </tr>
           </tbody>
         </table>
-      </div>
-      <nav v-if="page.total > page.pageSize" class="invocation-pagination" aria-label="HIS调用记录分页">
-        <button class="work-quiet-button" type="button" :disabled="page.page <= 1 || loading" @click="emit('changePage', page.page - 1)"><ChevronLeft :size="15" />上一页</button>
-        <span>第 {{ page.page }} 页，共 {{ Math.max(1, Math.ceil(page.total / page.pageSize)) }} 页</span>
-        <button class="work-quiet-button" type="button" :disabled="!canAdvance() || loading" @click="emit('changePage', page.page + 1)">下一页<ChevronRight :size="15" /></button>
-      </nav>
+      </AdminTableFrame>
+      <AdminPagination :total="page.total" :page="page.page" :page-size="page.pageSize" :page-sizes="[10, 20, 50]" @update:page="emit('changePage', $event)" @update:page-size="emit('changePageSize', $event)" />
       </template>
     </template>
   </section>
@@ -80,6 +75,5 @@ function canAdvance() {
 .invocation-table strong, .invocation-table small, .invocation-table span { display: block; }
 .invocation-table small { margin-top: 3px; color: #72858b; font-size: 11px; line-height: 1.45; }
 .invocation-table td:last-child { min-width: 280px; max-width: 460px; line-height: 1.5; overflow-wrap: anywhere; }
-.invocation-pagination { padding: 10px 16px; border-top: 1px solid #e9eef0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: #647980; font-size: 12px; }
-@media (max-width: 760px) { .card-heading { align-items: flex-start; flex-direction: column; } .card-heading-actions { width: 100%; justify-content: space-between; } .invocation-pagination { justify-content: space-between; } }
+@media (max-width: 760px) { .card-heading { align-items: flex-start; flex-direction: column; } .card-heading-actions { width: 100%; justify-content: space-between; } }
 </style>
