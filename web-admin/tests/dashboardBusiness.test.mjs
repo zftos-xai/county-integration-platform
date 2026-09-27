@@ -31,6 +31,16 @@ test('运行总览处理会话失效、局部失败和请求取消', async () =>
   assert.match(source, /dashboardController\?\.abort\(\)/)
 })
 
+test('运行总览的局部加载、空数据、错误和无权限状态共用页面状态组件', async () => {
+  const source = await readFile(dashboardPath, 'utf8')
+
+  assert.match(source, /import PageState from '@\/components\/PageState\.vue'/)
+  for (const kind of ['loading', 'empty', 'error', 'info']) {
+    assert.match(source, new RegExp(`<PageState[^>]*kind="${kind}"`), `首页缺少统一的 ${kind} 状态`)
+  }
+  assert.doesNotMatch(source, /class="empty-state"/)
+})
+
 test('运行总览的审计读取失败不显示成无管理操作', async () => {
   const source = await readFile(dashboardPath, 'utf8')
   const errorState = source.indexOf("v-else-if=\"failureLabels.includes('最近管理操作')\"")

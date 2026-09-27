@@ -3,6 +3,7 @@
 import { AlertCircle, BookOpen, CheckCircle2, ClipboardList, RefreshCw, Settings2 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import PageState from '@/components/PageState.vue'
 import { listManagementAuditEvents } from '@/api/system/audit'
 import type { ManagementAuditEvent } from '@/api/system/audit'
 import { listDictionaryTypes, listParameterDefinitions, listParameterValues } from '@/api/system/configuration'
@@ -159,17 +160,25 @@ onBeforeUnmount(() => {
     <div class="overview-work-grid">
       <section class="card overview-work-card dashboard-audit-card">
         <div class="card-header"><div><h2 class="card-title">最近管理操作</h2></div><div class="audit-card-actions"><RouterLink v-if="canReadAudit && recentFailureCount" class="work-quiet-button" to="/audit?resultCode=FAILURE">只看失败</RouterLink><RouterLink v-if="canReadAudit" class="work-quiet-button" to="/audit">查看全部</RouterLink></div></div>
-        <div v-if="isLoading && canReadAudit" class="empty-state"><RefreshCw class="spinning" :size="27" /><strong>正在读取审计记录</strong></div>
-        <div v-else-if="!canReadAudit" class="empty-state"><ClipboardList :size="27" /><strong>当前账号无审计读取权限</strong></div>
-        <div v-else-if="failureLabels.includes('最近管理操作')" class="empty-state"><AlertCircle :size="27" /><strong>最近管理操作暂时无法读取</strong></div>
-        <div v-else-if="recentAuditEvents.length === 0" class="empty-state"><CheckCircle2 :size="27" /><strong>当前范围内暂无管理操作</strong></div>
+        <PageState v-if="isLoading && canReadAudit" kind="loading" title="正在读取审计记录" compact />
+        <PageState v-else-if="!canReadAudit" kind="info" title="当前账号无审计读取权限" compact>
+          <template #icon><ClipboardList :size="27" /></template>
+        </PageState>
+        <PageState v-else-if="failureLabels.includes('最近管理操作')" kind="error" title="最近管理操作暂时无法读取" compact>
+          <template #icon><AlertCircle :size="27" /></template>
+        </PageState>
+        <PageState v-else-if="recentAuditEvents.length === 0" kind="empty" title="当前范围内暂无管理操作" compact>
+          <template #icon><CheckCircle2 :size="27" /></template>
+        </PageState>
         <ol v-else class="dashboard-audit-list"><li v-for="event in recentAuditEvents" :key="event.id"><span class="prototype-tag" :class="event.resultCode === 'SUCCESS' ? 'success' : 'danger'">{{ event.resultCode === 'SUCCESS' ? '成功' : '失败' }}</span><div class="dashboard-audit-main"><strong>{{ auditActionLabel(event.actionCode) }}</strong><p>{{ event.changeSummary }}</p></div><small class="dashboard-audit-meta">{{ auditTargetLabel(event.targetType) }} · {{ event.targetId }} · {{ event.actorLogin }} · {{ formatLocalDateTime(event.occurredAt) }}</small></li></ol>
       </section>
 
       <section class="card overview-work-card dashboard-shortcuts">
         <div class="card-header"><div><h2 class="card-title">基础配置</h2></div></div>
         <div v-if="canReadConfiguration" class="shortcut-grid"><RouterLink to="/parameters"><Settings2 :size="22" /><span><strong>参数配置</strong><small>{{ configuredParameterCount ?? '—' }} 个启用当前适用范围的值</small></span></RouterLink><RouterLink to="/dictionaries"><BookOpen :size="22" /><span><strong>数据字典</strong><small>{{ dictionaryTypeCount ?? '—' }} 个启用类型</small></span></RouterLink></div>
-        <div v-else class="empty-state"><Settings2 :size="27" /><strong>当前账号无配置读取权限</strong></div>
+        <PageState v-else kind="info" title="当前账号无配置读取权限" compact>
+          <template #icon><Settings2 :size="27" /></template>
+        </PageState>
       </section>
     </div>
   </section>
