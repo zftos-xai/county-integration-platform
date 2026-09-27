@@ -714,6 +714,8 @@
 .prototype-main.directory-page .prototype-breadcrumb { margin-bottom: 6px; padding: 0; }
 .prototype-main.directory-page .prototype-heading h1 { margin-bottom: 4px; font-size: 24px; }
 .prototype-main.directory-page .prototype-content { padding: 8px 20px 28px; }
+/* 综合目录列表的页脚在窄视口末端会出现不足1px的裁切，保留末端滚动余量。 */
+.prototype-main.directory-page { padding-bottom: 1px; }
 .prototype-main.dashboard-page-shell .prototype-topbar { min-height: 0; padding: 12px 28px 14px; }
 .prototype-main.dashboard-page-shell .prototype-breadcrumb { margin-bottom: 6px; }
 .prototype-main.dashboard-page-shell .prototype-heading h1 { margin-bottom: 4px; font-size: 24px; }
