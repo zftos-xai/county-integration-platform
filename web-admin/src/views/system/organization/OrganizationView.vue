@@ -53,7 +53,6 @@ const formError = ref('')
 const operationError = ref<ApiClientError | null>(null)
 const isSaving = ref(false)
 const isDetailLoading = ref(false)
-const confirmStatusId = ref<number | null>(null)
 const statusSavingId = ref<number | null>(null)
 const editorSnapshot = ref('')
 let listController: AbortController | null = null
@@ -281,13 +280,16 @@ async function reloadDetail() {
 }
 
 async function changeStatus(item: Organization) {
-  // 撤销仅停止后续使用，历史数据保留；影响数量放在按钮提示中，避免撑宽表格。
   if (!canWrite.value || statusSavingId.value !== null) return
-  if (confirmStatusId.value !== item.id) {
-    confirmStatusId.value = item.id
-    return
-  }
-  confirmStatusId.value = null
+  const confirmed = await confirm({
+    title: item.enabled ? '撤销机构？' : '恢复机构？',
+    message: item.enabled
+      ? `撤销“${item.organizationName}”前请确认影响：${childCountByOrganizationId.value.get(item.id) ?? 0} 个直接下级，${canReadUsers.value ? `${primaryUserCountByOrganizationId.value.get(item.id) ?? 0} 个关联用户` : '关联用户数无权查看'}；历史数据继续保留。`
+      : `确定恢复机构“${item.organizationName}”的使用状态吗？`,
+    confirmLabel: item.enabled ? '撤销机构' : '恢复使用',
+    danger: item.enabled,
+  })
+  if (!confirmed) return
   statusSavingId.value = item.id
   operationError.value = null
   try {
@@ -390,7 +392,7 @@ onBeforeUnmount(() => {
               <td>
                 <ListRowActions label="机构操作">
                 <button v-if="canWrite" class="icon-button" type="button" aria-label="修改机构" title="修改" @click="openOrganization(item, true)"><Pencil :size="15" /></button>
-                <button v-if="canWrite" class="status-action" :class="{ confirm: confirmStatusId === item.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === item.id && item.enabled ? `撤销前检查：${childCountByOrganizationId.get(item.id) ?? 0} 个直接下级，${canReadUsers ? `${primaryUserCountByOrganizationId.get(item.id) ?? 0} 个关联用户` : '关联用户数无权查看'}；历史数据继续保留` : ''" @blur="confirmStatusId = null" @click="changeStatus(item)">{{ statusSavingId === item.id ? '处理中…' : confirmStatusId === item.id ? item.enabled ? '确认撤销' : '确认恢复' : item.enabled ? '撤销机构' : '恢复使用' }}</button>
+                <button v-if="canWrite" class="status-action" type="button" :disabled="statusSavingId !== null" @click="changeStatus(item)">{{ statusSavingId === item.id ? '处理中…' : item.enabled ? '撤销机构' : '恢复使用' }}</button>
                 <button v-else class="icon-button" type="button" aria-label="查看机构详情" title="查看详情" @click="openOrganization(item)"><ChevronRight :size="16" /></button>
                 </ListRowActions>
               </td>
@@ -454,7 +456,6 @@ code { padding: 3px 6px; border-radius: 3px; background: #eef2f5; color: #3d5267
 .record-link small { color: #75818d; }
 .compact-time { color: #687580; line-height: 1.65; white-space: nowrap; }
 .status-action { min-height: 34px; padding: 0 10px; border: 1px solid #ccd5dd; background: white; color: #52606d; white-space: nowrap; }
-.status-action.confirm { border-color: #a54b34; background: #a54b34; color: white; }
 .feedback { min-height: 48px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .feedback > span { min-width: 0; display: grid; gap: 2px; }
 .feedback small { display: block; }

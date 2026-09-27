@@ -47,7 +47,6 @@ const selected = ref<Role | null>(null)
 const form = ref(emptyRoleForm())
 const permissionDraft = ref<string[]>([])
 const formError = ref('')
-const confirmStatusId = ref<number | null>(null)
 const statusSavingId = ref<number | null>(null)
 const deletingRoleId = ref<number | null>(null)
 const editorSnapshot = ref('')
@@ -264,11 +263,18 @@ async function savePermissions() {
 
 async function changeStatus(role: Role) {
   if (!canWrite.value || role.systemManaged || statusSavingId.value !== null) return
-  if (confirmStatusId.value !== role.id) {
-    confirmStatusId.value = role.id
-    return
-  }
-  confirmStatusId.value = null
+  const assignedUsers = userCountByRoleId.value.get(role.id) ?? 0
+  const confirmed = await confirm({
+    title: role.enabled ? '停用角色？' : '启用角色？',
+    message: role.enabled
+      ? canReadUsers.value
+        ? `停用角色“${role.roleName}”后会影响 ${assignedUsers} 名用户。`
+        : `停用角色“${role.roleName}”后会影响使用该角色的用户。`
+      : `确定启用角色“${role.roleName}”吗？`,
+    confirmLabel: role.enabled ? '停用角色' : '启用角色',
+    danger: role.enabled,
+  })
+  if (!confirmed) return
   statusSavingId.value = role.id
   error.value = null
   try {
@@ -361,7 +367,7 @@ onBeforeUnmount(() => {
             <td>{{ canReadUsers ? `${userCountByRoleId.get(role.id) ?? 0} 人` : '无权查看' }}</td>
             <td><span class="prototype-tag" :class="role.enabled ? 'success' : 'neutral'">{{ role.enabled ? '已启用' : '已停用' }}</span></td>
             <td>{{ formatTime(role.updatedAt) }}</td>
-            <td><ListRowActions label="角色操作"><button v-if="canWrite && !role.systemManaged" class="prototype-icon" type="button" aria-label="修改角色" title="修改" @click="openRole(role, true)"><Pencil :size="15" /></button><button v-if="canWrite && !role.systemManaged" class="status-action" :class="{ confirm: confirmStatusId === role.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === role.id && role.enabled ? canReadUsers ? `停用后将影响 ${userCountByRoleId.get(role.id) ?? 0} 名用户` : '停用后会影响使用该角色的用户' : ''" @blur="confirmStatusId = null" @click="changeStatus(role)">{{ statusSavingId === role.id ? '处理中…' : confirmStatusId === role.id ? role.enabled ? '确认停用' : '确认启用' : role.enabled ? '停用' : '启用' }}</button><button v-if="canWrite && !role.systemManaged" class="work-danger-button" type="button" :disabled="deletingRoleId !== null" :title="canReadUsers && (userCountByRoleId.get(role.id) ?? 0) > 0 ? '请先调整使用该角色的用户' : '删除角色'" @click="removeRole(role)"><Trash2 :size="13" />{{ deletingRoleId === role.id ? '删除中…' : '删除' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看角色详情" title="查看详情" @click="openRole(role)"><ChevronRight :size="16" /></button></ListRowActions></td>
+            <td><ListRowActions label="角色操作"><button v-if="canWrite && !role.systemManaged" class="prototype-icon" type="button" aria-label="修改角色" title="修改" @click="openRole(role, true)"><Pencil :size="15" /></button><button v-if="canWrite && !role.systemManaged" class="status-action" type="button" :disabled="statusSavingId !== null" @click="changeStatus(role)">{{ statusSavingId === role.id ? '处理中…' : role.enabled ? '停用' : '启用' }}</button><button v-if="canWrite && !role.systemManaged" class="work-danger-button" type="button" :disabled="deletingRoleId !== null" :title="canReadUsers && (userCountByRoleId.get(role.id) ?? 0) > 0 ? '请先调整使用该角色的用户' : '删除角色'" @click="removeRole(role)"><Trash2 :size="13" />{{ deletingRoleId === role.id ? '删除中…' : '删除' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看角色详情" title="查看详情" @click="openRole(role)"><ChevronRight :size="16" /></button></ListRowActions></td>
           </tr></tbody>
         </table>
       </AdminTableFrame>
@@ -379,7 +385,6 @@ onBeforeUnmount(() => {
 .role-table { min-width: 850px; }
 .role-table td small { display: block; margin-top: 3px; color: #7c8993; font-size: 10px; }
 .status-action { min-height: 32px; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 5px; background: white; color: #53636b; font-size: 11px; white-space: nowrap; }
-.status-action.confirm { border-color: #a94b42; background: #a94b42; color: white; }
 .feedback { min-height: 46px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .feedback > span { min-width: 0; display: grid; gap: 2px; }
 .feedback > button:last-child { margin-left: auto; }

@@ -59,7 +59,6 @@ const scopeDraft = ref<number[]>([])
 const formError = ref('')
 const isSaving = ref(false)
 const isDetailLoading = ref(false)
-const confirmStatusId = ref<number | null>(null)
 const isPasswordResetOpen = ref(false)
 const temporaryPassword = ref('')
 const statusSavingId = ref<number | null>(null)
@@ -374,13 +373,20 @@ async function submitPasswordReset() {
 }
 
 async function changeStatus(user: ManagedUser) {
-  // 注销本人（立即退出）仍由二次确认保护；按钮保持短文案，避免撑宽操作列。
   if (!canWrite.value || statusSavingId.value !== null) return
-  if (confirmStatusId.value !== user.id) {
-    confirmStatusId.value = user.id
-    return
-  }
-  confirmStatusId.value = null
+  const isDisabling = user.enabled
+  const isCurrentUser = user.id === authState.user?.userId
+  const confirmed = await confirm({
+    title: isDisabling ? '注销账号？' : '恢复账号？',
+    message: isDisabling
+      ? isCurrentUser
+        ? '注销当前账号后会立即退出登录。'
+        : '注销后该用户将不能登录，历史记录继续保留。'
+      : `确定恢复“${user.displayName}”的账号吗？`,
+    confirmLabel: isDisabling ? '注销账号' : '恢复使用',
+    danger: isDisabling,
+  })
+  if (!confirmed) return
   statusSavingId.value = user.id
   operationError.value = null
   try {
@@ -453,7 +459,7 @@ onBeforeUnmount(() => {
             <td><span class="user-cell-text" :class="{ 'attention-text': loginRequirement(user) !== '无需处理' }" :title="loginRequirement(user)">{{ loginRequirement(user) }}</span></td>
             <td><span class="prototype-tag" :class="user.enabled ? 'success' : 'neutral'">{{ user.enabled ? '正常使用' : '已注销' }}</span></td>
             <td>{{ formatTime(user.updatedAt) }}</td>
-            <td><ListRowActions label="用户操作"><button v-if="canWrite" class="prototype-icon" type="button" aria-label="修改用户" title="修改" @click="openUser(user, true)"><Pencil :size="15" /></button><button v-if="canWrite" class="status-action" :class="{ confirm: confirmStatusId === user.id }" type="button" :disabled="statusSavingId !== null" :title="confirmStatusId === user.id && user.enabled ? user.id === authState.user?.userId ? '注销后当前账号会立即退出登录' : '注销后该用户将不能登录，历史记录继续保留' : ''" @blur="confirmStatusId = null" @click="changeStatus(user)">{{ statusSavingId === user.id ? '处理中…' : confirmStatusId === user.id ? user.enabled ? '确认注销' : '确认恢复' : user.enabled ? '注销账号' : '恢复使用' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看用户详情" title="查看详情" @click="openUser(user)"><ChevronRight :size="16" /></button></ListRowActions></td>
+            <td><ListRowActions label="用户操作"><button v-if="canWrite" class="prototype-icon" type="button" aria-label="修改用户" title="修改" @click="openUser(user, true)"><Pencil :size="15" /></button><button v-if="canWrite" class="status-action" type="button" :disabled="statusSavingId !== null" @click="changeStatus(user)">{{ statusSavingId === user.id ? '处理中…' : user.enabled ? '注销账号' : '恢复使用' }}</button><button v-else class="prototype-icon" type="button" aria-label="查看用户详情" title="查看详情" @click="openUser(user)"><ChevronRight :size="16" /></button></ListRowActions></td>
           </tr></tbody>
         </table>
       </AdminTableFrame>
@@ -508,7 +514,6 @@ onBeforeUnmount(() => {
 .user-cell-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-table .attention-text { color: #a45437; }
 .status-action { min-height: 32px; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 5px; background: white; color: #53636b; font-size: 11px; white-space: nowrap; }
-.status-action.confirm { border-color: #a94b42; background: #a94b42; color: white; }
 .feedback { min-height: 46px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid; border-radius: 5px; display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .feedback > span { min-width: 0; display: grid; gap: 2px; }
 .feedback > button:last-child { margin-left: auto; }
