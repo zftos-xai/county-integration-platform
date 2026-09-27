@@ -25,3 +25,14 @@ test('DDL执行要求输入完整方案编号并明确事务失败自动回滚',
   assert.match(view, /创建人不能审批自己的方案/)
   assert.match(view, /只取消未执行方案，不删除历史/)
 })
+
+test('数据库结构维护页使用共享页面状态展示加载、错误和空状态', async () => {
+  const view = await readFile(viewPath, 'utf8')
+
+  assert.match(view, /import PageState from '@\/components\/PageState\.vue'/)
+  assert.match(view, /<PageState v-if="error && !inspection" kind="error"/)
+  assert.match(view, /<PageState v-else-if="loading && !inspection" kind="loading"/)
+  assert.match(view, /<PageState v-if="inspection\.issues\.length === 0" kind="info"/)
+  assert.match(view, /<PageState v-if="plans\.length === 0" kind="empty"/)
+  assert.doesNotMatch(view, /class="contract-state/)
+})
