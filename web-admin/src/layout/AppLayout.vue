@@ -8,9 +8,12 @@ import {
   ClipboardList,
   Clock3,
   Database,
+  EyeOff,
   FileOutput,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   ServerCog,
   Settings2,
   ShieldCheck,
@@ -39,6 +42,8 @@ type NavigationGroup = {
 const route = useRoute();
 const router = useRouter();
 const isSidebarCollapsed = ref(false);
+// 隐藏仅调整桌面框架；窄屏仍从菜单按钮打开侧栏抽屉。
+const isSidebarHidden = ref(false);
 const isMobileOpen = ref(false);
 const pageSection = computed(() => {
   const path = route.path;
@@ -180,8 +185,8 @@ function toggleNavigation() {
 </script>
 
 <template>
-  <div class="prototype-app real-app" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
-    <aside id="primary-navigation" class="prototype-sidebar" :class="{ open: isMobileOpen, collapsed: isSidebarCollapsed }">
+  <div class="prototype-app real-app" :class="{ 'sidebar-collapsed': isSidebarCollapsed, 'sidebar-hidden': isSidebarHidden }">
+    <aside id="primary-navigation" class="prototype-sidebar" :class="{ open: isMobileOpen, collapsed: isSidebarCollapsed, hidden: isSidebarHidden }">
       <div class="prototype-brand">
         <span class="prototype-logo"><Database :size="20" /></span>
         <span class="prototype-brand-copy"
@@ -246,15 +251,51 @@ function toggleNavigation() {
 
     <main class="prototype-main" :class="{ 'dashboard-page-shell': route.path === '/', 'directory-page': route.path.startsWith('/master-data/directory') }">
       <header class="prototype-topbar real-page-heading">
-        <button
-          class="prototype-icon prototype-menu"
-          aria-label="切换导航"
-          title="切换导航"
-          aria-controls="primary-navigation"
-          @click="toggleNavigation"
-        >
-          <Menu :size="20" />
-        </button>
+        <div class="prototype-navigation-controls">
+          <button
+            v-if="isSidebarHidden"
+            class="prototype-icon prototype-collapse-toggle"
+            aria-label="展开导航"
+            title="展开导航"
+            aria-expanded="false"
+            aria-controls="primary-navigation"
+            @click="isSidebarHidden = false; isSidebarCollapsed = false"
+          >
+            <PanelLeftOpen :size="20" />
+          </button>
+          <button
+            v-else
+            class="prototype-icon prototype-collapse-toggle"
+            :aria-label="isSidebarCollapsed ? '展开导航' : '折叠导航'"
+            :title="isSidebarCollapsed ? '展开导航' : '折叠导航'"
+            :aria-expanded="!isSidebarCollapsed"
+            aria-controls="primary-navigation"
+            @click="isSidebarCollapsed = !isSidebarCollapsed"
+          >
+            <PanelLeftOpen v-if="isSidebarCollapsed" :size="20" />
+            <PanelLeftClose v-else :size="20" />
+          </button>
+          <button
+            v-if="!isSidebarHidden"
+            class="prototype-icon prototype-hide-toggle"
+            aria-label="隐藏导航"
+            title="隐藏导航"
+            aria-expanded="true"
+            aria-controls="primary-navigation"
+            @click="isSidebarHidden = true"
+          >
+            <EyeOff :size="20" />
+          </button>
+          <button
+            class="prototype-icon prototype-menu"
+            aria-label="切换导航"
+            title="切换导航"
+            aria-controls="primary-navigation"
+            @click="toggleNavigation"
+          >
+            <Menu :size="20" />
+          </button>
+        </div>
         <div class="prototype-heading">
           <!-- 当前页面名称作为面包屑末项，页头与菜单保持同一行。 -->
           <nav class="prototype-breadcrumb" aria-label="页面层级">
