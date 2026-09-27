@@ -359,7 +359,7 @@
 .standard-list-filter--check input { width: 15px; height: 15px; accent-color: var(--accent); }
 .standard-list-toolbar__commands { grid-column: 1 / -1; grid-row: 2; min-width: 0; display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
 .standard-list-toolbar__commands > * { flex: 0 0 auto; }
-.standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: 0; white-space: nowrap; }
+.standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: auto; white-space: nowrap; }
 .standard-list-toolbar .prototype-search { justify-self: stretch; width: 100%; min-width: 0; max-width: none; }
 .standard-list-toolbar select { width: 100%; min-width: 0; height: 36px; max-width: none; padding: 0 9px; border: 1px solid #ccd7da; border-radius: 4px; outline-color: var(--accent); background: white; color: #455b63; font-size: 12px; }
 .standard-list-toolbar__filters--search-with-selects { grid-template-columns: minmax(240px, 1fr) repeat(2, minmax(170px, 220px)); }
@@ -370,7 +370,7 @@
 .standard-list-toolbar--search-with-selects > .standard-list-toolbar__filters > .standard-list-filter--type { grid-area: type; }
 .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands { grid-column: 1 / -1; grid-row: 2; }
 .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands { justify-content: flex-start; }
-.standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: 0; }
+.standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: auto; }
 .standard-list-toolbar--search-with-three-selects { grid-template-columns: minmax(0, 1fr); }
 .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__filters { grid-column: 1; grid-row: 1; display: grid; grid-template-areas: "search status type attention"; grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(160px, 220px)); }
 .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__filters > .standard-list-filter--search { grid-area: search; }
@@ -429,7 +429,7 @@
   .standard-list-toolbar--search-with-selects { grid-template-columns: minmax(0, 1fr); }
   .standard-list-toolbar--search-with-selects > .standard-list-toolbar__filters { grid-column: 1; grid-row: auto; grid-template-areas: "search" "status" "type"; grid-template-columns: minmax(0, 1fr); }
   .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands { grid-column: 1; grid-row: auto; width: 100%; }
-  .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: 0; }
+  .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: auto; }
   .standard-list-toolbar--search-with-three-selects { grid-template-columns: minmax(0, 1fr); }
   .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__filters { grid-column: 1; grid-row: auto; grid-template-areas: "search" "status" "type" "attention"; grid-template-columns: minmax(0, 1fr); }
   .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__commands { grid-column: 1; grid-row: auto; width: 100%; }
@@ -438,23 +438,23 @@
   .standard-list-toolbar--search-with-selects > .standard-list-toolbar__filters { width: 100%; grid-template-areas: "search search" "status type"; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: start; justify-items: stretch; }
   .standard-list-toolbar--search-with-selects > .standard-list-toolbar__filters > * { width: 100%; min-width: 0; justify-self: stretch; }
   .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands { width: 100%; justify-content: flex-start; }
-  .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: 0; }
+  .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: auto; }
 }
 @container (min-width: 561px) and (max-width: 760px) {
   .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__filters { width: 100%; grid-template-areas: "search search search" "status type attention"; grid-template-columns: repeat(3, minmax(0, 1fr)); justify-content: start; justify-items: stretch; }
   .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__filters > * { width: 100%; min-width: 0; justify-self: stretch; }
   .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__commands { width: 100%; justify-content: flex-start; }
-  .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: 0; }
+  .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: auto; }
 }
 @container (min-width: 761px) {
   .standard-list-toolbar--search-with-selects > .standard-list-toolbar__filters { width: 100%; grid-template-areas: "search status type"; grid-template-columns: minmax(240px, 1fr) minmax(170px, 215px) minmax(200px, 265px); justify-content: start; justify-items: stretch; }
   .standard-list-toolbar--search-with-selects > .standard-list-toolbar__filters > * { min-width: 0; justify-self: stretch; }
   .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
-  .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: 0; }
+  .standard-list-toolbar--search-with-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: auto; }
   .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__filters { width: 100%; grid-template-areas: "search status type attention"; grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(160px, 220px)); justify-content: start; justify-items: stretch; }
   .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__filters > * { min-width: 0; justify-self: stretch; }
   .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__commands { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
-  .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: 0; }
+  .standard-list-toolbar--search-with-three-selects > .standard-list-toolbar__commands > .standard-list-toolbar__refresh { margin-inline-start: auto; }
 }
 @container (min-width: 561px) and (max-width: 859px) {
   .standard-list-toolbar--search-with-four-selects > .standard-list-toolbar__filters { width: 100%; grid-template-areas: "search search" "status organization" "role attention"; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: start; justify-items: stretch; }

@@ -16,5 +16,5 @@ test('机构筛选在宽屏同行显示，在较窄视口按顺序换行', () =>
   assert.match(sharedToolbar, /\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__filters \{ grid-column: 1; grid-row: 1; display: grid; grid-template-areas: "search status type";/)
   assert.match(sharedToolbar, /@container \(min-width: 381px\) and \(max-width: 760px\)[\s\S]*?grid-template-areas: "search search" "status type";/)
   assert.match(sharedToolbar, /@container \(max-width: 560px\)[\s\S]*?grid-template-areas: "search" "status" "type";/)
-  assert.match(sharedToolbar, /\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ margin-inline-start: 0; \}/)
+  assert.match(sharedToolbar, /\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ margin-inline-start: auto; \}/)
 })
