@@ -723,6 +723,8 @@
 .prototype-main.dashboard-page-shell .prototype-content { padding-top: 16px; padding-bottom: 40.5px; }
 /* 审计列表短视口在文档最大滚动位置仍会裁掉不足半像素的Footer，末端保留1px滚动余量。 */
 .prototype-main:has(.audit-page) { padding-bottom: 1px; }
+/* 外部系统单行配置页在窄屏Footer边缘会留下亚像素尾差，保留末端余量。 */
+.prototype-main:has(.external-system-page) { padding-bottom: 1px; }
 /* 字典双列表在窄屏末端存在亚像素尾差，保留1px余量以完整显示应用页脚。 */
 .prototype-main:has(.dictionary-page) { padding-bottom: 1px; }
 /* 参数表格分页的亚像素高度会把页脚推过窄屏视口，末端同样保留1px余量。 */
