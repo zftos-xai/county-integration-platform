@@ -113,6 +113,7 @@ test('共享抽屉框架统一对话框语义、键盘焦点管理和固定操�
 
 test('共享居中对话框框架统一语义、键盘焦点管理和响应式固定操作区', async () => {
   const source = await readFile(modalFramePath, 'utf8')
+  const focusSource = await readFile(new URL('../src/composables/useModalDialog.ts', import.meta.url), 'utf8')
   const sharedStyles = await readFile(new URL('../src/assets/styles/prototype.css', import.meta.url), 'utf8')
 
   assert.match(source, /useModalDialog\(isOpen, \(\) => emit\('close'\)\)/)
@@ -123,6 +124,8 @@ test('共享居中对话框框架统一语义、键盘焦点管理和响应式�
   assert.match(source, /<slot name="footer" \/>/)
   assert.match(sharedStyles, /\.work-modal \{[^}]*max-height: var\(--work-modal-max-height/)
   assert.match(sharedStyles, /\.work-modal-footer \.prototype-button \{ flex: 1; \}/)
+  assert.match(focusSource, /getClientRects\(\)\.length > 0 && getComputedStyle\(control\)\.visibility !== 'hidden'/)
+  assert.doesNotMatch(focusSource, /control\.offsetParent/)
 })
 
 test('正式列表页统一使用受控共享分页组件', async () => {

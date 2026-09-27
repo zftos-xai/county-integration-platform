@@ -36,7 +36,7 @@ export function useModalDialog(isOpen: Ref<boolean>, requestClose: () => void) {
     }
     if (event.key !== 'Tab' || !dialogRef.value) return
     const controls = [...dialogRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
-      .filter(control => control.offsetParent !== null)
+      .filter(control => control.getClientRects().length > 0 && getComputedStyle(control).visibility !== 'hidden')
     if (!controls.length) {
       event.preventDefault()
       dialogRef.value.focus()
