@@ -71,7 +71,7 @@ function verifyHisDomainLayout(sourcePath, source) {
   }
 
   const packagePath = relative(hisRoot, join(sourcePath, ".."));
-  const allowed = /^client$|^exception$|^service(?:\/impl)?$|^domain\/(?:hospitaldirectory|medicaldirectory|icd10|organization)(?:\/(?:dto|model))?$|^domain\/(?:protocol|endpointverification)(?:\/model)?$/;
+  const allowed = /^client$|^exception$|^service(?:\/impl)?$|^domain\/(?:hospitaldirectory|medicaldirectory|icd10|organization|lis)(?:\/(?:dto|model))?$|^domain\/(?:protocol|endpointverification)(?:\/model)?$/;
   if (!allowed.test(packagePath)) {
     violations.push(`${relative(projectRoot, sourcePath)}: his 只能按SOAP适配层、协议或具体HIS交易模型归属`);
   }

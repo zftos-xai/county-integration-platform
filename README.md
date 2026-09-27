@@ -1,6 +1,6 @@
 # 县人民医院与基层卫生院中间接口平台
 
-本目录是工程建设规范对应的首版项目骨架。平台部署在县人民医院侧，保存获批的基层机构基础数据；县医院HIS厂商在平台数据库上建立受控视图，由县医院HIS使用只读账号读取这些基础数据。其他业务通过平台按`PHIS_Interface`等正式接口交互。当前只建立公共工程结构，不表示75项业务接口、平台库视图或基础数据同步已经完成联调。
+本目录包含本项目当前工程结构。平台部署在县人民医院侧，保存获批的基层机构基础数据；县医院HIS厂商在平台数据库上建立受控视图，由县医院HIS使用只读账号读取这些基础数据。其他业务通过平台按`PHIS_Interface`等正式接口交互。当前只建立公共工程结构，不表示75项业务接口、平台库视图或基础数据同步已经完成联调。
 
 平台以“基层基础数据进入平台库并由县医院 HIS 通过受控视图只读获取”和“其他业务通过正式接口交互”两条数据传递过程运行。完整关系、边界和实施范围统一见[总体方案](docs/plans/总体方案.md)。
 
@@ -20,7 +20,7 @@
 
 ```text
 .
-├─ backend/                                      Java 17 / Spring Boot 3.5 / MyBatis模块化单体
+├─ backend/                                      Java 17 / Spring Boot 3.5 / MyBatis后端，按业务职责划分模块并统一构建运行
 │  ├─ pom.xml                                    后端依赖、构建插件及Java版本约束
 │  ├─ checkstyle.xml                             Java静态规则和Javadoc强制检查
 │  └─ src/
@@ -47,7 +47,7 @@
 │     │  │     ├─ controller/                   交换HTTP入口
 │     │  │     ├─ domain/
 │     │  │     │  ├─ dto/                      交换查询DTO
-│     │  │     │  ├─ model/                    交换内部运行事实
+│     │  │     │  ├─ model/                    交换请求的内部处理记录
 │     │  │     │  └─ vo/                       交换查询输出VO
 │     │  │     ├─ mapper/                       仅存放交换MyBatis Mapper接口
 │     │  │     └─ service/                      交换服务接口
@@ -71,7 +71,7 @@
 │     ├─ api/                                    会话及各业务域API请求
 │     ├─ assets/                                 全局样式和静态资源
 │     ├─ components/                             跨页面公共组件
-│     ├─ layout/                                 登录后管理端应用外壳
+│     ├─ layout/                                 管理端登录后的整体页面布局
 │     ├─ router/                                 集中页面地址表
 │     ├─ store/modules/                          会话等跨页面状态
 │     ├─ utils/                                  请求和页面访问判定函数
@@ -96,7 +96,7 @@
 │  └─ samples/README.md                          正式已删除或遮盖敏感字段的样例存放规则
 ├─ deploy/                                       私有化部署配置
 │  ├─ Dockerfile.backend                         后端容器镜像定义
-│  ├─ docker-compose.yml                         连接外部SQL Server的后端编排
+│  ├─ docker-compose.yml                         连接外部SQL Server的后端容器配置
 │  ├─ .env.example                               非敏感环境变量示例
 │  └─ README.md                                  SQL Server 2012 SP4部署及验证说明
 ├─ docs/                                         总体方案、设计、规范、决策和接口资料
@@ -122,7 +122,7 @@ Java基础包统一为`cn.zqkj.platform`。包结构参考RuoYi-Vue的直观分�
 
 管理端同样参考 RuoYi-Vue 的直观职责分层，并按 Vue 3 与本项目实际范围裁剪；目录与注释要求见[前端编码与注释规范](docs/standards/frontend-coding-guidelines.md)。Vue 组件职责注释和 TypeScript 导出声明说明由 `node tools/verify-frontend-comments.mjs` 执行自动检查。
 
-当前已实现`common`、`framework`、`system`和`exchange`。患者标识、接口登记、对账、告警和审计功能待正式需求、接口规范和实际代码明确后再创建，不使用空包预占。管理端除运行总览的后台健康检查和双角色交互原型外，其他业务视图仍不代表真实接口已经接入。
+当前已实现`common`、`framework`、`system`和`exchange`。患者标识、接口登记、双方记录核对、告警和审计功能待正式需求、接口规范和实际代码明确后再创建，不使用空包预占。管理端除运行总览的后台健康检查和双角色交互原型外，其他业务视图仍不代表真实接口已经接入。
 
 ## 开始开发
 
@@ -143,13 +143,13 @@ chmod 600 deploy/.env.dev.local
 
 启动器只对当前开发进程追加 Java 17 兼容策略，并强制检查开发标识、`127.0.0.1:14330` 和 TLS 参数；生产环境会被拒绝。具体边界、IDEA 配置和退出条件见[开发环境临时 TLS 兼容方案](docs/plans/开发环境临时TLS兼容方案.md)。
 
-后台在Flyway完成后、进入可接收流量状态前执行数据库契约检查。检查器以版本化迁移脚本为结构依据，读取SQL Server真实元数据，核对SQL Server 2012主版本、数据库兼容级别110以及所有业务字段的类型、字符或二进制长度、数值精度、小数位、空值、自增和计算属性；同时核对全部MyBatis构造映射与Java记录组件。发现差异时启动失败，日志会输出稳定错误码、对象、期望值、实际值以及“数据库”或“Mapper/模型”的修改方向。`PLATFORM_DATABASE_CONTRACT_ENABLED`默认且正式环境必须为`true`；关闭后只能用于受控排障，不能作为结构兼容性验证证据。
+后台应用在Flyway完成数据库迁移后、开始接收请求前，会检查数据库实际结构是否与迁移脚本、MyBatis映射和Java数据模型一致。检查器读取SQL Server实际结构，核对SQL Server 2012主版本、数据库兼容级别110，以及业务字段的类型、字符或二进制长度、数值精度、小数位、是否允许空值、自增和计算属性。发现差异时应用启动失败；日志会列出错误码、对象、预期值、实际值，以及应修改数据库还是Mapper/模型。`PLATFORM_DATABASE_CONTRACT_ENABLED`默认开启，正式环境必须设为`true`；关闭后只能用于受控故障排查，不能作为数据库结构兼容性检查记录。
 
-DBA也可以在SSMS或`sqlcmd`中直接执行[`deploy/sqlserver/04-verify-database-contract.sql`](deploy/sqlserver/04-verify-database-contract.sql)，只读检查真实数据库与Flyway字段契约并以结果集列出修改方向。该脚本由`node tools/generate-database-contract-sql.mjs`生成；迁移变化后未重新生成会被`./tools/verify.sh`和CI拦截。SQL脚本无法读取应用包内的Mapper和Java模型，因此这部分仍由应用启动检查负责。
+DBA也可以在SSMS或`sqlcmd`中直接执行[`deploy/sqlserver/04-verify-database-contract.sql`](deploy/sqlserver/04-verify-database-contract.sql)，只读检查数据库结构与Flyway迁移脚本定义的字段，并在结果中列出修改方向。该脚本由`node tools/generate-database-contract-sql.mjs`生成；数据库迁移内容变化后未重新生成脚本，会被`./tools/verify.sh`和CI拦截。SQL脚本无法读取应用中的Mapper和Java模型，因此这部分仍由应用启动时检查。
 
-完成备份、审批和SQL Server 2012测试实例演练后，可执行[`deploy/sqlserver/05-repair-database-contract.sql`](deploy/sqlserver/05-repair-database-contract.sql)实际修复DDL。脚本会在同一事务内执行生成的`ALTER TABLE ... ALTER COLUMN`，支持字符或二进制字段长度及NULL属性修正；缩短字段和收紧`NOT NULL`前会检查存量数据，任一DDL失败则整批回滚。缺失或额外字段、类型、精度、`IDENTITY`、计算列等高风险差异不会自动处理，必须编写正式Flyway迁移。
+完成备份、审批并在SQL Server 2012测试实例演练后，可执行[`deploy/sqlserver/05-repair-database-contract.sql`](deploy/sqlserver/05-repair-database-contract.sql)修正数据库结构。脚本会在同一事务内执行生成的`ALTER TABLE ... ALTER COLUMN`，支持调整字符或二进制字段长度及是否允许空值；缩短字段和改为`NOT NULL`前会检查现有数据，任一DDL失败则整批回滚。缺少或多出字段、字段类型或精度不符、`IDENTITY`和计算列差异等高风险问题不会自动处理，必须编写正式Flyway迁移。
 
-实例已正常启动时，管理端“运行处理 / 数据库契约维护”提供独立的日常维护闭环：实时扫描 → 生成方案 → 非创建人审批 → 输入方案编号确认执行 → 同事务复验。页面执行的DDL只由服务端根据当前契约生成，目前仅允许扩大字符或二进制字段长度、将`NOT NULL`放宽为`NULL`；客户端不能提交任意SQL。方案在执行前可以取消且历史保留；DDL或复验失败会整体回滚并记为失败，成功后不会提供恢复旧错误结构的按钮，后续调整必须建立新的版本化迁移。使用该页面前必须先部署`V0700__database_contract_maintenance_main.sql`，并按职责分别授予`database-contract:read`、`database-contract:plan`、`database-contract:approve`和`database-contract:execute`权限。
+实例已正常启动时，管理端“运行与核查 / 数据库结构维护”可以按以下步骤处理允许安全修正的差异：重新检查数据库 → 生成方案 → 由非创建人审批 → 输入方案编号确认执行 → 在同一事务中再次检查。页面中的DDL由服务端根据数据库迁移脚本生成，目前仅允许扩大字符或二进制字段长度、将`NOT NULL`改为允许空值；客户端不能提交任意SQL。执行前可以取消方案，历史记录会保留；DDL执行或再次检查失败时，所有更改都会回滚并记录失败状态。成功后不能直接恢复旧结构，后续调整必须建立新的Flyway迁移。使用该页面前必须先部署`V0700__database_contract_maintenance_main.sql`，并按职责授予`database-contract:read`、`database-contract:plan`、`database-contract:approve`和`database-contract:execute`权限。
 
 SQL Server 2012 只能部署在受支持的 Windows Server 环境，不能使用本项目原有的 SQL Server Linux 容器。平台库可以与HIS库位于同一台服务器或同一实例，但必须使用独立数据库、读写账号、备份和维护计划；县医院HIS读取平台库视图使用独立只读账号。数据库实例、`county_integration` 数据库、兼容级别 110、TLS及备份恢复策略须由医院 DBA 按 [部署说明](deploy/README.md) 准备；Compose 只启动后台并连接外部数据库。
 

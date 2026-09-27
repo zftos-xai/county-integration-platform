@@ -392,7 +392,8 @@ VALUES
     (N'dbo', N'md_icd10_his_invocation', N'returned_count', N'bigint', NULL, NULL, NULL, 1, 0, 0),
     (N'dbo', N'md_icd10_his_invocation', N'duration_ms', N'bigint', NULL, NULL, NULL, 0, 0, 0),
     (N'dbo', N'md_icd10_his_invocation', N'requested_at', N'datetime2', NULL, NULL, 3, 0, 0, 0),
-    (N'dbo', N'md_icd10_his_invocation', N'completed_at', N'datetime2', NULL, NULL, 3, 0, 0, 0);
+    (N'dbo', N'md_icd10_his_invocation', N'completed_at', N'datetime2', NULL, NULL, 3, 0, 0, 0),
+    (N'dbo', N'sys_external_system', N'inbound_key_hash', N'nvarchar', 200, NULL, NULL, 1, 0, 0);
 
 DECLARE @violations TABLE (
     error_code nvarchar(32) NOT NULL,

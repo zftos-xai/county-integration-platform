@@ -38,6 +38,7 @@ const persistenceContracts = new Map([
   ['cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointCredential', ['sys_external_endpoint_credential', 'sys_external_endpoint']],
   ['cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointScope', ['sys_external_endpoint', 'sys_external_system', 'org_organization', 'sys_external_endpoint_credential']],
   ['cn.zqkj.platform.system.configuration.domain.model.ExternalSystem', ['sys_external_system']],
+  ['cn.zqkj.platform.system.configuration.domain.model.ExternalSystemInboundCredential', ['sys_external_system']],
   ['cn.zqkj.platform.system.identity.domain.model.ManagedUserSummary', ['sys_user', 'org_organization']],
   ['cn.zqkj.platform.system.identity.domain.model.UserRoleAssignment', ['sys_user_role']],
   ['cn.zqkj.platform.system.identity.domain.model.UserOrganizationAssignment', ['sys_user_organization_scope']],

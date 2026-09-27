@@ -1,0 +1,4 @@
+interface:
+  display_name: "Portable Web Acceptance"
+  short_description: "Trace Web requirements from page review through tests"
+  default_prompt: "Use $portable-web-acceptance to map this Web requirement to page checks, appropriate tests, evidence, and a bounded verdict."
