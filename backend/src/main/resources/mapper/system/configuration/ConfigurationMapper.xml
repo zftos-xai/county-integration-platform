@@ -84,12 +84,27 @@
             <arg column="description" javaType="java.lang.String"/>
             <!-- 外部系统是否允许被运行时解析 -->
             <arg column="is_enabled" javaType="_boolean"/>
+            <!-- 外部系统是否已配置县医院调用平台的入站Key -->
+            <arg column="inbound_key_configured" javaType="_boolean"/>
             <!-- 外部系统配置创建UTC时间 -->
             <arg column="created_at" javaType="java.time.LocalDateTime"/>
             <!-- 外部系统配置最后修改UTC时间 -->
             <arg column="updated_at" javaType="java.time.LocalDateTime"/>
             <!-- SQL Server并发版本 -->
             <arg column="row_version" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="externalSystemInboundCredential" type="cn.zqkj.platform.system.configuration.domain.model.ExternalSystemInboundCredential">
+        <constructor>
+            <!-- 稳定外部系统代码 -->
+            <arg column="system_code" javaType="java.lang.String"/>
+            <!-- 外部系统展示名称 -->
+            <arg column="system_name" javaType="java.lang.String"/>
+            <!-- 外部系统是否启用 -->
+            <arg column="is_enabled" javaType="_boolean"/>
+            <!-- 入站Key单向校验值 -->
+            <arg column="key_hash" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -409,14 +424,25 @@
 
     <select id="findExternalSystems" resultMap="externalSystem">
         <!-- 按稳定系统代码及内部主键排序读取全部外部系统配置 -->
-        SELECT id, system_code, system_name, description, is_enabled, created_at, updated_at, row_version
+        SELECT id, system_code, system_name, description, is_enabled,
+               CASE WHEN inbound_key_hash IS NULL THEN 0 ELSE 1 END AS inbound_key_configured,
+               created_at, updated_at, row_version
         FROM sys_external_system ORDER BY system_code, id
     </select>
 
     <select id="findExternalSystem" resultMap="externalSystem">
         <!-- 按外部系统内部主键精确读取 -->
-        SELECT id, system_code, system_name, description, is_enabled, created_at, updated_at, row_version
+        SELECT id, system_code, system_name, description, is_enabled,
+               CASE WHEN inbound_key_hash IS NULL THEN 0 ELSE 1 END AS inbound_key_configured,
+               created_at, updated_at, row_version
         FROM sys_external_system WHERE id = #{systemId}
+    </select>
+
+    <select id="findExternalSystemInboundCredential" resultMap="externalSystemInboundCredential">
+        <!-- 认证时只按稳定代码读取校验值；调用方不得通过管理端查询获得哈希正文 -->
+        SELECT system_code, system_name, is_enabled, inbound_key_hash AS key_hash
+        FROM sys_external_system
+        WHERE system_code = #{systemCode} AND inbound_key_hash IS NOT NULL
     </select>
 
     <select id="externalSystemCodeExists" resultType="boolean">
@@ -444,6 +470,13 @@
         SET system_name = #{command.systemName}, description = #{command.description},
             is_enabled = #{command.enabled}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
         WHERE id = #{systemId} AND row_version = #{command.expectedVersion}
+    </update>
+
+    <update id="rotateExternalSystemInboundKey">
+        <!-- 使用父系统rowversion串行化Key轮换；成功后数据库自动更新row_version -->
+        UPDATE sys_external_system
+        SET inbound_key_hash = #{keyHash}, updated_by = #{actor}, updated_at = SYSUTCDATETIME()
+        WHERE id = #{systemId} AND row_version = #{expectedVersion}
     </update>
 
     <select id="findExternalEndpoints" resultMap="externalEndpoint">

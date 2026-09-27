@@ -10,10 +10,12 @@ import java.time.LocalDateTime;
  * @param systemName 名称
  * @param description 用途
  * @param enabled 是否启用
+ * @param inboundKeyConfigured 是否已配置县医院调用平台的入站Key
  * @param createdAt 创建UTC时间
  * @param updatedAt 修改UTC时间
  * @param version Base64并发版本
  */
 public record ExternalSystemVO(long id, String systemCode, String systemName, String description, boolean enabled,
-                               LocalDateTime createdAt, LocalDateTime updatedAt, String version) {
+                               boolean inboundKeyConfigured, LocalDateTime createdAt, LocalDateTime updatedAt,
+                               String version) {
 }

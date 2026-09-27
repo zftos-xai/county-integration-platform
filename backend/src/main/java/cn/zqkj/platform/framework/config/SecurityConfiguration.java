@@ -20,6 +20,7 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.core.annotation.Order;
 
 /**
  * 配置平台本地管理身份的服务端会话、CSRF和默认拒绝边界。
@@ -37,6 +38,7 @@ public class SecurityConfiguration {
      * @throws Exception 安全过滤链无法构建时抛出
      */
     @Bean
+    @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http, ActiveAccountFilter accountFilter) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepository.setCookiePath("/");
@@ -101,4 +103,5 @@ public class SecurityConfiguration {
     ActiveAccountFilter activeAccountFilter(IdentityMapper repository) {
         return new ActiveAccountFilter(repository);
     }
+
 }

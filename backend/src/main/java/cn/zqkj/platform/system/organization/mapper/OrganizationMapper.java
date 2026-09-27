@@ -28,6 +28,14 @@ public interface OrganizationMapper {
     OrganizationVO findById(long id);
 
     /**
+     * 按平台稳定机构编码读取机构档案，供机器调用业务路由使用。
+     *
+     * @param organizationCode 平台机构代码
+     * @return 匹配机构；不存在时为空
+     */
+    OrganizationVO findByCode(String organizationCode);
+
+    /**
      * 按机构主键和获准范围读取档案；空范围不匹配任何机构。
      * @param id 机构主键
      * @param organizationCodes 获准访问的机构代码

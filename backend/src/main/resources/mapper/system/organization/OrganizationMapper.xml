@@ -69,6 +69,13 @@
         WHERE id = #{id}
     </select>
 
+    <select id="findByCode" resultMap="organizationView">
+        <!-- 集成调用按平台稳定机构代码路由；调用方身份认证不附带机构白名单。 -->
+        SELECT <include refid="organizationColumns"/>
+        FROM org_organization
+        WHERE organization_code = #{organizationCode}
+    </select>
+
     <select id="findVisibleById" resultMap="organizationView">
         <!-- 按主键和获准机构代码同时过滤；空集合拒绝全部行。 -->
         SELECT <include refid="organizationColumns"/>

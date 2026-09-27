@@ -16,6 +16,7 @@ import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpoint;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointCredential;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalEndpointScope;
 import cn.zqkj.platform.system.configuration.domain.model.ExternalSystem;
+import cn.zqkj.platform.system.configuration.domain.model.ExternalSystemInboundCredential;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterEnvironment;
 import cn.zqkj.platform.system.configuration.domain.model.ParameterValue;
 import java.util.List;
@@ -256,6 +257,16 @@ public interface ConfigurationMapper {
     Optional<ExternalSystem> findExternalSystem(long systemId);
 
     /**
+     * 通过稳定系统代码读取入站Key校验材料。
+     *
+     * @param systemCode 外部系统稳定代码
+     * @return 系统状态和单向Key校验值；未登记系统时为空
+     */
+    Optional<ExternalSystemInboundCredential> findExternalSystemInboundCredential(
+            @Param("systemCode") String systemCode
+    );
+
+    /**
      * 判断外部系统稳定代码是否已被占用。
      *
      * @param systemCode 稳定代码
@@ -283,6 +294,22 @@ public interface ConfigurationMapper {
     int updateExternalSystem(@Param("systemId") long systemId,
                              @Param("command") UpdateExternalSystemRequest command,
                              @Param("actor") String actor);
+
+    /**
+     * 按外部系统行版本原子替换入站Key校验值。
+     *
+     * @param systemId 外部系统主键
+     * @param expectedVersion 当前外部系统行版本
+     * @param keyHash 新入站Key的单向校验值
+     * @param actor 操作人
+     * @return 更新行数
+     */
+    int rotateExternalSystemInboundKey(
+            @Param("systemId") long systemId,
+            @Param("expectedVersion") byte[] expectedVersion,
+            @Param("keyHash") String keyHash,
+            @Param("actor") String actor
+    );
 
     /**
      * 查询稳定排序服务地址。

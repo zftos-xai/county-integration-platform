@@ -14,10 +14,29 @@ import java.time.LocalDateTime;
  * @param systemName 展示名称
  * @param description 用途说明
  * @param enabled 是否启用
+ * @param inboundKeyConfigured 是否已配置调用平台的入站Key
  * @param createdAt 创建UTC时间
  * @param updatedAt 修改UTC时间
  * @param version SQL Server并发版本
  */
 public record ExternalSystem(long id, String systemCode, String systemName, String description, boolean enabled,
-                             LocalDateTime createdAt, LocalDateTime updatedAt, byte[] version) {
+                             boolean inboundKeyConfigured, LocalDateTime createdAt, LocalDateTime updatedAt,
+                             byte[] version) {
+
+    /**
+     * 保持不含入站Key状态的既有内部调用兼容。
+     *
+     * @param id 主键
+     * @param systemCode 稳定系统代码
+     * @param systemName 系统名称
+     * @param description 用途说明
+     * @param enabled 是否启用
+     * @param createdAt 创建UTC时间
+     * @param updatedAt 修改UTC时间
+     * @param version SQL Server并发版本
+     */
+    public ExternalSystem(long id, String systemCode, String systemName, String description, boolean enabled,
+                          LocalDateTime createdAt, LocalDateTime updatedAt, byte[] version) {
+        this(id, systemCode, systemName, description, enabled, false, createdAt, updatedAt, version);
+    }
 }

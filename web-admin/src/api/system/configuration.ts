@@ -3,7 +3,7 @@ import { isRecord } from '@/utils/validation'
 import {
   configurationWriteRequest, dictionaryItemPath, dictionaryItemsPath, dictionaryTypePath,
   externalEndpointAuthenticationPath, externalEndpointPath, externalEndpointVerificationPath,
-  externalEndpointsPath, externalSystemPath,
+  externalEndpointsPath, externalSystemInboundKeyPath, externalSystemPath,
   parameterValuePath,
 } from './configurationApiPaths'
 
@@ -91,6 +91,7 @@ export type ExternalSystem = {
   systemName: string
   description: string
   enabled: boolean
+  inboundKeyConfigured: boolean
   createdAt: string
   updatedAt: string
   version: string
@@ -122,6 +123,12 @@ export type ExternalEndpoint = {
 export type CreateExternalSystemInput = Pick<ExternalSystem, 'systemCode' | 'systemName' | 'description'>
 /** 更新外部系统的请求。 */
 export type UpdateExternalSystemInput = Pick<ExternalSystem, 'systemName' | 'description' | 'enabled' | 'version'>
+/** 外部系统入站Key只在轮换响应中返回一次。 */
+export type ExternalSystemInboundKey = {
+  systemCode: string
+  key: string
+  system: ExternalSystem
+}
 /** 管理端写入的机构HIS接口认证信息。 */
 export type ExternalEndpointAuthenticationInput = {
   vendorCode: string
@@ -189,8 +196,15 @@ export function isExternalSystem(value: unknown): value is ExternalSystem {
   if (!isRecord(value)) return false
   return typeof value.id === 'number' && typeof value.systemCode === 'string'
     && typeof value.systemName === 'string' && typeof value.description === 'string'
-    && typeof value.enabled === 'boolean' && typeof value.createdAt === 'string'
+    && typeof value.enabled === 'boolean' && typeof value.inboundKeyConfigured === 'boolean'
+    && typeof value.createdAt === 'string'
     && typeof value.updatedAt === 'string' && typeof value.version === 'string'
+}
+
+/** 校验一次性外部系统Key及更新后的系统状态。 */
+export function isExternalSystemInboundKey(value: unknown): value is ExternalSystemInboundKey {
+  if (!isRecord(value)) return false
+  return typeof value.systemCode === 'string' && typeof value.key === 'string' && isExternalSystem(value.system)
 }
 
 /** Validates one organization-scoped external endpoint returned by the management API. */
@@ -295,6 +309,15 @@ export function createExternalSystem(input: CreateExternalSystemInput) {
 /** 使用并发版本更新外部系统。 */
 export function updateExternalSystem(id: number, input: UpdateExternalSystemInput) {
   return apiRequest<ExternalSystem>(externalSystemPath(id), configurationWriteRequest('PUT', input), isExternalSystem)
+}
+
+/** 轮换外部系统入站Key；明文只由本次响应返回，不保存到浏览器持久化存储。 */
+export function rotateExternalSystemInboundKey(id: number, version: string) {
+  return apiRequest<ExternalSystemInboundKey>(
+    externalSystemInboundKeyPath(id),
+    { ...configurationWriteRequest('POST', { version }), cache: 'no-store' },
+    isExternalSystemInboundKey,
+  )
 }
 
 /** 查询当前管理员可见的机构服务地址。 */

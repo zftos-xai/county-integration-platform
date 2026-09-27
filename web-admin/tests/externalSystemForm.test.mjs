@@ -97,8 +97,12 @@ test('机构接口字段都在主列表展示，不保留重复的展开详情',
 test('外部系统页按数据阶段收敛空状态操作', async () => {
   const source = await readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8')
   assert.match(source, /v-else-if="!error && systems\.length === 0" class="prototype-section first-system-empty"/)
-  assert.match(source, /<ListQueryToolbar v-if="endpointGroups\.length"/)
+  assert.match(source, /<ListQueryToolbar v-if="!endpointError && endpointGroups\.length"/)
+  assert.match(source, /<button v-if="canWrite && selectedSystem && endpointGroups\.length > 0" class="prototype-button"[^>]*>[^<]*<Plus[^>]*\/>新增机构接口配置/)
   assert.match(source, /v-else-if="selectedSystem && endpointGroups\.length === 0" class="endpoint-empty"/)
+  assert.match(source, /<PageState v-if="filteredEndpointGroups\.length === 0" kind="empty" title="没有符合当前筛选条件的机构接口配置" compact/)
+  assert.match(source, /<AdminTableFrame v-else label="外部系统端点配置矩阵"/)
+  assert.doesNotMatch(source, /filteredEndpointGroups\.length === 0" class="prototype-empty"/)
   assert.match(source, /登记第一个外部系统/)
 })
 
@@ -129,11 +133,14 @@ test('外部系统与机构接口配置抽屉使用完整字段和固定操作�
   assert.match(endpointDrawer, /<strong id="endpoint-address-title">填写 HIS 接口地址<\/strong>/)
   assert.match(endpointDrawer, /<span>厂商编号 <em>必填<\/em><\/span>/)
   assert.match(endpointDrawer, /<span>HIS 验证码 <em>必填<\/em><\/span>/)
+  assert.match(endpointDrawer, /\.authentication-status \{[^}]*white-space: nowrap; flex: none;/)
+  assert.match(endpointDrawer, /@media\(max-width:620px\)\{[\s\S]*?\.credential-summary\{display:grid;grid-template-columns:20px minmax\(0,1fr\);align-items:start\}[\s\S]*?\.credential-summary \.work-quiet-button\{grid-column:2;margin:0;justify-self:start\}/)
   assert.doesNotMatch(endpointDrawer, /凭证引用|env:\/\//)
   assert.doesNotMatch(endpointDrawer, /setup-guide|配置步骤|1选择机构2填写地址3填写接入信息/)
   assert.doesNotMatch(endpointDrawer, /id="endpoint-(environment|organization)"[^>]*disabled/)
   assert.match(endpointDrawer, /查看或修改/)
-  assert.match(endpointDrawer, /class="endpoint-footer"/)
+  assert.match(endpointDrawer, /<template #footer>[\s\S]*保存配置[\s\S]*<\/template>/)
+  assert.match(endpointDrawer, /import DrawerFrame from '@\/components\/DrawerFrame\.vue'/)
   assert.match(endpointDrawer, /<strong>保存后自动校验<\/strong>/)
   assert.doesNotMatch(endpointDrawer, /type="checkbox" role="switch"/)
   assert.doesNotMatch(endpointDrawer, /保存后的状态/)
@@ -142,6 +149,50 @@ test('外部系统与机构接口配置抽屉使用完整字段和固定操作�
   assert.doesNotMatch(endpointDrawer, /his_web_url|his_auth_code|PHIS_Interface|100-002|变量名|加密保存/)
   assert.doesNotMatch(endpointDrawer, /class="work-drawer-sub"/)
   assert.match(systemDrawer, /class="system-field" for="external-system-enabled"/)
-  assert.match(systemDrawer, /class="system-footer"/)
+  assert.match(systemDrawer, /<template #footer>[\s\S]*保存系统[\s\S]*<\/template>/)
+  assert.match(systemDrawer, /import DrawerFrame from '@\/components\/DrawerFrame\.vue'/)
   assert.doesNotMatch(systemDrawer, /本次操作/)
+})
+
+test('县医院入站Key与HIS出站凭证分开维护且明文仅在当前抽屉展示', async () => {
+  const [api, paths, systemPage, systemDrawer] = await Promise.all([
+    readFile('web-admin/src/api/system/configuration.ts', 'utf8'),
+    readFile('web-admin/src/api/system/configurationApiPaths.ts', 'utf8'),
+    readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8'),
+    readFile('web-admin/src/views/configuration/external-system/components/ExternalSystemEditorDrawer.vue', 'utf8'),
+  ])
+
+  assert.match(api, /inboundKeyConfigured: boolean/)
+  assert.match(api, /cache: 'no-store'/)
+  assert.match(api, /export function rotateExternalSystemInboundKey/)
+  assert.match(paths, /externalSystemInboundKeyPath/)
+  assert.match(systemPage, /const keyIsConfigured = system\.inboundKeyConfigured/)
+  assert.match(systemPage, /title: keyIsConfigured \? '轮换外部系统调用 Key？' : '生成外部系统调用 Key？'/)
+  assert.match(systemPage, /confirmLabel: keyIsConfigured \? '确认轮换' : '生成调用 Key'/)
+  assert.match(systemPage, /轮换后，当前 Key 将立即失效/)
+  assert.match(systemPage, /生成后县医院才能通过该 Key 识别平台调用方/)
+  assert.match(systemPage, /issuedInboundKey\.value = null/)
+  assert.match(systemDrawer, /县医院调用平台 Key/)
+  assert.match(systemDrawer, /机构接口的出站凭证相互独立/)
+  assert.match(systemDrawer, /:value="issuedInboundKey" readonly/)
+  assert.doesNotMatch(systemPage + systemDrawer, /localStorage|sessionStorage/)
+})
+
+test('外部系统筛选区使用共享搜索优先网格且移除重复滚动说明', async () => {
+  const [view, sharedStyles] = await Promise.all([
+    readFile('web-admin/src/views/configuration/external-system/ExternalSystemView.vue', 'utf8'),
+    readFile('web-admin/src/assets/styles/prototype.css', 'utf8'),
+  ])
+
+  assert.match(view, /class="standard-list-filter standard-list-filter--select"/)
+  assert.match(view, /class="standard-list-filter standard-list-filter--check"/)
+  assert.doesNotMatch(view, /\.connection-matrix :deep\(\.standard-list-toolbar__filters\)|\.status-filter|\.incomplete-filter/)
+  assert.match(view, /<AdminTableFrame[^>]*label="外部系统端点配置矩阵"/)
+  assert.doesNotMatch(view, /scroll-hint|hint-breakpoint|表格列较多，可左右滑动查看完整字段/)
+  assert.doesNotMatch(sharedStyles, /standard-table-hint|standard-table-frame--hint-/)
+  assert.match(sharedStyles, /\.standard-list-toolbar__commands \{ grid-column: 1 \/ -1; grid-row: 2;/)
+  assert.match(sharedStyles, /\.standard-list-toolbar__filters \{[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(240px, 100%\), 1fr\)\)/)
+  assert.match(sharedStyles, /\.standard-list-toolbar \.prototype-search \{ justify-self: stretch; width: 100%; min-width: 0; max-width: none; \}/)
+  assert.match(sharedStyles, /@container \(max-width: 560px\)[\s\S]*?\.standard-list-toolbar__filters \{ grid-template-columns: minmax\(0, 1fr\); \}/)
+  assert.match(sharedStyles, /\.standard-list-filter--check \{ min-width: 0; white-space: normal; \}/)
 })

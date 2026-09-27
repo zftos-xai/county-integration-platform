@@ -1,11 +1,11 @@
-<!-- 机构接口配置编辑抽屉：维护机构在指定环境使用的HIS接口参数。 -->
+<!-- 机构接口配置侧边编辑窗口：维护机构在指定环境使用的HIS接口参数。 -->
 <script setup lang="ts">
-import { AlertCircle, ChevronDown, Eye, EyeOff, ShieldCheck, X } from 'lucide-vue-next'
+import { AlertCircle, ChevronDown, Eye, EyeOff, ShieldCheck } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { getExternalEndpointAuthentication } from '@/api/system/configuration'
 import type { ExternalEndpoint, ExternalSystem } from '@/api/system/configuration'
 import { ApiClientError, isWriteResultUncertain } from '@/utils/request'
-import { useModalDialog } from '@/composables/useModalDialog'
+import DrawerFrame from '@/components/DrawerFrame.vue'
 import type { ExternalEndpointForm } from '../form'
 
 const props = defineProps<{
@@ -19,8 +19,6 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: []; submit: []; reload: [] }>()
 const form = defineModel<ExternalEndpointForm>('form', { required: true })
-const isOpen = ref(true)
-const { dialogRef, handleDialogKeydown } = useModalDialog(isOpen, () => emit('close'))
 const replaceAuthentication = ref(!props.existing?.credentialConfigured)
 const organizationChanged = computed(() => props.existing !== null
   && props.existing.organizationId !== form.value.organizationId)
@@ -39,7 +37,7 @@ function markAuthenticationChanged() {
   form.value.authenticationChanged = true
 }
 
-/** 按需读取已保存内容；敏感字段只保存在当前抽屉内存中。 */
+/** 按需读取已保存内容；敏感字段只保存在当前侧边窗口的内存中。 */
 async function revealAuthentication() {
   if (!props.existing || isAuthenticationLoading.value) return
   isAuthenticationLoading.value = true
@@ -75,10 +73,8 @@ watch(() => form.value.organizationId, (current, previous) => {
 </script>
 
 <template>
-  <div class="work-drawer-backdrop" @mousedown.self="emit('close')">
-    <section ref="dialogRef" class="work-drawer endpoint-drawer" role="dialog" aria-modal="true" aria-labelledby="endpoint-editor-title" tabindex="-1" @keydown="handleDialogKeydown">
-      <header class="work-drawer-header"><div><small>{{ system.systemName }}</small><h2 id="endpoint-editor-title">{{ existing ? '编辑机构接口配置' : '新增机构接口配置' }}</h2></div><button class="prototype-icon" type="button" aria-label="关闭" @click="emit('close')"><X :size="18" /></button></header>
-      <div class="work-drawer-body">
+  <DrawerFrame panel-class="endpoint-drawer" panel-width="min(680px, 100vw)" body-class="endpoint-body" body-padding="16px 18px 18px" labelled-by="endpoint-editor-title" @close="emit('close')">
+      <template #title><div><small>{{ system.systemName }}</small><h2 id="endpoint-editor-title">{{ existing ? '编辑机构接口配置' : '新增机构接口配置' }}</h2></div></template>
         <div v-if="error" class="feedback danger" role="alert"><AlertCircle :size="18" /><span><strong>{{ error.message }}</strong><small v-if="error.status === 409">接口配置已发生变化，请重新读取后再保存。</small><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button v-if="error.status === 409 || isWriteResultUncertain(error)" class="work-quiet-button" type="button" @click="emit('reload')">重新读取</button></div>
         <div v-if="formError" class="feedback danger" role="alert"><AlertCircle :size="18" />{{ formError }}</div>
         <form id="endpoint-form" class="endpoint-form" @submit.prevent="emit('submit')">
@@ -125,15 +121,13 @@ watch(() => form.value.organizationId, (current, previous) => {
           </details>
           <div v-if="system.systemCode === 'PRIMARY_HIS'" class="endpoint-ready-note wide"><ShieldCheck :size="17" /><span><strong>保存后自动校验</strong><small>系统将用 100-008 确认 HIS 返回的唯一机构；校验通过后才能用于数据同步。</small></span></div>
         </form>
-      </div>
-      <footer class="endpoint-footer"><button class="work-quiet-button" type="button" @click="emit('close')">取消</button><button v-if="canWrite" class="prototype-button" type="submit" form="endpoint-form" :disabled="isSaving">{{ isSaving ? '正在保存…' : '保存配置' }}</button></footer>
-    </section>
-  </div>
+      <template #footer><button class="work-quiet-button" type="button" @click="emit('close')">取消</button><button v-if="canWrite" class="prototype-button" type="submit" form="endpoint-form" :disabled="isSaving">{{ isSaving ? '正在保存…' : '保存配置' }}</button></template>
+  </DrawerFrame>
 </template>
 
 <style scoped>
 .endpoint-drawer { width: min(680px, 100vw); }
-.work-drawer-body { padding-top: 16px; }
+.endpoint-body { padding-top: 16px; }
 .form-step > header > i,.authentication-section > header > i { width: 19px; height: 19px; border-radius: 50%; background: #dceee8; color: #147467; display: inline-flex; align-items: center; justify-content: center; flex: none; font-size: 10px; font-style: normal; }
 .credential-boundary { margin: 0; padding: 10px 12px; border-bottom: 1px solid #e5eaec; background: #f3f8f6; color: #477066; display: flex; align-items: center; gap: 8px; font-size: 10px; line-height: 1.5; }
 .credential-boundary svg { flex: none; }
@@ -166,7 +160,7 @@ watch(() => form.value.organizationId, (current, previous) => {
 .authentication-section { overflow: hidden; border: 1px solid #d8e1e3; border-radius: 5px; background: #fbfcfc; }
 .authentication-section > header { min-height: 50px; padding: 10px 12px; border-bottom: 1px solid #e5eaec; }
 .authentication-section > header .authentication-status { margin-left: auto; }
-.authentication-status { padding: 3px 8px; border-radius: 999px; background: #f8eee8; color: #a1583e; font-size: 10px; font-weight: 650; }
+.authentication-status { padding: 3px 8px; border-radius: 999px; background: #f8eee8; color: #a1583e; font-size: 10px; font-weight: 650; white-space: nowrap; flex: none; }
 .authentication-status.configured { background: #e8f4ef; color: #14705b; }
 .authentication-grid { padding: 12px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 16px; }
 .login-settings { border-top: 1px solid #e5eaec; }
@@ -182,8 +176,12 @@ watch(() => form.value.organizationId, (current, previous) => {
 .number-input { position: relative; }
 .number-input input { padding-right: 48px; }
 .number-input em { position: absolute; top: 50%; right: 11px; color: #7b898f; font-size: 10px; font-style: normal; transform: translateY(-50%); pointer-events: none; }
-.endpoint-footer { min-height: 64px; padding: 11px 22px; border-top: 1px solid #e1e7e9; background: #fbfcfc; display: flex; justify-content: flex-end; align-items: center; gap: 9px; }
 .feedback { min-height: 44px; margin-bottom: 14px; padding: 9px 12px; border: 1px solid #e1c0b7; border-radius: 5px; background: #fbf1ee; color: #8d432e; display: flex; align-items: center; gap: 9px; font-size: 12px; }
 .feedback span { display: grid; gap: 3px; }
-@media(max-width:620px){.endpoint-form,.authentication-grid,.step-grid{grid-template-columns:1fr}.wide{grid-column:auto}.endpoint-footer{padding-inline:17px}.endpoint-footer .prototype-button{flex:1}}
+@media(max-width:620px){
+  .endpoint-form,.authentication-grid,.step-grid{grid-template-columns:1fr}
+  .wide{grid-column:auto}
+  .credential-summary{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:start}
+  .credential-summary .work-quiet-button{grid-column:2;margin:0;justify-self:start}
+}
 </style>

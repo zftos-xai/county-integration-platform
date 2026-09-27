@@ -19,6 +19,7 @@ import cn.zqkj.platform.system.configuration.domain.dto.DeleteParameterCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.ExternalEndpointAuthenticationCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalEndpointRequest;
+import cn.zqkj.platform.system.configuration.domain.dto.RotateExternalSystemInboundKeyRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpsertParameterCommand;
 import cn.zqkj.platform.system.configuration.domain.model.DictionaryItem;
 import cn.zqkj.platform.system.configuration.domain.model.DictionaryType;
@@ -45,6 +46,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,6 +67,53 @@ import static org.mockito.Mockito.when;
  * 验证平台注册参数、适用机构和系统字典管理边界。
  */
 class ConfigurationServiceTest {
+
+    /** 验证新Key只作为本次结果返回，数据库和管理审计只接收不可逆摘要。 */
+    @Test
+    void rotatesExternalSystemInboundKeyWithoutPersistingOrAuditingPlaintext() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        ManagementAuditService audit = mock(ManagementAuditService.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+        ExternalSystem current = new ExternalSystem(1L, "COUNTY_HOSPITAL", "县医院", "对接系统", true,
+                false, null, null, version());
+        ExternalSystem updated = new ExternalSystem(1L, "COUNTY_HOSPITAL", "县医院", "对接系统", true,
+                true, null, null, version());
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(current), Optional.of(updated));
+        when(encoder.encode(any())).thenReturn("$2a$10$only-the-hash-is-persisted");
+        when(mapper.rotateExternalSystemInboundKey(eq(1L), any(), any(), eq("admin"))).thenReturn(1);
+        ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
+                mock(OrganizationService.class), audit, mock(ExternalEndpointCredentialCipher.class),
+                mock(PhisEndpointVerificationService.class), transactions(), encoder);
+
+        var result = service.rotateExternalSystemInboundKey(1L,
+                new RotateExternalSystemInboundKeyRequest(version()), actor());
+
+        Assertions.assertEquals("COUNTY_HOSPITAL", result.systemCode());
+        Assertions.assertEquals(44, result.key().length());
+        Assertions.assertTrue(result.system().inboundKeyConfigured());
+        verify(encoder).encode(result.key());
+        verify(mapper).rotateExternalSystemInboundKey(eq(1L), any(),
+                eq("$2a$10$only-the-hash-is-persisted"), eq("admin"));
+        verify(audit).append(argThat(event -> "EXTERNAL_SYSTEM_INBOUND_KEY_ROTATED".equals(event.actionCode())
+                && !event.changeSummary().contains(result.key())));
+    }
+
+    /** 验证并发版本冲突时，新Key不会作为成功结果返回，也不会记成功审计。 */
+    @Test
+    void rejectsConcurrentExternalSystemInboundKeyRotation() {
+        ConfigurationMapper mapper = mock(ConfigurationMapper.class);
+        ManagementAuditService audit = mock(ManagementAuditService.class);
+        when(mapper.findExternalSystem(1L)).thenReturn(Optional.of(externalSystem(true)));
+        when(mapper.rotateExternalSystemInboundKey(eq(1L), any(), any(), eq("admin"))).thenReturn(0);
+        ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
+                mock(OrganizationService.class), audit, mock(ExternalEndpointCredentialCipher.class),
+                mock(PhisEndpointVerificationService.class), transactions(), mock(PasswordEncoder.class));
+
+        assertThrows(ResourceConflictException.class, () -> service.rotateExternalSystemInboundKey(1L,
+                new RotateExternalSystemInboundKeyRequest(version()), actor()));
+
+        Mockito.verifyNoInteractions(audit);
+    }
 
     /** HIS 在事务外调用，成功和失败结果均只能写回读取时的版本，冲突时回滚且不记成功审计。 */
     @Test
@@ -93,7 +142,7 @@ class ConfigurationServiceTest {
                     });
             ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                     mock(OrganizationService.class), audit, mock(ExternalEndpointCredentialCipher.class), verifier,
-                    new TransactionTemplate(manager));
+                    new TransactionTemplate(manager), mock(PasswordEncoder.class));
 
             assertThrows(ResourceConflictException.class, () -> service.verifyExternalEndpoint(9L, actor()));
 
@@ -417,7 +466,8 @@ class ConfigurationServiceTest {
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), mock(ManagementAuditService.class),
                 mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
-                mock(ExchangeRuntimeRecordService.class)), transactions());
+                mock(ExchangeRuntimeRecordService.class)), transactions(),
+                mock(PasswordEncoder.class));
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -459,7 +509,8 @@ class ConfigurationServiceTest {
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), auditService,
                 mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
-                mock(ExchangeRuntimeRecordService.class)), transactions());
+                mock(ExchangeRuntimeRecordService.class)), transactions(),
+                mock(PasswordEncoder.class));
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -502,7 +553,8 @@ class ConfigurationServiceTest {
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), mock(ManagementAuditService.class),
                 mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
-                mock(ExchangeRuntimeRecordService.class)), transactions());
+                mock(ExchangeRuntimeRecordService.class)), transactions(),
+                mock(PasswordEncoder.class));
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -543,7 +595,8 @@ class ConfigurationServiceTest {
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), mock(ManagementAuditService.class),
                 mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
-                mock(ExchangeRuntimeRecordService.class)), transactions());
+                mock(ExchangeRuntimeRecordService.class)), transactions(),
+                mock(PasswordEncoder.class));
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -584,7 +637,8 @@ class ConfigurationServiceTest {
         ConfigurationService service = new ConfigurationServiceImpl(mapper, mock(ParameterDefinitionRegistry.class),
                 mock(OrganizationService.class), mock(ManagementAuditService.class),
                 mock(ExternalEndpointCredentialCipher.class), new PhisEndpointVerificationServiceImpl(phisService,
-                mock(ExchangeRuntimeRecordService.class)), transactions());
+                mock(ExchangeRuntimeRecordService.class)), transactions(),
+                mock(PasswordEncoder.class));
 
         var result = service.verifyExternalEndpoint(9L, actor());
 
@@ -671,7 +725,8 @@ class ConfigurationServiceTest {
         ParameterDefinitionRegistry registry = mock(ParameterDefinitionRegistry.class);
         ConfigurationService service = new ConfigurationServiceImpl(
                 mapper, registry, mock(OrganizationService.class), auditService, cipher,
-                mock(PhisEndpointVerificationService.class), transactions()
+                mock(PhisEndpointVerificationService.class), transactions(),
+                mock(PasswordEncoder.class)
         );
 
         var result = service.findExternalEndpointAuthentication(9L, actor());
@@ -705,7 +760,8 @@ class ConfigurationServiceTest {
         definitions.forEach(definition -> when(registry.find(definition.key())).thenReturn(Optional.of(definition)));
         return new ConfigurationServiceImpl(mapper, registry, organizationService,
                 mock(ManagementAuditService.class), mock(ExternalEndpointCredentialCipher.class),
-                mock(PhisEndpointVerificationService.class), transactions());
+                mock(PhisEndpointVerificationService.class), transactions(),
+                mock(PasswordEncoder.class));
     }
 
     /**

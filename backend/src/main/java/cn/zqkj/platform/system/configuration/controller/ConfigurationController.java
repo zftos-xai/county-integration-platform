@@ -13,12 +13,14 @@ import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryItemComm
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalEndpointRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalSystemRequest;
+import cn.zqkj.platform.system.configuration.domain.dto.RotateExternalSystemInboundKeyRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpsertParameterCommand;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryItemVO;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryTypeVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointAuthenticationVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemInboundKeyVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterDefinitionVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterValueVO;
 import cn.zqkj.platform.system.configuration.service.ConfigurationService;
@@ -360,6 +362,28 @@ public class ConfigurationController {
             @AuthenticationPrincipal PlatformUserPrincipal principal
     ) {
         return ApiResponse.success(service.updateExternalSystem(systemId, request, principal.accessActor()));
+    }
+
+    /**
+     * 为外部系统生成新的县医院入站调用Key。
+     *
+     * <p>需要 {@code configuration:write} 功能权限。响应包含一次性明文，禁止缓存。</p>
+     *
+     * @param systemId 系统主键
+     * @param request 当前系统行版本
+     * @param principal 当前用户
+     * @return 一次性Key和更新后的安全系统状态
+     */
+    @PostMapping("/external-systems/{systemId}/inbound-key")
+    @PreAuthorize("hasAuthority('configuration:write')")
+    public ResponseEntity<ApiResponse<ExternalSystemInboundKeyVO>> rotateExternalSystemInboundKey(
+            @PathVariable @Positive long systemId,
+            @Valid @RequestBody RotateExternalSystemInboundKeyRequest request,
+            @AuthenticationPrincipal PlatformUserPrincipal principal
+    ) {
+        ExternalSystemInboundKeyVO result = service.rotateExternalSystemInboundKey(
+                systemId, request, principal.accessActor());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.success(result));
     }
 
     /**

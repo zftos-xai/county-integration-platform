@@ -8,15 +8,20 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   createExternalEndpoint, createExternalSystem, listExternalEndpoints, listExternalSystems,
-  updateExternalEndpoint, updateExternalSystem, verifyExternalEndpoint,
+  rotateExternalSystemInboundKey, updateExternalEndpoint, updateExternalSystem, verifyExternalEndpoint,
 } from '@/api/system/configuration'
 import type { ExternalEndpoint, ExternalSystem, ParameterEnvironment } from '@/api/system/configuration'
 import { listOrganizations } from '@/api/system/organization'
 import type { Organization } from '@/api/system/organization'
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import AdminPagination from '@/components/AdminPagination.vue'
+import AdminTableFrame from '@/components/AdminTableFrame.vue'
 import AuditAwareSuccess from '@/components/AuditAwareSuccess.vue'
 import ListQueryToolbar from '@/components/ListQueryToolbar.vue'
+import ListRowActions from '@/components/ListRowActions.vue'
+import PageState from '@/components/PageState.vue'
 import { useClientPagination } from '@/composables/useClientPagination'
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 import { authState, hasPermission } from '@/store/modules/auth'
 import { formatLocalDateTime } from '@/utils/managementDisplay'
 import { ApiClientError, asUncertainWriteError } from '@/utils/request'
@@ -37,6 +42,7 @@ const selectedSystem = ref<ExternalSystem | null>(null)
 const selectedEndpoint = ref<ExternalEndpoint | null>(null)
 const systemForm = ref<ExternalSystemForm>(emptyExternalSystemForm())
 const endpointForm = ref<ExternalEndpointForm>(emptyExternalEndpointForm(null))
+const { request: confirmationRequest, confirm, resolve: resolveConfirmation } = useConfirmationDialog()
 const systemEditorOpen = ref(false)
 const endpointEditorOpen = ref(false)
 const query = ref('')
@@ -49,7 +55,10 @@ const isLoading = ref(true)
 const isEndpointLoading = ref(false)
 const isRefreshing = ref(false)
 const isSaving = ref(false)
+const isRotatingInboundKey = ref(false)
+const issuedInboundKey = ref<string | null>(null)
 const error = ref<ApiClientError | null>(null)
+const endpointError = ref<ApiClientError | null>(null)
 const operationError = ref<ApiClientError | null>(null)
 const formError = ref('')
 const notice = ref('')
@@ -171,6 +180,7 @@ async function loadPage(background = false) {
   pageController?.abort(); const current = new AbortController(); pageController = current
   if (background) isRefreshing.value = true; else isLoading.value = true
   error.value = null
+  endpointError.value = null
   try {
     const [systemRows, organizationRows] = await Promise.all([
       listExternalSystems(current.signal),
@@ -197,13 +207,14 @@ async function loadEndpoints(system: ExternalSystem, parentSignal?: AbortSignal)
   const abortFromParent = () => current.abort()
   parentSignal?.addEventListener('abort', abortFromParent, { once: true })
   isEndpointLoading.value = true
+  endpointError.value = null
   try {
     const rows = await listExternalEndpoints(system.id, current.signal)
     if (!mounted || current.signal.aborted || selectedSystem.value?.id !== system.id) return
     endpoints.value = rows
   } catch (caught) {
     const apiError = asApiError(caught, '无法读取机构接口配置')
-    if (apiError.code !== 'REQUEST_ABORTED' && !await handleUnauthorized(apiError)) error.value = apiError
+    if (apiError.code !== 'REQUEST_ABORTED' && !await handleUnauthorized(apiError)) endpointError.value = apiError
   } finally {
     parentSignal?.removeEventListener('abort', abortFromParent)
     if (endpointController === current && mounted) isEndpointLoading.value = false
@@ -212,24 +223,26 @@ async function loadEndpoints(system: ExternalSystem, parentSignal?: AbortSignal)
 
 /** 选择系统并读取其机构接口配置。 */
 async function selectSystem(system: ExternalSystem) {
-  selectedSystem.value = system; endpoints.value = []; error.value = null
+  selectedSystem.value = system; endpoints.value = []; error.value = null; endpointError.value = null
   await loadEndpoints(system)
 }
 
-/** 打开新增系统抽屉。 */
+/** 打开新增系统的侧边编辑窗口。 */
 function openSystemCreate() {
+  issuedInboundKey.value = null
   systemForm.value = emptyExternalSystemForm(); operationError.value = null; formError.value = ''
   editorSnapshot.value = JSON.stringify(systemForm.value); systemEditorOpen.value = true
 }
 
-/** 打开系统编辑抽屉。 */
+/** 打开系统的侧边编辑窗口。 */
 function openSystemEdit(system: ExternalSystem) {
+  issuedInboundKey.value = null
   selectedSystem.value = system; systemForm.value = externalSystemToForm(system)
   operationError.value = null; formError.value = ''; editorSnapshot.value = JSON.stringify(systemForm.value)
   systemEditorOpen.value = true
 }
 
-/** 打开新增机构接口配置抽屉。 */
+/** 打开机构接口配置的侧边编辑窗口。 */
 function openEndpointCreate(organizationId?: number | null) {
   if (!selectedSystem.value) return
   endpointForm.value = emptyExternalEndpointForm(organizationId ?? endpointOrganizationOptions.value[0]?.id ?? null)
@@ -237,7 +250,7 @@ function openEndpointCreate(organizationId?: number | null) {
   editorSnapshot.value = endpointFormState(endpointForm.value); endpointEditorOpen.value = true
 }
 
-/** 打开机构接口配置编辑抽屉。 */
+/** 打开机构接口配置的侧边编辑窗口。 */
 function openEndpointEdit(endpoint: ExternalEndpoint) {
   endpointForm.value = externalEndpointToForm(endpoint); selectedEndpoint.value = endpoint
   operationError.value = null; formError.value = ''; editorSnapshot.value = endpointFormState(endpointForm.value)
@@ -252,17 +265,61 @@ function endpointFormState(form: ExternalEndpointForm) {
   })
 }
 
-/** 关闭系统抽屉，并保护尚未保存的编辑。 */
-function closeSystemEditor() {
-  if (isSaving.value) return
-  if (JSON.stringify(systemForm.value) !== editorSnapshot.value && !window.confirm('当前系统修改尚未保存，确定关闭吗？')) return
-  systemEditorOpen.value = false
+/** 关闭系统侧边编辑窗口，并保护尚未保存的编辑。 */
+async function closeSystemEditor() {
+  if (isSaving.value || isRotatingInboundKey.value) return
+  if (JSON.stringify(systemForm.value) !== editorSnapshot.value && !await confirm({
+    title: '放弃未保存的系统修改？',
+    message: '关闭后，本次修改的系统资料不会保存。',
+    confirmLabel: '放弃修改',
+    danger: true,
+  })) return
+  systemEditorOpen.value = false; issuedInboundKey.value = null
 }
 
-/** 关闭机构接口配置抽屉，并保护尚未保存的编辑。 */
-function closeEndpointEditor() {
+/** 轮换县医院调用Key，并仅在当前侧边窗口的内存中暂存一次明文。 */
+async function rotateInboundKey() {
+  const system = selectedSystem.value
+  if (!system || !canWrite.value || isSaving.value || isRotatingInboundKey.value) return
+  if (JSON.stringify(systemForm.value) !== editorSnapshot.value) {
+    formError.value = '请先保存系统资料，再轮换调用Key。'
+    return
+  }
+  const keyIsConfigured = system.inboundKeyConfigured
+  if (!await confirm({
+    title: keyIsConfigured ? '轮换外部系统调用 Key？' : '生成外部系统调用 Key？',
+    message: keyIsConfigured
+      ? '轮换后，当前 Key 将立即失效。请先确认县医院可以同步更新调用 Key。'
+      : '生成后县医院才能通过该 Key 识别平台调用方。请先确认县医院已准备好安全接收并配置此 Key。',
+    confirmLabel: keyIsConfigured ? '确认轮换' : '生成调用 Key',
+    danger: true,
+  })) return
+  isRotatingInboundKey.value = true; operationError.value = null; formError.value = ''
+  try {
+    const result = await rotateExternalSystemInboundKey(system.id, system.version)
+    const index = systems.value.findIndex(item => item.id === result.system.id)
+    if (index >= 0) systems.value[index] = result.system
+    selectedSystem.value = result.system
+    systemForm.value = externalSystemToForm(result.system)
+    editorSnapshot.value = JSON.stringify(systemForm.value)
+    issuedInboundKey.value = result.key
+    notice.value = `${result.system.systemName}的新调用Key已生成；旧Key已失效。请现在复制并安全提供给县医院。`
+    auditTarget.value = { targetType: 'EXTERNAL_SYSTEM', targetId: result.systemCode }
+  } catch (caught) {
+    const apiError = asUncertainWriteError(asApiError(caught, '无法确认调用Key是否已轮换'))
+    if (!await handleUnauthorized(apiError)) operationError.value = apiError
+  } finally { isRotatingInboundKey.value = false }
+}
+
+/** 关闭机构接口配置侧边窗口，并保护尚未保存的编辑。 */
+async function closeEndpointEditor() {
   if (isSaving.value) return
-  if (endpointFormState(endpointForm.value) !== editorSnapshot.value && !window.confirm('当前接口配置尚未保存，确定关闭吗？')) return
+  if (endpointFormState(endpointForm.value) !== editorSnapshot.value && !await confirm({
+    title: '放弃未保存的接口配置？',
+    message: '关闭后，本次修改的接口地址和接入资料不会保存。',
+    confirmLabel: '放弃修改',
+    danger: true,
+  })) return
   endpointEditorOpen.value = false; selectedEndpoint.value = null
   endpointForm.value = emptyExternalEndpointForm(null)
 }
@@ -391,8 +448,9 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 <template>
   <section class="content external-system-page">
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
-    <div v-if="error && !isLoading" class="feedback danger page-error" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}</span><button class="work-quiet-button" type="button" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
+    <div v-if="error && !isLoading && systems.length" class="feedback danger page-error" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}</span><button class="work-quiet-button" type="button" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
     <section v-if="isLoading" class="prototype-section first-load-state"><LoaderCircle class="spinning" :size="28" /><strong>正在加载外部系统</strong></section>
+    <section v-else-if="error && systems.length === 0" class="prototype-section first-system-empty"><PageState kind="error" title="暂时无法读取外部系统" :description="error.message"><template #icon><AlertCircle :size="28" /></template><template #actions><button class="work-quiet-button" type="button" @click="loadPage()"><RefreshCw :size="15" />重试</button></template></PageState></section>
     <section v-else-if="!error && systems.length === 0" class="prototype-section first-system-empty">
       <ServerCog :size="38" aria-hidden="true" />
       <h2>登记第一个外部系统</h2>
@@ -412,20 +470,28 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
         <div class="context-actions">
           <button v-if="canWrite && selectedSystem" class="work-quiet-button context-edit" type="button" @click="openSystemEdit(selectedSystem)"><Settings2 :size="15" />系统资料</button>
           <button v-if="canWrite" class="work-quiet-button" type="button" @click="openSystemCreate"><Plus :size="15" />新增系统</button>
-          <button v-if="canWrite && selectedSystem" class="prototype-button" type="button" :disabled="!selectedSystem.enabled" @click="openEndpointCreate()"><Plus :size="15" />新增机构接口配置</button>
+          <button v-if="canWrite && selectedSystem && endpointGroups.length > 0" class="prototype-button" type="button" :disabled="!selectedSystem.enabled || Boolean(endpointError)" :title="endpointError ? '读取接口配置失败，重试成功后再新增' : !selectedSystem.enabled ? '当前系统已停用' : ''" @click="openEndpointCreate()"><Plus :size="15" />新增机构接口配置</button>
         </div>
       </section>
 
-      <section class="prototype-section connection-matrix action-column-table">
-        <ListQueryToolbar v-if="endpointGroups.length" :refreshing="isRefreshing" @query="applyFilters" @reset="resetFilters" @refresh="loadPage(true)">
+      <section class="prototype-section connection-matrix">
+        <ListQueryToolbar v-if="!endpointError && endpointGroups.length" :refreshing="isRefreshing" @query="applyFilters" @reset="resetFilters" @refresh="loadPage(true)">
             <label class="prototype-search"><Search :size="16" /><input v-model="query" type="search" placeholder="搜索机构名称或编码" aria-label="搜索机构名称或编码" /></label>
-            <label class="status-filter"><span>同步状态</span><select v-model="endpointStatus"><option value="all">全部</option><option value="ready">有可用环境</option><option value="attention">无可用环境</option></select></label>
-            <label class="incomplete-filter"><input v-model="onlyIncomplete" type="checkbox" />仅看配置缺项</label>
+            <label class="standard-list-filter standard-list-filter--select"><span>同步状态</span><select v-model="endpointStatus"><option value="all">全部</option><option value="ready">有可用环境</option><option value="attention">无可用环境</option></select></label>
+            <label class="standard-list-filter standard-list-filter--check"><input v-model="onlyIncomplete" type="checkbox" />仅看配置缺项</label>
         </ListQueryToolbar>
 
-        <div v-if="isEndpointLoading" class="page-state"><LoaderCircle class="spinning" :size="28" /><strong>正在加载机构接口配置</strong></div>
+        <PageState v-if="isEndpointLoading" kind="loading" title="正在加载机构接口配置" />
+        <PageState v-else-if="endpointError" kind="error" title="暂时无法读取机构接口配置" :description="endpointError.message" compact>
+          <template #icon><AlertCircle :size="26" /></template>
+          <template #actions><button class="work-quiet-button" type="button" :disabled="!selectedSystem" @click="selectedSystem && loadEndpoints(selectedSystem)"><RefreshCw :size="15" />重试</button></template>
+        </PageState>
         <div v-else-if="selectedSystem && endpointGroups.length === 0" class="endpoint-empty"><ServerCog :size="32" aria-hidden="true" /><h2>还没有可展示的机构</h2><p>当前没有可见的机构或接口配置；请检查机构数据范围，或先为 {{ selectedSystem.systemName }} 添加接口配置。</p><button v-if="canWrite && selectedSystem.enabled" class="prototype-button" type="button" @click="openEndpointCreate()"><Plus :size="15" />新增机构接口配置</button></div>
-        <div v-else class="prototype-table-wrap matrix-table-wrap">
+        <div v-else class="matrix-table-area">
+        <PageState v-if="filteredEndpointGroups.length === 0" kind="empty" title="没有符合当前筛选条件的机构接口配置" compact>
+          <template #icon><ServerCog :size="26" /></template>
+        </PageState>
+        <AdminTableFrame v-else label="外部系统端点配置矩阵" has-actions>
         <table class="work-table matrix-table">
           <colgroup><col class="org-column" /><col class="org-code-column" /><col class="state-column" /><col class="url-column" /><col class="state-column" /><col class="url-column" /><col class="credential-column" /><col class="source-column" /><col class="updated-column" /><col class="action-column" /></colgroup>
           <thead><tr><th>机构</th><th>机构编码</th><th>生产状态</th><th>生产接口地址</th><th>测试状态</th><th>测试接口地址</th><th>接入信息</th><th>数据来源</th><th>最后更新</th><th>操作</th></tr></thead>
@@ -440,17 +506,18 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
                 <td><span class="credential-status" :class="{ missing: !primaryEndpoint(group)?.credentialConfigured }"><KeyRound :size="14" />{{ primaryEndpoint(group)?.credentialConfigured ? '已配置' : '未配置' }}</span></td>
                 <td><span class="single-line" :title="primaryEndpoint(group)?.sourceOrganizationName ?? '—'">{{ primaryEndpoint(group)?.sourceOrganizationName ?? '—' }}</span></td>
                 <td><span class="single-line" :title="group.latestEndpoint ? formatLocalDateTime(group.latestEndpoint.updatedAt) : '—'">{{ group.latestEndpoint ? formatLocalDateTime(group.latestEndpoint.updatedAt) : '—' }}</span></td>
-                <td><div class="table-actions"><button v-if="canWrite && primaryEndpoint(group)" class="table-action" type="button" @click="openGroupEndpointEdit(group)"><Pencil :size="13" />编辑</button><button v-else-if="canWrite && group.organizationId && selectedSystem?.enabled" class="table-action" type="button" @click="openEndpointCreate(group.organizationId)"><Plus :size="13" />新增配置</button><button v-if="canReadExchange && selectedSystem?.systemCode === 'PRIMARY_HIS' && primaryEndpoint(group)" class="table-action" type="button" @click="openEndpointExchangeRecords(group)"><ClipboardList :size="13" />调用记录</button></div></td>
+                <td><ListRowActions label="端点配置操作"><button v-if="canWrite && primaryEndpoint(group)" class="table-action" type="button" @click="openGroupEndpointEdit(group)"><Pencil :size="13" />编辑</button><button v-else-if="canWrite && group.organizationId && selectedSystem?.enabled" class="table-action" type="button" @click="openEndpointCreate(group.organizationId)"><Plus :size="13" />新增配置</button><button v-if="canReadExchange && selectedSystem?.systemCode === 'PRIMARY_HIS' && primaryEndpoint(group)" class="table-action" type="button" @click="openEndpointExchangeRecords(group)"><ClipboardList :size="13" />调用记录</button></ListRowActions></td>
               </tr>
           </tbody>
         </table>
-        <div v-if="filteredEndpointGroups.length === 0" class="prototype-empty">没有符合当前条件的机构接口配置</div>
+        </AdminTableFrame>
         </div>
-        <AdminPagination v-if="endpointGroups.length" :total="filteredEndpointGroups.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
+        <AdminPagination v-if="!endpointError && filteredEndpointGroups.length" :total="filteredEndpointGroups.length" :page="page" :page-size="pageSize" @update:page="page = $event" @update:page-size="pageSize = $event" />
       </section>
     </template>
-    <ExternalSystemEditorDrawer v-if="systemEditorOpen" v-model:form="systemForm" :creating="!systemForm.version" :can-write="canWrite" :is-saving="isSaving" :error="operationError" :form-error="formError" @close="closeSystemEditor" @submit="submitSystem" @reload="reloadSystemEditor" />
+    <ExternalSystemEditorDrawer v-if="systemEditorOpen" v-model:form="systemForm" :creating="!systemForm.version" :can-write="canWrite" :inbound-key-configured="selectedSystem?.inboundKeyConfigured ?? false" :issued-inbound-key="issuedInboundKey" :is-rotating-inbound-key="isRotatingInboundKey" :is-saving="isSaving" :error="operationError" :form-error="formError" @close="closeSystemEditor" @submit="submitSystem" @reload="reloadSystemEditor" @rotate-inbound-key="rotateInboundKey" />
     <ExternalEndpointEditorDrawer v-if="endpointEditorOpen && selectedSystem" v-model:form="endpointForm" :system="selectedSystem" :existing="selectedEndpoint" :organizations="endpointOrganizationOptions" :can-write="canWrite" :is-saving="isSaving" :error="operationError" :form-error="formError" @close="closeEndpointEditor" @submit="submitEndpoint" @reload="reloadEndpointEditor" />
+    <ConfirmationDialog v-if="confirmationRequest" :request="confirmationRequest" @confirm="resolveConfirmation(true)" @cancel="resolveConfirmation(false)" />
   </section>
 </template>
 
@@ -461,7 +528,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .first-system-empty h2,.endpoint-empty h2 { margin: 2px 0 0; color: #20333e; font-size: 20px; line-height: 1.35; }
 .first-system-empty p,.endpoint-empty p { max-width: 540px; margin: 0 0 10px; color: #6c7d86; font-size: 13px; line-height: 1.75; }
 .endpoint-empty { min-height: 360px; }
-.system-context { min-height: 82px; padding: 16px 18px; border: 1px solid #dce4e6; border-radius: 6px; background: #fff; display: grid; grid-template-columns: auto minmax(280px, 440px) auto minmax(0, 1fr); align-items: center; gap: 14px; box-shadow: 0 1px 2px #18243308; }
+.system-context { min-height: 82px; padding: 16px 18px; border: 1px solid #dce4e6; border-radius: 6px; background: #fff; display: grid; grid-template-columns: max-content minmax(240px, 440px) max-content max-content; align-items: center; justify-content: space-between; gap: 14px; box-shadow: 0 1px 2px #18243308; }
 .system-context > strong { color: #263a43; font-size: 13px; white-space: nowrap; }
 .system-selector { min-height: 42px; padding: 0 12px; border: 1px solid #cdd9dd; border-radius: 5px; display: flex; align-items: center; gap: 9px; color: #147467; }
 .system-selector select { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #20333e; font-size: 14px; font-weight: 650; }
@@ -469,12 +536,8 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .system-state.disabled { color: #77858c; }
 .context-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .context-edit { border-color: #7dafaa; color: #176f63; }
-.connection-matrix { min-height: 520px; }
-.status-filter { display: inline-flex; align-items: center; gap: 8px; color: #4b6069; font-size: 12px; white-space: nowrap; }
-.status-filter select { min-height: 36px; padding: 0 32px 0 11px; border: 1px solid #ced8dc; border-radius: 4px; background: white; color: #455b65; }
-.incomplete-filter { display: inline-flex; align-items: center; gap: 7px; color: #4b6069; font-size: 12px; white-space: nowrap; }
-.incomplete-filter input { width: 15px; height: 15px; accent-color: #147467; }
-.matrix-table-wrap { overflow-x: auto; }
+.connection-matrix { min-height: 0; }
+.matrix-table-area { min-width: 0; container-type: inline-size; }
 .matrix-table { min-width: 1830px; table-layout: fixed; }
 .matrix-table .org-column { width: 210px; }.matrix-table .org-code-column { width: 255px; }.matrix-table .state-column { width: 110px; }.matrix-table .url-column { width: 260px; }.matrix-table .credential-column { width: 105px; }.matrix-table .source-column { width: 230px; }.matrix-table .updated-column { width: 150px; }.matrix-table .action-column { width: 140px; }
 .matrix-table th,.matrix-table td { overflow: hidden; }
@@ -486,13 +549,11 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .endpoint-url { color: #70828b; font-size: 11px; }
 .credential-status { display: inline-flex; align-items: center; gap: 6px; color: #17765e; font-weight: 650; }
 .credential-status.missing { color: #bb613e; }
-.table-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }.table-action { padding: 4px 0; border: 0; background: transparent; color: #147467; display: inline-flex; align-items: center; gap: 5px; font-weight: 650; white-space: nowrap; }
+.table-action { padding: 4px 0; border: 0; background: transparent; color: #147467; display: inline-flex; align-items: center; gap: 5px; font-weight: 650; white-space: nowrap; }
 .single-line { min-width: 0; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.page-state { min-height: 390px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; color: #33745c; text-align: center; }
-.page-state span { max-width: 420px; color: #75828c; font-size: 11px; line-height: 1.6; }
 .feedback.page-error { margin-bottom: 0; }
 .spinning { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media(max-width:1100px){.system-context{grid-template-columns:minmax(260px,1fr) auto}.system-context>strong,.system-state{display:none}.context-actions{grid-column:auto;justify-content:flex-end}}
+@media(max-width:1100px){.system-context{grid-template-columns:minmax(0,1fr)}.system-context>strong,.system-state{display:none}.context-actions{grid-column:1;justify-content:flex-start;flex-wrap:wrap}}
 @media(max-width:700px){.first-system-empty,.endpoint-empty{min-height:300px;padding:42px 20px}.system-context{grid-template-columns:1fr}.context-actions{grid-column:auto;align-items:stretch;flex-direction:column}}
 </style>

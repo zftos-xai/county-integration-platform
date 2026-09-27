@@ -4,6 +4,7 @@ import cn.zqkj.platform.common.exception.InvalidRequestException;
 import cn.zqkj.platform.common.exception.ResourceConflictException;
 import cn.zqkj.platform.common.exception.ResourceNotFoundException;
 import cn.zqkj.platform.common.utils.Func;
+import cn.zqkj.platform.common.utils.Func;
 import cn.zqkj.platform.his.domain.endpointverification.model.PhisEndpointVerificationResult;
 import cn.zqkj.platform.his.exception.PhisCommunicationException;
 import cn.zqkj.platform.his.exception.PhisConfigurationException;
@@ -17,6 +18,7 @@ import cn.zqkj.platform.system.configuration.domain.dto.CreateExternalEndpointRe
 import cn.zqkj.platform.system.configuration.domain.dto.CreateExternalSystemRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.DeleteParameterCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.ExternalEndpointAuthenticationCommand;
+import cn.zqkj.platform.system.configuration.domain.dto.RotateExternalSystemInboundKeyRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryItemCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalEndpointRequest;
@@ -36,6 +38,7 @@ import cn.zqkj.platform.system.configuration.domain.vo.DictionaryItemVO;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryTypeVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointAuthenticationVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemInboundKeyVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterDefinitionVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterValueVO;
@@ -46,12 +49,14 @@ import cn.zqkj.platform.system.identity.domain.model.AccessActor;
 import cn.zqkj.platform.system.organization.domain.vo.OrganizationVO;
 import cn.zqkj.platform.system.organization.service.OrganizationService;
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -63,6 +68,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ConfigurationServiceImpl implements ConfigurationService {
 
     private static final String MASKED_VALUE = "******";
+    private static final SecureRandom KEY_RANDOM = new SecureRandom();
 
     private final ConfigurationMapper mapper;
     private final ParameterDefinitionRegistry registry;
@@ -71,6 +77,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     private final ExternalEndpointCredentialCipher credentialCipher;
     private final PhisEndpointVerificationService phisEndpointVerificationService;
     private final TransactionTemplate transactions;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * 创建平台配置服务。
@@ -82,6 +89,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
      * @param credentialCipher 机构接口认证信息加密器
      * @param phisEndpointVerificationService 基层HIS端点自动校验服务
      * @param transactions 保存校验结果与审计的短事务
+     * @param passwordEncoder 外部系统入站Key单向校验编码器
      */
     public ConfigurationServiceImpl(
             ConfigurationMapper mapper,
@@ -90,7 +98,8 @@ public class ConfigurationServiceImpl implements ConfigurationService {
             ManagementAuditService auditService,
             ExternalEndpointCredentialCipher credentialCipher,
             PhisEndpointVerificationService phisEndpointVerificationService,
-            TransactionTemplate transactions
+            TransactionTemplate transactions,
+            PasswordEncoder passwordEncoder
     ) {
         this.mapper = mapper;
         this.registry = registry;
@@ -99,6 +108,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         this.credentialCipher = credentialCipher;
         this.phisEndpointVerificationService = phisEndpointVerificationService;
         this.transactions = transactions;
+        this.passwordEncoder = passwordEncoder;
     }
 
 
@@ -362,6 +372,45 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return result;
     }
 
+    /**
+     * 生成并轮换外部系统入站Key，明文仅作为本次受控响应返回。
+     *
+     * @param systemId 外部系统主键
+     * @param command 当前外部系统行版本
+     * @param actor 执行轮换的平台用户
+     * @return 新Key的一次性明文及更新后的外部系统状态
+     */
+    @Transactional
+    @Override
+    public ExternalSystemInboundKeyVO rotateExternalSystemInboundKey(
+            long systemId,
+            RotateExternalSystemInboundKeyRequest command,
+            AccessActor actor
+    ) {
+        ExternalSystem current = requireExternalSystem(systemId);
+        String rawKey = generateExternalSystemInboundKey();
+        String keyHash = passwordEncoder.encode(rawKey);
+        if (mapper.rotateExternalSystemInboundKey(systemId, command.expectedVersion(), keyHash,
+                actor.loginName()) != 1) {
+            throw new ResourceConflictException("外部系统资料已被他人修改，请刷新后重试");
+        }
+        ExternalSystemVO updated = toExternalSystemVO(requireExternalSystem(systemId));
+        audit(actor, null, null, "EXTERNAL_SYSTEM_INBOUND_KEY_ROTATED", "EXTERNAL_SYSTEM", current.systemCode(),
+                "已轮换县医院入站调用Key；明文仅返回本次，未写入审计记录");
+        return new ExternalSystemInboundKeyVO(current.systemCode(), rawKey, updated);
+    }
+
+    /**
+     * 生成不可预测且适合HTTP头传输的外部系统Key。
+     *
+     * @return 256位随机材料的Base64URL编码
+     */
+    private String generateExternalSystemInboundKey() {
+        byte[] keyMaterial = new byte[32];
+        KEY_RANDOM.nextBytes(keyMaterial);
+        return Func.encodeBase64(keyMaterial);
+    }
+
     /** 读取系统的全局端点和获准机构端点，不返回认证正文。 */
     @Transactional(readOnly = true)
     @Override
@@ -583,7 +632,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
      */
     private ExternalSystemVO toExternalSystemVO(ExternalSystem system) {
         return new ExternalSystemVO(system.id(), system.systemCode(), system.systemName(), system.description(),
-                system.enabled(), system.createdAt(), system.updatedAt(),
+                system.enabled(), system.inboundKeyConfigured(), system.createdAt(), system.updatedAt(),
                 Func.encodeBase64(system.version()));
     }
 

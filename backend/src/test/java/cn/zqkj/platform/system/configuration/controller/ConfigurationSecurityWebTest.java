@@ -2,23 +2,30 @@ package cn.zqkj.platform.system.configuration.controller;
 
 import cn.zqkj.platform.common.exception.GlobalExceptionHandler;
 import cn.zqkj.platform.framework.config.SecurityConfiguration;
+import cn.zqkj.platform.framework.config.IntegrationSecurityConfiguration;
 import cn.zqkj.platform.framework.security.PlatformUserPrincipal;
 import cn.zqkj.platform.system.configuration.service.ConfigurationService;
+import cn.zqkj.platform.system.configuration.service.ExternalSystemInboundKeyAuthenticator;
+import cn.zqkj.platform.system.configuration.domain.model.ExternalSystemCaller;
 import cn.zqkj.platform.system.identity.domain.model.UserAccount;
 import cn.zqkj.platform.system.identity.mapper.IdentityMapper;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -29,14 +36,33 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 验证平台配置API的功能权限和当前会话权限边界。
  */
 @WebMvcTest(controllers = ConfigurationController.class)
-@Import({SecurityConfiguration.class, GlobalExceptionHandler.class})
+@Import({SecurityConfiguration.class, IntegrationSecurityConfiguration.class, GlobalExceptionHandler.class,
+        ConfigurationSecurityWebTest.IntegrationProbeController.class})
 class ConfigurationSecurityWebTest {
+
+    /** 提供仅用于验证集成安全链的轻量目标端点。 */
+    @RestController
+    static class IntegrationProbeController {
+
+        /**
+         * 返回已认证集成请求的探测状态。
+         *
+         * @return 无正文的已认证响应
+         */
+        @GetMapping("/api/integration/v1/probe")
+        ResponseEntity<Void> probe() {
+            return ResponseEntity.noContent().build();
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
     private ConfigurationService configurationService;
+
+    @MockitoBean
+    private ExternalSystemInboundKeyAuthenticator inboundKeyAuthenticator;
 
     @MockitoBean
     private IdentityMapper identityMapper;
@@ -196,6 +222,63 @@ class ConfigurationSecurityWebTest {
         prepareActiveAccount("configuration:write");
         mockMvc.perform(get("/api/v1/configuration/external-endpoints/9/authentication").with(user(writer)))
                 .andExpect(status().isOk());
+    }
+
+    /** 集成入口接受外部系统ID/Key而不依赖管理会话或CSRF令牌。 */
+    @Test
+    void authenticatesIntegrationPathWithoutManagementSessionOrCsrf() throws Exception {
+        mockMvc.perform(get("/api/integration/v1/probe"))
+                .andExpect(status().isUnauthorized());
+
+        when(inboundKeyAuthenticator.authenticate("COUNTY_HOSPITAL", "valid-key"))
+                .thenReturn(Optional.of(new ExternalSystemCaller("COUNTY_HOSPITAL", "县医院")));
+        mockMvc.perform(get("/api/integration/v1/probe")
+                        .header("X-External-System-Id", "COUNTY_HOSPITAL")
+                        .header("X-External-System-Key", "valid-key"))
+                .andExpect(status().isNoContent());
+
+        Mockito.verify(inboundKeyAuthenticator).authenticate("COUNTY_HOSPITAL", "valid-key");
+    }
+
+    /** 有效调用方访问尚未实现的入口应收到404，而不是被误报为服务器内部故障。 */
+    @Test
+    void reportsNotFoundForAuthenticatedUnimplementedIntegrationRoute() throws Exception {
+        when(inboundKeyAuthenticator.authenticate("COUNTY_HOSPITAL", "valid-key"))
+                .thenReturn(Optional.of(new ExternalSystemCaller("COUNTY_HOSPITAL", "县医院")));
+
+        mockMvc.perform(get("/api/integration/v1/not-implemented")
+                        .header("X-External-System-Id", "COUNTY_HOSPITAL")
+                        .header("X-External-System-Key", "valid-key"))
+                .andExpect(status().isNotFound())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    /** Key轮换只允许配置写权限，并要求携带八字节并发版本；成功响应禁止缓存。 */
+    @Test
+    void protectsInboundKeyRotationAndDisablesResponseCaching() throws Exception {
+        prepareActiveAccount("configuration:read");
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/configuration/external-systems/1/inbound-key")
+                        .with(user(principal("configuration:read")))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":\"AAAAAAAAAAA=\"}"))
+                .andExpect(status().isForbidden());
+
+        prepareActiveAccount("configuration:write");
+        Mockito.when(configurationService.rotateExternalSystemInboundKey(
+                Mockito.eq(1L), Mockito.any(), Mockito.any())).thenReturn(null);
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/configuration/external-systems/1/inbound-key")
+                        .with(user(principal("configuration:write")))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":\"AAAAAAAAAAA=\"}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")));
+
+        Mockito.verify(configurationService).rotateExternalSystemInboundKey(
+                Mockito.eq(1L), Mockito.any(), Mockito.any());
     }
 
     /**

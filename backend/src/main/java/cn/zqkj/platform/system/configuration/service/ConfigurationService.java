@@ -9,12 +9,14 @@ import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryItemComm
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateDictionaryTypeCommand;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalEndpointRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpdateExternalSystemRequest;
+import cn.zqkj.platform.system.configuration.domain.dto.RotateExternalSystemInboundKeyRequest;
 import cn.zqkj.platform.system.configuration.domain.dto.UpsertParameterCommand;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryItemVO;
 import cn.zqkj.platform.system.configuration.domain.vo.DictionaryTypeVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointAuthenticationVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalEndpointVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemVO;
+import cn.zqkj.platform.system.configuration.domain.vo.ExternalSystemInboundKeyVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterDefinitionVO;
 import cn.zqkj.platform.system.configuration.domain.vo.ParameterValueVO;
 import cn.zqkj.platform.system.identity.domain.model.AccessActor;
@@ -157,6 +159,20 @@ public interface ConfigurationService {
      * @return 修改后系统
      */
     ExternalSystemVO updateExternalSystem(long systemId, UpdateExternalSystemRequest command, AccessActor actor);
+
+    /**
+     * 为外部系统生成并保存新的入站调用Key；明文只在本次响应中返回。
+     *
+     * @param systemId 外部系统主键
+     * @param command 当前外部系统并发版本
+     * @param actor 执行轮换的平台用户
+     * @return 新Key的一次性明文及更新后的外部系统安全状态
+     */
+    ExternalSystemInboundKeyVO rotateExternalSystemInboundKey(
+            long systemId,
+            RotateExternalSystemInboundKeyRequest command,
+            AccessActor actor
+    );
 
     /**
      * 查询授权范围内服务地址。

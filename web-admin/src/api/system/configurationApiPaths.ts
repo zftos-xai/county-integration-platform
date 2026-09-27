@@ -32,6 +32,11 @@ export function externalSystemPath(systemId: number) {
   return `/configuration/external-systems/${systemId}`
 }
 
+/** 构造外部系统入站调用Key轮换路径。 */
+export function externalSystemInboundKeyPath(systemId: number) {
+  return `${externalSystemPath(systemId)}/inbound-key`
+}
+
 /** 构造机构服务地址详情路径。 */
 export function externalEndpointPath(endpointId: number) {
   return `/configuration/external-endpoints/${endpointId}`
