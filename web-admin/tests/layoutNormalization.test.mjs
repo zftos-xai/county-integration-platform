@@ -78,7 +78,9 @@ test('共享列表工具栏按宽度组织桌面筛选和窄屏操作', async ()
   assert.match(source, /@container \(min-width: 381px\) and \(max-width: 760px\)[\s\S]*?\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__commands \{ width: 100%; justify-content: flex-start; \}/)
   assert.doesNotMatch(source, /@container \(min-width: 761px\) and \(max-width: 1200px\)\s*\{\s*\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__filters \{ grid-template-areas: "search search search" "status type \.";/)
   assert.match(source, /\.standard-list-toolbar__commands \{ grid-column: 1 \/ -1; grid-row: 2;[^}]*justify-content: flex-start;/)
-  assert.match(source, /\.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ margin-inline-start: auto; white-space: nowrap; \}/)
+  assert.match(source, /\.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ white-space: nowrap; \}/)
+  assert.match(source, /\.standard-list-toolbar__commands \{[^}]*justify-content: flex-start; flex-wrap: wrap; gap: 8px; \}/)
+  assert.doesNotMatch(source, /\.standard-list-toolbar[^\n]*\.standard-list-toolbar__refresh \{[^}]*margin-inline-start: auto;/)
 })
 
 test('共享筛选栏使用语义网格区域而不依赖控件顺序', async () => {
