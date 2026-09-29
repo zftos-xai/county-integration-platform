@@ -1,0 +1,72 @@
+{
+  "schema": "county-platform-acceptance-learning-1.0",
+  "updated_at": "2026-09-29",
+  "entries": [
+    {
+      "id": "scope-pc-and-responsive-only",
+      "status": "active",
+      "source": "User-confirmed scope in acceptance feedback, 2026-09-29",
+      "scope": "This repository's management pages when the user requests the established PC and responsive review scope",
+      "trigger": "A broad page audit is requested without a narrower viewport instruction.",
+      "required_action": "Include the supported PC viewport and responsive layouts only. Do not add mobile-native or touch-device acceptance unless the user asks for it. Record actual CSS viewport and project-supported breakpoints in the trace.",
+      "regression_check": "The contract lists only the requested PC and responsive environments, and every in-scope page has evidence for each declared environment.",
+      "evidence_required": ["acceptance contract", "browser viewport readback", "page-region evidence"],
+      "last_verified": null
+    },
+    {
+      "id": "page-by-page-full-region-pass",
+      "status": "active",
+      "source": "User corrections on missed layout defects, 2026-09-29",
+      "scope": "All in-scope management pages, including nested routes, details, dialogs, drawers, and tabs",
+      "trigger": "A task requests validation of all pages or a deep page-layout review.",
+      "required_action": "Finish one page at a time from top to actual scroll end. Inventory and inspect each visible region and each relevant conditional surface before marking that page reviewed; then proceed to the next page.",
+      "regression_check": "Each page/environment pair has a complete region inventory, full-scroll evidence, checks for applicable conditional surfaces, and no unreviewed required region.",
+      "evidence_required": ["route inventory", "region checklist", "full-page/region screenshots", "report coverage matrix"],
+      "last_verified": null
+    },
+    {
+      "id": "annotated-visual-feedback-is-test-input",
+      "status": "active",
+      "source": "User-provided annotated screenshots and corrections, 2026-09-29",
+      "scope": "Acceptance tasks that include marked or annotated UI screenshots",
+      "trigger": "The user marks an area, draws an arrow, crosses out content, or describes a missed visual defect.",
+      "required_action": "Translate every distinct marked area or correction into a separate observable assertion. Verify it against the live page, identify the owning component, and retain evidence whether it passes or fails.",
+      "regression_check": "Every annotation maps to a numbered/identified acceptance assertion with a live-page result and evidence; none is treated as decorative context.",
+      "evidence_required": ["annotation-to-assertion map", "live-page screenshot", "source/owner trace when a defect is found"],
+      "last_verified": null
+    },
+    {
+      "id": "management-layout-hotspots",
+      "status": "active",
+      "source": "Repeated user-reported layout issues, 2026-09-29",
+      "scope": "Management list, dashboard, directory, configuration, and detail pages in this repository",
+      "trigger": "Reviewing a page with filters/search, list/table, actions, tabs, or pagination.",
+      "required_action": "Explicitly inspect alignment and wrapping of search/filter/action controls; refresh placement; operation-column width and alignment; pagination control, page-size selector, and total-count relationship; tab spacing; unexplained whitespace; redundant instructional copy; and overlap between helper text and table headers.",
+      "regression_check": "The region checklist has a concrete observation for every hotspot present on the page at each declared viewport; visible defects receive a finding and targeted retest.",
+      "evidence_required": ["per-region observations", "viewport screenshots", "findings and retest links"],
+      "last_verified": null
+    },
+    {
+      "id": "reuse-valid-evidence-with-baseline-check",
+      "status": "active",
+      "source": "User request to avoid repeated verification, 2026-09-29",
+      "scope": "Repeated acceptance runs over this repository's pages and flows",
+      "trigger": "A route or assertion was verified in an earlier run.",
+      "required_action": "Check prior evidence and compare build/commit, route, role, data, state, browser, and viewport before reuse. Rerun only stale, failed, changed, or newly requested assertions; do not repeat a passing unchanged check without a reason.",
+      "regression_check": "The report links reused evidence and states why its baseline still matches; every changed or failed assertion has a new attempt.",
+      "evidence_required": ["prior evidence reference", "baseline comparison", "new attempt for changed findings"],
+      "last_verified": null
+    },
+    {
+      "id": "preserve-breadcrumb-and-optimize-header",
+      "status": "active",
+      "source": "User-confirmed page shell direction, 2026-09-29",
+      "scope": "Management page headers and breadcrumbs in this repository",
+      "trigger": "Reviewing or changing a page header that includes navigation context, a menu control, or page title.",
+      "required_action": "Keep the breadcrumb/navigation context as part of the page shell unless the current page requirement explicitly says otherwise. Improve alignment, spacing, hierarchy, and responsive behavior instead of removing the header region globally.",
+      "regression_check": "The page retains useful breadcrumb context and the menu/title/breadcrumb layout is aligned and usable at every declared viewport.",
+      "evidence_required": ["page header screenshot at each declared viewport", "navigation context check"],
+      "last_verified": null
+    }
+  ]
+}

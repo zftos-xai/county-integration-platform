@@ -61,4 +61,11 @@ Use `passed`, `failed`, `partial`, `blocked`, `not-run`, or `not-applicable`. Us
 - Environment scope:
 - Release readiness (only if in scope):
 - Focused follow-up and regression checks:
+
+## Learning loop
+
+- Project learning entries applied (or why not applicable):
+- Prior evidence reused and baseline match:
+- Entries added/updated/retired and their regression result, or `no new learning`:
+- Known misses or learned checks still open:
 ```

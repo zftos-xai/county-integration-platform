@@ -9,6 +9,10 @@ Review Web work from the approved requirement through the real user-facing page 
 
 For this repository, read [County integration project profile](references/county-integration-project.md) before setting scope or deciding what evidence can support a verdict. It identifies the three separate Web surfaces and the project's formal menu acceptance gates.
 
+For every run in this repository, also read [Project acceptance learning record](references/project-learning.json). Carry forward applicable open findings and user corrections as explicit checks; update the record after a confirmed miss or a durable process improvement. This is a project-specific regression memory, not a substitute for current requirements.
+
+When the learning record changes, validate it with `python3 .agents/skills/portable-web-acceptance/scripts/validate_learning.py .agents/skills/portable-web-acceptance/references/project-learning.json` and run `python3 -m unittest discover -s .agents/skills/portable-web-acceptance/scripts -p 'test_*.py'`.
+
 When the user needs a starting prompt or the task boundary is still being written, use [Usage examples](references/usage-examples.md) and adapt the example to the named feature. Examples are prompts, not evidence or permission to perform writes.
 
 ## Operating rules
@@ -82,9 +86,13 @@ Do not treat a command starting successfully as a passed test. Capture exact com
 
 Distinguish product defect, test defect/flakiness, environment/setup failure, and missing requirement/evidence. Preserve first-failure evidence before repair. If authorized to fix, repair the smallest mapped scope, update or add a regression test at the layer that protects the behavior, then rerun the focused test and impacted neighboring checks. Do not hide an initial failure by replacing evidence or changing the requirement after the fact.
 
+If a known issue was missed, a user correction conflicts with the report, or the same validation was repeated without new evidence, stop broadening the pass. Reopen the affected result, preserve the miss, add a specific check to this run, and follow [Self-repair and learning loop](references/self-repair-and-learning.md). Do not claim completion while an applicable learned check remains unrun or failed.
+
 ### 7. Report results
 
 Use [Verdicts and report template](references/verdicts-and-report.md). Report requirement/page status and engineering test status separately. State any untested roles, routes, states, viewports, browsers, data paths, or test layers. Do not claim full release readiness from a local page review or a green unit test suite.
+
+At close, report the learning record entries used and any added, updated, retired, or still-open lessons. A clean run with no new evidence-backed lesson should say “no new learning”; never invent lessons to satisfy the process.
 
 ## Surface references
 
