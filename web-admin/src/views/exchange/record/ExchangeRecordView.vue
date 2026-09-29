@@ -276,10 +276,14 @@ onBeforeUnmount(() => {
     <div v-if="isTradeCatalogUnavailable" class="feedback warning" role="status"><AlertCircle :size="18" /><span>交易目录暂不可用，列表保留原始交易码；中文名称和文档状态未确认。</span><button class="work-quiet-button" type="button" @click="loadTradeCatalog">重试读取目录</button></div>
     <div v-if="!isLoading && !error && records.length === 100" class="feedback warning" role="status"><AlertCircle :size="18" /><span>当前查询最多返回最近100条调用记录，不能据此判断该筛选范围的完整调用总数。可缩小请求时间范围继续核对更早记录。</span></div>
     <div v-if="filterError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ filterError }}</span></div>
-    <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}<small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="work-quiet-button" type="button" @click="loadRecords">重试</button></div>
+    <div v-if="error && !isLoading && records.length > 0" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}<small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="work-quiet-button" type="button" @click="loadRecords">重试</button></div>
 
     <section class="prototype-section work-table-section exchange-panel action-column-table">
       <PageState v-if="isLoading" kind="loading" title="正在读取HIS调用记录" />
+      <PageState v-else-if="error && records.length === 0" kind="error" title="暂时无法读取HIS调用记录" :description="error.message" compact>
+        <template #icon><AlertCircle :size="26" /></template>
+        <template #actions><button class="work-quiet-button" type="button" @click="loadRecords"><RefreshCw :size="15" />重试</button></template>
+      </PageState>
       <PageState v-else-if="!error && records.length === 0" kind="empty" title="当前条件下没有调用记录" description="调用记录功能启用前发生的历史批次或服务地址校验，不会补造记录。">
         <template #icon><FileWarning :size="30" /></template>
       </PageState>

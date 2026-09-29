@@ -204,7 +204,7 @@ onMounted(load)
             <span><strong>{{ plan.planNo }}</strong><small>{{ plan.summary }}</small></span><span><em class="prototype-tag" :class="statusTone(plan.status)">{{ statusLabel(plan.status) }}</em><small>{{ formatTime(plan.updatedAt) }}</small></span>
           </button>
           <PageState v-if="plans.length === 0" kind="empty" title="尚无维护方案" compact />
-          <AdminPagination compact :total="plans.length" :page="planPage" :page-size="planPageSize" @update:page="planPage = $event" @update:page-size="planPageSize = $event" />
+          <AdminPagination v-if="plans.length > 0" compact :total="plans.length" :page="planPage" :page-size="planPageSize" @update:page="planPage = $event" @update:page-size="planPageSize = $event" />
         </section>
 
         <section v-if="selectedPlan" class="contract-card plan-detail">

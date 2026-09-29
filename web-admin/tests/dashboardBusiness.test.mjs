@@ -50,6 +50,14 @@ test('运行总览的审计读取失败不显示成无管理操作', async () =>
   assert.match(source, /最近管理操作暂时无法读取/)
 })
 
+test('运行总览的读取失败提示不假设已有可用缓存数据', async () => {
+  const source = await readFile(dashboardPath, 'utf8')
+
+  assert.match(source, /<strong>管理概况暂时无法读取<\/strong>/)
+  assert.match(source, /未能读取：\{\{ failureLabels\.join\('、'\) \}\}。可稍后刷新重试。/)
+  assert.doesNotMatch(source, /已有数据仍可使用/)
+})
+
 test('运行总览桌面版压缩标题区、横排操作并紧凑展示快捷入口', async () => {
   const [source, shell, styles] = await Promise.all([
     readFile(dashboardPath, 'utf8'),

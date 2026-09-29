@@ -448,7 +448,7 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 <template>
   <section class="content external-system-page">
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
-    <div v-if="error && !isLoading && systems.length" class="feedback danger page-error" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}</span><button class="work-quiet-button" type="button" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
+    <div v-if="error && !isLoading && systems.length" class="feedback danger page-error" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}；以下为上次成功读取的数据</span><button class="work-quiet-button" type="button" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
     <section v-if="isLoading" class="prototype-section first-load-state"><LoaderCircle class="spinning" :size="28" /><strong>正在加载外部系统</strong></section>
     <section v-else-if="error && systems.length === 0" class="prototype-section first-system-empty"><PageState kind="error" title="暂时无法读取外部系统" :description="error.message"><template #icon><AlertCircle :size="28" /></template><template #actions><button class="work-quiet-button" type="button" @click="loadPage()"><RefreshCw :size="15" />重试</button></template></PageState></section>
     <section v-else-if="!error && systems.length === 0" class="prototype-section first-system-empty">
@@ -486,7 +486,10 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
           <template #icon><AlertCircle :size="26" /></template>
           <template #actions><button class="work-quiet-button" type="button" :disabled="!selectedSystem" @click="selectedSystem && loadEndpoints(selectedSystem)"><RefreshCw :size="15" />重试</button></template>
         </PageState>
-        <div v-else-if="selectedSystem && endpointGroups.length === 0" class="endpoint-empty"><ServerCog :size="32" aria-hidden="true" /><h2>还没有可展示的机构</h2><p>当前没有可见的机构或接口配置；请检查机构数据范围，或先为 {{ selectedSystem.systemName }} 添加接口配置。</p><button v-if="canWrite && selectedSystem.enabled" class="prototype-button" type="button" @click="openEndpointCreate()"><Plus :size="15" />新增机构接口配置</button></div>
+        <PageState v-else-if="selectedSystem && endpointGroups.length === 0" kind="empty" title="还没有可展示的机构" :description="`当前没有可见的机构或接口配置；请检查机构数据范围，或先为 ${selectedSystem.systemName} 添加接口配置。`" compact>
+          <template #icon><ServerCog :size="26" /></template>
+          <template v-if="canWrite && selectedSystem.enabled" #actions><button class="prototype-button" type="button" @click="openEndpointCreate()"><Plus :size="15" />新增机构接口配置</button></template>
+        </PageState>
         <div v-else class="matrix-table-area">
         <PageState v-if="filteredEndpointGroups.length === 0" kind="empty" title="没有符合当前筛选条件的机构接口配置" compact>
           <template #icon><ServerCog :size="26" /></template>
@@ -524,10 +527,9 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 <style scoped>
 .external-system-page { display: grid; gap: 16px; }
 .first-load-state { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #33745c; }
-.first-system-empty,.endpoint-empty { min-height: 340px; padding: 56px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #177565; text-align: center; }
-.first-system-empty h2,.endpoint-empty h2 { margin: 2px 0 0; color: #20333e; font-size: 20px; line-height: 1.35; }
-.first-system-empty p,.endpoint-empty p { max-width: 540px; margin: 0 0 10px; color: #6c7d86; font-size: 13px; line-height: 1.75; }
-.endpoint-empty { min-height: 360px; }
+.first-system-empty { min-height: 340px; padding: 56px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #177565; text-align: center; }
+.first-system-empty h2 { margin: 2px 0 0; color: #20333e; font-size: 20px; line-height: 1.35; }
+.first-system-empty p { max-width: 540px; margin: 0 0 10px; color: #6c7d86; font-size: 13px; line-height: 1.75; }
 .system-context { min-height: 82px; padding: 16px 18px; border: 1px solid #dce4e6; border-radius: 6px; background: #fff; display: grid; grid-template-columns: max-content minmax(240px, 440px) max-content max-content; align-items: center; justify-content: space-between; gap: 14px; box-shadow: 0 1px 2px #18243308; }
 .system-context > strong { color: #263a43; font-size: 13px; white-space: nowrap; }
 .system-selector { min-height: 42px; padding: 0 12px; border: 1px solid #cdd9dd; border-radius: 5px; display: flex; align-items: center; gap: 9px; color: #147467; }
@@ -555,5 +557,5 @@ onBeforeUnmount(() => { mounted = false; pageController?.abort(); endpointContro
 .spinning { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media(max-width:1100px){.system-context{grid-template-columns:minmax(0,1fr)}.system-context>strong,.system-state{display:none}.context-actions{grid-column:1;justify-content:flex-start;flex-wrap:wrap}}
-@media(max-width:700px){.first-system-empty,.endpoint-empty{min-height:300px;padding:42px 20px}.system-context{grid-template-columns:1fr}.context-actions{grid-column:auto;align-items:stretch;flex-direction:column}}
+@media(max-width:700px){.first-system-empty{min-height:300px;padding:42px 20px}.system-context{grid-template-columns:1fr}.context-actions{grid-column:auto;align-items:stretch;flex-direction:column}}
 </style>

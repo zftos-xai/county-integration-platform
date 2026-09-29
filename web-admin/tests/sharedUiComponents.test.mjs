@@ -9,6 +9,35 @@ const paginationPath = new URL('../src/components/AdminPagination.vue', import.m
 const tableFramePath = new URL('../src/components/AdminTableFrame.vue', import.meta.url)
 const rowActionsPath = new URL('../src/components/ListRowActions.vue', import.meta.url)
 
+test('登录后正式页面统一由共享页头提供唯一一级标题', async () => {
+  const appLayout = await readFile(new URL('../src/layout/AppLayout.vue', import.meta.url), 'utf8')
+  const routeViews = [
+    '../src/views/dashboard/DashboardView.vue',
+    '../src/views/system/organization/OrganizationView.vue',
+    '../src/views/system/user/UserView.vue',
+    '../src/views/system/role/RoleView.vue',
+    '../src/views/configuration/parameter/ParameterView.vue',
+    '../src/views/configuration/dictionary/DictionaryView.vue',
+    '../src/views/configuration/external-system/ExternalSystemView.vue',
+    '../src/views/database-contract/DatabaseContractMaintenanceView.vue',
+    '../src/views/master-data/directory/HospitalDirectoryView.vue',
+    '../src/views/master-data/directory/MedicalDirectoryView.vue',
+    '../src/views/master-data/directory/Icd10DirectoryView.vue',
+    '../src/views/master-data/batch/MasterDataBatchView.vue',
+    '../src/views/exchange/record/ExchangeRecordView.vue',
+    '../src/views/audit/management/AuditView.vue',
+    '../src/views/error/AccessDeniedView.vue',
+    '../src/views/error/NotFoundView.vue',
+    '../src/views/error/PlaceholderView.vue',
+  ]
+  const sources = await Promise.all(routeViews.map(path => readFile(new URL(path, import.meta.url), 'utf8')))
+
+  assert.match(appLayout, /<h1>\{\{ route\.meta\.title \}\}<\/h1>/)
+  for (const [index, source] of sources.entries()) {
+    assert.doesNotMatch(source, /<h1(?:\s|>)/, `${routeViews[index]} must use the shared page heading`)
+  }
+})
+
 test('共享页面状态组件统一加载、空结果、错误播报与紧凑布局', async () => {
   const source = await readFile(pageStatePath, 'utf8')
 
@@ -39,6 +68,35 @@ test('管理端基础色彩令牌映射到当前设计值并供工作区主题�
   assert.match(batches, /\.master-batch-page\s*\{[\s\S]*color:\s*var\(--ui-color-text\);/)
 })
 
+test('共享弱化文字令牌在常用浅色容器上达到4.5比1对比度', async () => {
+  const base = await readFile(new URL('../src/assets/styles/base.css', import.meta.url), 'utf8')
+  const icd10 = await readFile(new URL('../src/views/master-data/directory/Icd10DirectoryView.vue', import.meta.url), 'utf8')
+  const muted = base.match(/--ui-color-muted:\s*(#[\da-f]{6})/i)?.[1]
+  assert.ok(muted, 'shared muted token must remain an explicit six-digit color')
+
+  const luminance = color => {
+    const channels = color.match(/[\da-f]{2}/gi)?.map(channel => Number.parseInt(channel, 16) / 255)
+    assert.ok(channels?.length === 3, `expected RGB color: ${color}`)
+    const [red, green, blue] = channels.map(channel => channel <= 0.04045
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+  }
+  const textLuminance = luminance(muted)
+  for (const background of ['#f3f6f6', '#f5f7fa', '#f7fbfa', '#ffffff']) {
+    const ratio = (luminance(background) + 0.05) / (textLuminance + 0.05)
+    assert.ok(ratio >= 4.5, `${muted} on ${background} has contrast ${ratio.toFixed(2)}:1`)
+  }
+  assert.match(icd10, /\.icd10-context p \{[^}]*color:\s*var\(--muted\);/)
+})
+
+test('管理端侧栏导航分组使用共享弱化文字令牌', async () => {
+  const sharedStyles = await readFile(new URL('../src/assets/styles/prototype.css', import.meta.url), 'utf8')
+
+  assert.match(sharedStyles, /\.prototype-nav-label\s*\{[^}]*color:\s*var\(--muted\);/)
+  assert.doesNotMatch(sharedStyles, /\.prototype-nav-label\s*\{[^}]*color:\s*#8d99a6/i)
+})
+
 test('共享查询栏只有搜索框时让搜索框占满可用宽度', async () => {
   const sharedStyles = await readFile(new URL('../src/assets/styles/prototype.css', import.meta.url), 'utf8')
 
@@ -49,11 +107,17 @@ test('共享查询栏只有搜索框时让搜索框占满可用宽度', async ()
   assert.match(sharedStyles, /\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__filters > \.standard-list-filter--status \{ grid-area: status; \}/)
   assert.match(sharedStyles, /\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__filters > \.standard-list-filter--type \{ grid-area: type; \}/)
   assert.match(sharedStyles, /@container \(max-width: 560px\) \{\s*\.standard-list-toolbar \{ grid-template-columns: minmax\(0, 1fr\); \}/)
-  assert.match(sharedStyles, /\.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ white-space: nowrap; \}/)
-  assert.doesNotMatch(sharedStyles, /\.standard-list-toolbar[^\n]*\.standard-list-toolbar__refresh \{[^}]*margin-inline-start: auto;/)
+  assert.match(sharedStyles, /\.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ margin-inline-start: auto; white-space: nowrap; \}/)
   assert.match(sharedStyles, /\.standard-list-toolbar__commands \{[^}]*justify-content: flex-start;/)
   assert.match(sharedStyles, /@container \(max-width: 560px\) \{\s*\.standard-list-toolbar--search-with-selects \{ grid-template-columns: minmax\(0, 1fr\); \}/)
   assert.match(sharedStyles, /\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__filters \{ grid-column: 1; grid-row: auto; grid-template-areas: "search" "status" "type"; grid-template-columns: minmax\(0, 1fr\); \}/)
+})
+
+test('参数概况卡片占满桌面内容宽度并在窄屏保持三列', async () => {
+  const source = await readFile(new URL('../src/views/configuration/parameter/ParameterView.vue', import.meta.url), 'utf8')
+
+  assert.match(source, /\.parameter-summary \{ width: 100%; margin-bottom: 10px; display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/)
+  assert.doesNotMatch(source, /\.parameter-summary\s*\{[^}]*max-width:/)
 })
 
 test('三类数据目录页共享页签、查询工具栏和机构目录骨架', async () => {
@@ -129,6 +193,21 @@ test('共享居中对话框框架统一语义、键盘焦点管理和响应式�
   assert.doesNotMatch(focusSource, /control\.offsetParent/)
 })
 
+test('共享抽屉和对话框打开时锁定背景滚动并支持嵌套恢复', async () => {
+  const focusSource = await readFile(new URL('../src/composables/useModalDialog.ts', import.meta.url), 'utf8')
+  const frames = await Promise.all([
+    readFile(new URL('../src/components/DrawerFrame.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/ModalFrame.vue', import.meta.url), 'utf8'),
+  ])
+
+  assert.match(focusSource, /let activeModalCount = 0/)
+  assert.match(focusSource, /watch\(isOpen, open => \{[\s\S]*?acquireDocumentScrollLock\(\)[\s\S]*?releaseScrollLock\?\.\(\)/)
+  assert.match(focusSource, /html\.style\.setProperty\('overflow', 'hidden'\)/)
+  assert.match(focusSource, /body\.style\.setProperty\('overflow', 'hidden'\)/)
+  assert.match(focusSource, /activeModalCount !== 0 \|\| !originalScrollStyles/)
+  for (const frame of frames) assert.match(frame, /useModalDialog\(isOpen, \(\) => emit\('close'\)\)/)
+})
+
 test('正式列表页统一使用受控共享分页组件', async () => {
   const paths = [
     '../src/views/audit/management/AuditView.vue',
@@ -163,10 +242,19 @@ test('正式列表页统一使用受控共享分页组件', async () => {
   assert.match(sharedStyles, /@media \(max-width: 560px\) \{\s*\.real-app \.standard-pagination \{ grid-template-columns: minmax\(0, 1fr\) auto; \}\s*\.real-app \.standard-pagination \.pagination-summary \{ min-width: 0; justify-self: end; justify-content: flex-end; white-space: nowrap; \}/)
 })
 
+test('共享分页在总数为零时不渲染无意义的第一页和数量摘要', async () => {
+  const source = await readFile(paginationPath, 'utf8')
+
+  assert.match(source, /<footer v-if="total > 0" class="standard-pagination"/)
+})
+
 test('数据字典的类型列表和字典项无结果时隐藏共享分页', async () => {
   const source = await readFile(new URL('../src/views/configuration/dictionary/DictionaryView.vue', import.meta.url), 'utf8')
 
   assert.match(source, /<AdminPagination v-if="filteredTypes\.length > 0" compact :total="filteredTypes\.length"/)
+  assert.match(source, /<main v-if="selectedType" class="dictionary-items">/)
+  assert.match(source, /\.dictionary-workspace\.no-type-selected \{ grid-template-columns: minmax\(0, 1fr\); \}/)
+  assert.doesNotMatch(source, /选择一个字典类型/)
   assert.match(source, /<PageState v-if="itemRows\.length === 0" kind="empty" title="没有符合当前条件的字典项" compact \/>/)
   assert.match(source, /<template v-else><AdminTableFrame label="字典项列表" has-actions :pin-actions="false">/)
   assert.match(source, /<AdminPagination :total="itemRows\.length" :page="itemPage"/)
@@ -179,13 +267,18 @@ test('正式管理列表仅在当前筛选结果非空时显示共享分页', as
     '../src/views/system/organization/OrganizationView.vue',
     '../src/views/configuration/parameter/ParameterView.vue',
     '../src/views/configuration/external-system/ExternalSystemView.vue',
+    '../src/views/database-contract/DatabaseContractMaintenanceView.vue',
   ]
   const views = await Promise.all(paths.map(path => readFile(new URL(path, import.meta.url), 'utf8')))
-  const resultCollections = ['filteredRoles', 'filtered', 'filtered', 'rows', 'filteredEndpointGroups']
+  const resultCollections = ['filteredRoles', 'filtered', 'filtered', 'rows', 'filteredEndpointGroups', 'plans']
 
   for (const [index, source] of views.entries()) {
     const resultCollection = resultCollections[index]
-    assert.match(source, new RegExp(`<AdminPagination v-if="[^\"]*${resultCollection}\\.length[^\"]*" :total="${resultCollection}\\.length"`))
+    if (resultCollection === 'plans') {
+      assert.match(source, /<AdminPagination v-if="plans\.length > 0" compact :total="plans\.length"/)
+    } else {
+      assert.match(source, new RegExp(`<AdminPagination v-if="[^\"]*${resultCollection}\\.length[^\"]*" :total="${resultCollection}\\.length"`))
+    }
   }
 })
 

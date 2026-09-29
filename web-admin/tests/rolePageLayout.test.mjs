@@ -36,6 +36,7 @@ test('角色详情抽屉基础操作固定在共享底栏且仍提交对应表�
   const source = await readFile('web-admin/src/views/system/role/components/RoleEditorDrawer.vue', 'utf8')
 
   assert.match(source, /<form id="role-base-form" class="role-form"/)
+  assert.match(source, /<p v-if="!selected\.systemManaged">\{\{ !userAssignmentKnown/)
   assert.match(source, /<template v-if="showBaseActions" #footer>/)
   assert.match(source, /type="submit" form="role-base-form"/)
   assert.ok(source.includes(`<button v-else class="prototype-button" type="button" @click="emit('edit')">编辑基础信息</button>`))

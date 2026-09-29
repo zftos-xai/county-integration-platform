@@ -17,7 +17,7 @@ import {
   Users,
   X,
 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { Component } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import { platformSettings } from '@/settings';
@@ -40,6 +40,19 @@ const route = useRoute();
 const router = useRouter();
 const isSidebarCollapsed = ref(false);
 const isMobileOpen = ref(false);
+const responsiveNavigationQuery = window.matchMedia('(max-width: 900px)');
+const isResponsiveViewport = ref(responsiveNavigationQuery.matches);
+const menuToggleButton = ref<HTMLButtonElement | null>(null);
+const mobileCloseButton = ref<HTMLButtonElement | null>(null);
+
+/** Keep drawer accessibility state aligned with the responsive breakpoint. */
+function syncResponsiveViewport(event: MediaQueryListEvent) {
+  isResponsiveViewport.value = event.matches;
+  if (!event.matches) isMobileOpen.value = false;
+}
+
+onMounted(() => responsiveNavigationQuery.addEventListener('change', syncResponsiveViewport));
+onBeforeUnmount(() => responsiveNavigationQuery.removeEventListener('change', syncResponsiveViewport));
 const pageSection = computed(() => {
   const path = route.path;
   if (path.startsWith('/master-data/')) return '基础数据';
@@ -169,19 +182,36 @@ async function logout() {
   await router.replace('/login');
 }
 
-/** 桌面端折叠侧栏，窄屏端打开导航抽屉。 */
-function toggleNavigation() {
-  if (window.matchMedia('(max-width: 900px)').matches) {
+/** 桌面端折叠侧栏，窄屏端打开导航抽屉并将键盘焦点移入。 */
+async function toggleNavigation() {
+  if (isResponsiveViewport.value) {
     isMobileOpen.value = true;
+    await nextTick();
+    mobileCloseButton.value?.focus();
     return;
   }
   isSidebarCollapsed.value = !isSidebarCollapsed.value;
+}
+
+/** 关闭窄屏抽屉后将焦点交还页头开关，避免焦点留在移出视口的菜单中。 */
+async function closeMobileNavigation() {
+  isMobileOpen.value = false;
+  if (isResponsiveViewport.value) {
+    await nextTick();
+    menuToggleButton.value?.focus();
+  }
 }
 </script>
 
 <template>
   <div class="prototype-app real-app" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
-    <aside id="primary-navigation" class="prototype-sidebar" :class="{ open: isMobileOpen, collapsed: isSidebarCollapsed }">
+    <aside
+      id="primary-navigation"
+      class="prototype-sidebar"
+      :class="{ open: isMobileOpen, collapsed: isSidebarCollapsed }"
+      :aria-hidden="isResponsiveViewport && !isMobileOpen"
+      :inert="isResponsiveViewport && !isMobileOpen"
+    >
       <div class="prototype-brand">
         <span class="prototype-logo"><Database :size="20" /></span>
         <span class="prototype-brand-copy"
@@ -190,9 +220,10 @@ function toggleNavigation() {
         >
         <button
           class="prototype-icon prototype-close"
+          ref="mobileCloseButton"
           aria-label="关闭导航"
           title="关闭导航"
-          @click="isMobileOpen = false"
+          @click="closeMobileNavigation"
         >
           <X :size="18" />
         </button>
@@ -214,7 +245,7 @@ function toggleNavigation() {
             active-class="prototype-router-match"
             exact-active-class="prototype-router-exact"
             :class="{ 'prototype-route-parent': isNavigationItemActive(item) }"
-            @click="isMobileOpen = false"
+            @click="closeMobileNavigation"
           >
             <component :is="item.icon" :size="17" /><span>{{
               item.label
@@ -241,16 +272,22 @@ function toggleNavigation() {
     <div
       v-if="isMobileOpen"
       class="prototype-scrim"
-      @click="isMobileOpen = false"
+      @click="closeMobileNavigation"
     />
 
-    <main class="prototype-main" :class="{ 'dashboard-page-shell': route.path === '/', 'directory-page': route.path.startsWith('/master-data/directory') }">
+    <main
+      class="prototype-main"
+      :class="{ 'dashboard-page-shell': route.path === '/', 'directory-page': route.path.startsWith('/master-data/directory') }"
+      :inert="isResponsiveViewport && isMobileOpen"
+    >
       <header class="prototype-topbar real-page-heading">
         <button
           class="prototype-icon prototype-menu"
+          ref="menuToggleButton"
           aria-label="切换导航"
           title="切换导航"
           aria-controls="primary-navigation"
+          :aria-expanded="isResponsiveViewport ? isMobileOpen : !isSidebarCollapsed"
           @click="toggleNavigation"
         >
           <Menu :size="20" />

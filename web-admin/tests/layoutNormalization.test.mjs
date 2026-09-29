@@ -63,6 +63,19 @@ test('管理端共享页头把当前页面名称放在同一行面包屑末项',
   assert.match(styles, /\.real-app \.prototype-main \.real-page-heading \{ min-height: 76px; padding: 18px 28px; \}/)
 })
 
+test('响应式导航关闭后隐藏抽屉并将键盘焦点返回页头开关', async () => {
+  const layout = await readFile('web-admin/src/layout/AppLayout.vue', 'utf8')
+
+  assert.match(layout, /:aria-hidden="isResponsiveViewport && !isMobileOpen"/)
+  assert.match(layout, /:inert="isResponsiveViewport && !isMobileOpen"/)
+  assert.match(layout, /:inert="isResponsiveViewport && isMobileOpen"/)
+  assert.match(layout, /const menuToggleButton = ref<HTMLButtonElement \| null>\(null\)/)
+  assert.match(layout, /const mobileCloseButton = ref<HTMLButtonElement \| null>\(null\)/)
+  assert.match(layout, /mobileCloseButton\.value\?\.focus\(\)/)
+  assert.match(layout, /function closeMobileNavigation\(\)[\s\S]*?menuToggleButton\.value\?\.focus\(\)/)
+  assert.match(layout, /:aria-expanded="isResponsiveViewport \? isMobileOpen : !isSidebarCollapsed"/)
+})
+
 test('共享列表工具栏按宽度组织桌面筛选和窄屏操作', async () => {
   const source = await readFile('web-admin/src/assets/styles/prototype.css', 'utf8')
 
@@ -78,9 +91,8 @@ test('共享列表工具栏按宽度组织桌面筛选和窄屏操作', async ()
   assert.match(source, /@container \(min-width: 381px\) and \(max-width: 760px\)[\s\S]*?\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__commands \{ width: 100%; justify-content: flex-start; \}/)
   assert.doesNotMatch(source, /@container \(min-width: 761px\) and \(max-width: 1200px\)\s*\{\s*\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__filters \{ grid-template-areas: "search search search" "status type \.";/)
   assert.match(source, /\.standard-list-toolbar__commands \{ grid-column: 1 \/ -1; grid-row: 2;[^}]*justify-content: flex-start;/)
-  assert.match(source, /\.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ white-space: nowrap; \}/)
+  assert.match(source, /\.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ margin-inline-start: auto; white-space: nowrap; \}/)
   assert.match(source, /\.standard-list-toolbar__commands \{[^}]*justify-content: flex-start; flex-wrap: wrap; gap: 8px; \}/)
-  assert.doesNotMatch(source, /\.standard-list-toolbar[^\n]*\.standard-list-toolbar__refresh \{[^}]*margin-inline-start: auto;/)
 })
 
 test('共享筛选栏使用语义网格区域而不依赖控件顺序', async () => {
@@ -98,7 +110,8 @@ test('参数配置概况使用同一网格排列指标卡', async () => {
 
   assert.match(summaryRule, /display: grid/)
   assert.match(summaryRule, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/)
-  assert.match(summaryRule, /max-width: 900px/)
+  assert.match(summaryRule, /width: 100%/)
+  assert.doesNotMatch(summaryRule, /max-width:/)
   assert.match(source, /@media \(max-width: 480px\) \{ \.parameter-summary span \{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; \}/)
   assert.match(source, /<PageState v-else-if="!error && rows\.length === 0" kind="empty" title="没有符合当前条件的参数" compact \/>/)
   assert.doesNotMatch(source, /<div v-if="rows\.length === 0" class="prototype-empty">/)
@@ -168,6 +181,7 @@ test('机构列表筛选从左侧排列且不显示通用横向滚动提示', as
 
   assert.match(source, /<ListQueryToolbar filters-layout="search-with-selects"/)
   assert.match(source, /<AdminTableFrame[^>]*label="机构列表"[^>]*has-actions/)
+  assert.match(source, /<PageState v-else-if="error && organizations\.length === 0" kind="error" title="无法读取机构列表"/)
   assert.match(source, /<PageState v-else-if="!error && filtered\.length === 0" kind="empty" title="没有符合当前筛选条件的机构" compact>/)
   assert.match(source, /<AdminTableFrame v-else-if="filtered\.length" label="机构列表" has-actions>/)
   assert.doesNotMatch(source, /filtered-empty/)
@@ -255,14 +269,14 @@ test('字典项总数只在类型摘要和分页中展示一次', async () => {
   assert.match(source, /<AdminTableFrame[^>]*label="字典项列表"[^>]*has-actions/)
 })
 
-test('数据库结构维护方案列表使用共享受控分页并展示空列表总数', async () => {
+test('数据库结构维护方案列表使用共享受控分页且空列表隐藏分页', async () => {
   const source = await readFile('web-admin/src/views/database-contract/DatabaseContractMaintenanceView.vue', 'utf8')
 
   assert.match(source, /import AdminPagination from '@\/components\/AdminPagination\.vue'/)
   assert.match(source, /useClientPagination\(computed\(\(\) => plans\.value\)\)/)
   assert.match(source, /v-for="plan in pagedPlans"/)
-  assert.match(source, /<AdminPagination compact :total="plans\.length" :page="planPage" :page-size="planPageSize"/)
-  assert.match(source, /尚无维护方案[\s\S]*?<AdminPagination compact :total="plans\.length"/)
+  assert.match(source, /尚无维护方案/)
+  assert.match(source, /<AdminPagination v-if="plans\.length > 0" compact :total="plans\.length" :page="planPage" :page-size="planPageSize"/)
 })
 
 test('窄屏分页为每页条数文本和原生下拉箭头保留清晰间距', async () => {

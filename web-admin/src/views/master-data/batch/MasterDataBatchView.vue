@@ -106,9 +106,7 @@ let durationTimer: ReturnType<typeof setInterval> | null = null;
 
 const canStart = computed(() => hasPermission('master-data:sync'));
 const hasBatchRowActions = computed(
-  () =>
-    canStart.value &&
-    batches.value.some((item) => item.status === 'CREATED'),
+  () => batches.value.length > 0,
 );
 const hasSyncOption = computed(
   () =>
@@ -192,11 +190,14 @@ async function loadBatches(background = false) {
     total.value = result.total;
   } catch (caught) {
     const apiError = asApiError(caught, '无法读取同步批次');
-    if (
-      apiError.code !== 'REQUEST_ABORTED' &&
-      !(await handleUnauthorized(apiError))
-    )
-      error.value = apiError;
+    if (apiError.code !== 'REQUEST_ABORTED') {
+      // 新筛选、翻页或每页条数请求失败时，旧结果不属于当前条件，不能继续展示。
+      if (!background) {
+        batches.value = [];
+        total.value = 0;
+      }
+      if (!(await handleUnauthorized(apiError))) error.value = apiError;
+    }
   } finally {
     if (listController === controller && mounted) {
       isLoading.value = false;
@@ -347,15 +348,49 @@ async function cancelBatch(item: MasterDataBatchSummary) {
   }
 }
 
-/** 创建当前选择业务批次并立即完成自动取得、校验和当前数据更新。 */
-async function submitBatch() {
+/** 校验批次业务选择，并为本次用户操作生成稳定的幂等请求。 */
+function prepareBatchInput() {
   formError.value = validateMasterDataBatchForm(form.value) ?? '';
   const business = syncOptions.value.businesses.find(
     (item) => item.category === form.value.category,
   );
   if (!formError.value && !business) formError.value = '请选择可用的同步业务';
-  if (formError.value || isSaving.value) return;
-  const input = toStartMasterDataBatchInput(form.value);
+  if (formError.value) return null;
+  return toStartMasterDataBatchInput(form.value);
+}
+
+/** 创建待执行批次并显示详情；该路径不调用 HIS。 */
+async function createPendingBatch() {
+  if (isSaving.value) return;
+  const input = prepareBatchInput();
+  if (!input) return;
+  lastStartInput.value = input;
+  isSaving.value = true;
+  createError.value = null;
+  try {
+    const created = await startMasterDataBatch(input);
+    isCreatorOpen.value = false;
+    notice.value = `批次 ${created.batchNo} 已创建，尚未访问 HIS；可在详情中同步或取消。`;
+    auditTarget.value = {
+      targetType: 'MASTER_DATA_BATCH',
+      targetId: created.batchNo,
+    };
+    page.value = 1;
+    await loadBatches(true);
+    await openDetail(created);
+  } catch (caught) {
+    const apiError = asApiError(caught, '无法创建待执行批次');
+    if (!(await handleUnauthorized(apiError))) createError.value = apiError;
+  } finally {
+    isSaving.value = false;
+  }
+}
+
+/** 创建当前选择业务批次并立即完成自动取得、校验和当前数据更新。 */
+async function submitBatch() {
+  if (isSaving.value) return;
+  const input = prepareBatchInput();
+  if (!input) return;
   lastStartInput.value = input;
   isSaving.value = true;
   createError.value = null;
@@ -821,7 +856,7 @@ onBeforeUnmount(() => {
     <section
       class="prototype-section work-table-section batch-table-section"
     >
-      <div v-if="error && !isLoading" class="batch-list-error" role="alert">
+      <div v-if="error && !isLoading && batches.length > 0" class="batch-list-error" role="alert">
         <AlertCircle :size="19" />
         <div>
           <strong>同步批次读取失败</strong>
@@ -831,14 +866,20 @@ onBeforeUnmount(() => {
         <button class="work-quiet-button" type="button" @click="reloadPage">重试读取</button>
       </div>
       <PageState v-if="isLoading" kind="loading" title="正在读取同步批次" description="请稍候" />
-      <PageState v-else-if="!error && total === 0" kind="empty" title="当前条件下没有同步批次" compact :description="
+      <PageState v-else-if="error && batches.length === 0" kind="error" title="暂时无法读取同步批次" compact :description="
+        `${error.message}；本次查询未完成，无法确认批次总数。${error.requestId ? ` 请求编号：${error.requestId}` : ''}`
+      ">
+        <template #icon><AlertCircle :size="26" /></template>
+        <template #actions><button class="work-quiet-button" type="button" @click="reloadPage"><RefreshCw :size="15" />重试读取</button></template>
+      </PageState>
+      <PageState v-else-if="total === 0" kind="empty" title="当前条件下没有同步批次" compact :description="
           canStart && hasSyncOption
             ? '可选择已开放的业务发起新同步。'
             : '可调整筛选条件，或稍后刷新查看最新记录。'
         ">
         <template #icon><Database :size="29" /></template>
       </PageState>
-      <AdminTableFrame v-else-if="!error && batches.length" label="同步批次列表" :has-actions="hasBatchRowActions">
+      <AdminTableFrame v-else-if="batches.length" label="同步批次列表" :has-actions="hasBatchRowActions">
         <table class="work-table">
           <thead>
             <tr>
@@ -888,6 +929,14 @@ onBeforeUnmount(() => {
               </td>
               <td v-if="hasBatchRowActions">
                 <ListRowActions label="同步批次操作">
+                  <button
+                    class="work-quiet-button"
+                    type="button"
+                    :aria-label="`查看批次 ${item.batchNo} 详情`"
+                    @click="openDetail(item)"
+                  >
+                    查看详情
+                  </button>
                   <button
                     v-if="
                       hasPermission('master-data:sync') &&
@@ -1110,6 +1159,7 @@ onBeforeUnmount(() => {
       :form-error="formError"
       @close="isCreatorOpen = false"
       @submit="submitBatch"
+      @create-pending="createPendingBatch"
       @reload="reloadCreatedBatch"
       @configure="openInterfaceConfiguration"
       @retry-sources="loadSyncSources"
@@ -1356,9 +1406,9 @@ onBeforeUnmount(() => {
   font-weight: 650;
 }
 @media (max-width: 640px) {
-  .sync-readiness-notice,
+  .sync-readiness-notice { align-items: flex-start; flex-wrap: wrap; }
+  .sync-readiness-notice button { margin-left: 28px; }
   .batch-list-error { align-items: flex-start; flex-wrap: wrap; }
-  .sync-readiness-notice button,
   .batch-list-error button { margin-left: 28px; }
   .batch-execution-section .batch-execution-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));

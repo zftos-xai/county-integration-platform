@@ -99,7 +99,7 @@ test('外部系统页按数据阶段收敛空状态操作', async () => {
   assert.match(source, /v-else-if="!error && systems\.length === 0" class="prototype-section first-system-empty"/)
   assert.match(source, /<ListQueryToolbar v-if="!endpointError && endpointGroups\.length"/)
   assert.match(source, /<button v-if="canWrite && selectedSystem && endpointGroups\.length > 0" class="prototype-button"[^>]*>[^<]*<Plus[^>]*\/>新增机构接口配置/)
-  assert.match(source, /v-else-if="selectedSystem && endpointGroups\.length === 0" class="endpoint-empty"/)
+  assert.match(source, /<PageState v-else-if="selectedSystem && endpointGroups\.length === 0" kind="empty" title="还没有可展示的机构"[^>]*compact>/)
   assert.match(source, /<PageState v-if="filteredEndpointGroups\.length === 0" kind="empty" title="没有符合当前筛选条件的机构接口配置" compact/)
   assert.match(source, /<AdminTableFrame v-else label="外部系统端点配置矩阵"/)
   assert.doesNotMatch(source, /filteredEndpointGroups\.length === 0" class="prototype-empty"/)

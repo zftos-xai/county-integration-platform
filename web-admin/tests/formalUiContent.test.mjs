@@ -34,7 +34,7 @@ test('未开放路由使用共享页面状态组件承载说明', async () => {
   const baseStyles = await readFile('web-admin/src/assets/styles/base.css', 'utf8')
 
   assert.match(source, /import PageState from '@\/components\/PageState\.vue'/)
-  assert.match(source, /<PageState class="placeholder-page-state" kind="info" title="当前功能暂未开放。">/)
+  assert.match(source, /<PageState class="placeholder-page-state" kind="info" title="当前功能暂未开放。" compact>/)
   assert.doesNotMatch(source, /class="empty-page"/)
   assert.doesNotMatch(baseStyles, /\.empty-page/)
 })

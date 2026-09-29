@@ -16,6 +16,11 @@ test('机构筛选在宽屏同行显示，在较窄视口按顺序换行', () =>
   assert.match(sharedToolbar, /\.standard-list-toolbar--search-with-selects > \.standard-list-toolbar__filters \{ grid-column: 1; grid-row: 1; display: grid; grid-template-areas: "search status type";/)
   assert.match(sharedToolbar, /@container \(min-width: 381px\) and \(max-width: 760px\)[\s\S]*?grid-template-areas: "search search" "status type";/)
   assert.match(sharedToolbar, /@container \(max-width: 560px\)[\s\S]*?grid-template-areas: "search" "status" "type";/)
-  assert.match(sharedToolbar, /\.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ white-space: nowrap; \}/)
-  assert.doesNotMatch(sharedToolbar, /\.standard-list-toolbar[^\n]*\.standard-list-toolbar__refresh \{[^}]*margin-inline-start: auto;/)
+  assert.match(sharedToolbar, /\.standard-list-toolbar__commands > \.standard-list-toolbar__refresh \{ margin-inline-start: auto; white-space: nowrap; \}/)
+})
+
+test('机构列表初次读取失败显示可重试的共享错误状态，后台刷新失败保留旧数据', () => {
+  assert.match(page, /error && !isLoading && organizations\.length > 0/)
+  assert.match(page, /<PageState v-else-if="error && organizations\.length === 0" kind="error" title="无法读取机构列表"/)
+  assert.match(page, /<template #actions><button class="work-quiet-button" type="button" @click="loadOrganizations\(\)">[\s\S]*?重试<\/button><\/template>/)
 })

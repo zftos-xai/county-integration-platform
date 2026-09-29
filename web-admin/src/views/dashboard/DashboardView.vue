@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
       <div class="overview-commandbar-actions"><span class="prototype-tag overview-health-tag" :class="health === 'available' ? 'success' : health === 'unavailable' ? 'danger' : 'neutral'">{{ health === 'available' ? '服务可用' : health === 'unavailable' ? '连接失败' : '检查中' }}</span><button class="work-quiet-button overview-refresh" type="button" title="重新检查" :disabled="isLoading" @click="loadDashboard"><RefreshCw :size="14" :class="{ spinning: isLoading }" />刷新</button></div>
     </div>
 
-    <div v-if="failureCount" class="dashboard-warning" role="alert"><AlertCircle :size="18" /><span><strong>部分管理概况暂时无法读取</strong><small>未能读取：{{ failureLabels.join('、') }}。已有数据仍可使用，可稍后刷新。</small></span></div>
+    <div v-if="failureCount" class="dashboard-warning" role="alert"><AlertCircle :size="18" /><span><strong>管理概况暂时无法读取</strong><small>未能读取：{{ failureLabels.join('、') }}。可稍后刷新重试。</small></span></div>
 
     <section v-if="metrics.length" class="overview-kpis" aria-label="管理关键指标">
       <RouterLink v-for="metric in metrics" :key="metric.to" :to="metric.to"><span>{{ metric.label }}</span><strong>{{ metric.value ?? '—' }}</strong><small>{{ metric.value === null ? '读取失败或尚未返回' : metric.detail }}</small></RouterLink>

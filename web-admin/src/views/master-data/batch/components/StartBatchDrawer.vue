@@ -1,4 +1,4 @@
-<!-- 基础数据同步窗口：从已验证HIS来源选择业务及必要的来源查询范围后立即执行。 -->
+<!-- 基础数据批次窗口：选择HIS来源与查询范围，并创建待执行批次或立即同步。 -->
 <script setup lang="ts">
 import {
   AlertCircle,
@@ -24,7 +24,14 @@ const props = defineProps<{
 }>()
 const form = defineModel<MasterDataBatchForm>('form', { required: true })
 const fullRangePreview = ref(previewFullSyncRange(new Date()))
-const emit = defineEmits<{ close: []; submit: []; reload: []; configure: []; retrySources: [] }>()
+const emit = defineEmits<{
+  close: []
+  submit: []
+  createPending: []
+  reload: []
+  configure: []
+  retrySources: []
+}>()
 /** 无法确认写入结果时，允许使用原请求编号回查，避免重复创建批次。 */
 const canRecoverResult = computed(
   () =>
@@ -155,6 +162,7 @@ watch(
           class="batch-start-form"
           @submit.prevent="emit('submit')"
         >
+          <p class="pending-batch-help">可先创建待执行批次；此操作不会访问 HIS，之后可在详情中同步或取消。</p>
           <section class="batch-form-section" aria-label="HIS 数据来源">
             <label class="batch-form-field">
               <span>{{ form.category === 'ICD10_DIAGNOSIS' ? 'HIS 调用端点机构' : 'HIS 来源机构' }}</span>
@@ -237,6 +245,14 @@ watch(
           取消</button
         ><button
           v-if="!isSourceLoading && !sourceError && options.sources.length > 0 && options.businesses.length > 0"
+          class="work-quiet-button"
+          type="button"
+          :disabled="isSaving"
+          @click="emit('createPending')"
+        >
+          创建待执行批次
+        </button><button
+          v-if="!isSourceLoading && !sourceError && options.sources.length > 0 && options.businesses.length > 0"
           class="prototype-button"
           type="button"
           :disabled="isSaving"
@@ -258,6 +274,7 @@ watch(
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
+.pending-batch-help { margin: 0; color: #526872; font-size: 12px; line-height: 1.5; }
 .batch-form-section { min-width: 0; }
 .batch-form-section + .batch-form-section { padding-top: 14px; border-top: 1px solid #e1e7e9; }
 .batch-start-form .batch-form-field {

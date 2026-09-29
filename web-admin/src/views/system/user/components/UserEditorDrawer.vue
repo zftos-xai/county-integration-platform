@@ -41,6 +41,7 @@ const scopeDraft = defineModel<number[]>('scopeDraft', { required: true })
 const temporaryPassword = defineModel<string>('temporaryPassword', { required: true })
 const isPasswordResetOpen = defineModel<boolean>('isPasswordResetOpen', { required: true })
 const activeSection = ref<EditorSection>('base')
+const drawerContent = ref<HTMLDivElement | null>(null)
 const roleNameById = computed(() => new Map(props.roles.map(item => [item.id, item.roleName])))
 const organizationNameById = computed(() => new Map(props.organizations.map(item => [item.id, item.organizationName])))
 const primaryOrganizationCode = computed(() => props.organizations.find(item => String(item.id) === form.value.primaryOrganizationId)?.organizationCode ?? '')
@@ -48,6 +49,13 @@ const addedRoleNames = computed(() => roleDraft.value.filter(id => !props.select
 const removedRoleNames = computed(() => (props.selected?.roleIds ?? []).filter(id => !roleDraft.value.includes(id)).map(id => roleNameById.value.get(id) ?? `角色 #${id}`))
 const addedScopeNames = computed(() => scopeDraft.value.filter(id => !props.selected?.organizationScopeIds.includes(id)).map(id => organizationNameById.value.get(id) ?? `机构 #${id}`))
 const removedScopeNames = computed(() => (props.selected?.organizationScopeIds ?? []).filter(id => !scopeDraft.value.includes(id)).map(id => organizationNameById.value.get(id) ?? `机构 #${id}`))
+
+/** 切换抽屉页签时回到正文顶部，避免旧滚动位置遮住新页签的标题。 */
+function selectSection(section: EditorSection) {
+  const scrollContainer = drawerContent.value?.parentElement
+  if (scrollContainer) scrollContainer.scrollTop = 0
+  activeSection.value = section
+}
 </script>
 
 <template>
@@ -55,11 +63,11 @@ const removedScopeNames = computed(() => (props.selected?.organizationScopeIds ?
       <template #title><div><span>{{ mode === 'create' ? '新增平台用户' : mode === 'edit' ? '编辑用户' : '用户详情' }}</span><h2 id="user-editor-title">{{ mode === 'create' ? '建立用户账号' : selected?.displayName }}</h2><small v-if="selected">登录名：{{ selected.loginName }}</small></div></template>
       <template #subheader><div v-if="isDetailLoading" class="drawer-loading"><LoaderCircle class="spinning" :size="22" />正在读取最新版本…</div></template>
       <template #tabs><nav v-if="selected" class="user-editor-tabs" aria-label="用户编辑区域">
-        <button type="button" :class="{ active: activeSection === 'base' }" :aria-selected="activeSection === 'base'" @click="activeSection = 'base'">基础资料</button>
-        <button type="button" :class="{ active: activeSection === 'access' }" :aria-selected="activeSection === 'access'" @click="activeSection = 'access'">访问权限</button>
-        <button v-if="canWrite" type="button" :class="{ active: activeSection === 'password' }" :aria-selected="activeSection === 'password'" @click="activeSection = 'password'">密码操作</button>
+        <button type="button" :class="{ active: activeSection === 'base' }" :aria-selected="activeSection === 'base'" @click="selectSection('base')">基础资料</button>
+        <button type="button" :class="{ active: activeSection === 'access' }" :aria-selected="activeSection === 'access'" @click="selectSection('access')">访问权限</button>
+        <button v-if="canWrite" type="button" :class="{ active: activeSection === 'password' }" :aria-selected="activeSection === 'password'" @click="selectSection('password')">密码操作</button>
       </nav></template>
-      <div class="user-drawer-body">
+      <div ref="drawerContent" class="user-drawer-body">
         <div v-if="operationError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span><strong>{{ operationError.message }}</strong><small v-if="operationError.status === 409">数据已变化，请重新读取最新版本后再操作。</small><small v-if="operationError.requestId">请求编号：{{ operationError.requestId }}</small></span><button v-if="operationError.status === 409 || isWriteResultUncertain(operationError)" class="work-quiet-button" type="button" @click="emit('reload')">重新读取</button></div>
         <div v-if="formError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ formError }}</span></div>
         <form v-if="activeSection === 'base'" id="user-base-form" class="user-form" @submit.prevent="emit('submitBase')">

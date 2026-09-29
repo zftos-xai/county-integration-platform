@@ -130,6 +130,11 @@ test('两个页面使用同一布局和表格样式，不再独立定义机构�
   assert.doesNotMatch(source, /\.directory-search\s*\{[^}]*flex/)
 })
 
+test('响应式目录类型选择器使用两列完整显示全部类型', () => {
+  assert.match(source, /@media\s*\(max-width:780px\)[\s\S]*?\.directory-tabs\s*\{[^}]*display:grid;[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\);[^}]*overflow:visible;/)
+  assert.match(source, /@media\s*\(max-width:780px\)[\s\S]*?\.directory-tabs button\s*\{[^}]*width:100%;[^}]*text-align:left;/)
+})
+
 test('两个目录的展开详情共用带单元格边界的字段栅格', async () => {
   const styles = await readFile(new URL('directory-records.css', directory), 'utf8')
   const hospital = await readFile(new URL('HospitalDirectoryView.vue', directory), 'utf8')
@@ -141,7 +146,7 @@ test('两个目录的展开详情共用带单元格边界的字段栅格', async
   assert.match(hospital, /<AdminTableFrame[^>]*:pin-actions="false"/)
   assert.match(medical, /<AdminTableFrame[^>]*:pin-actions="false"/)
   assert.match(sharedStyles, /\.action-column-table th:last-child,[\s\S]*?\.action-column-table td:last-child:not\(\[colspan\]\) \{[^}]*position: sticky/)
-  assert.match(styles, /\.directory-detail--hospital section:first-child dl\s*\{ grid-template-columns:max-content; \}/)
+  assert.match(styles, /\.directory-detail--hospital section:first-child dl,[\s\S]*?\.directory-detail section:last-child dl \{ grid-template-columns:minmax\(0,1fr\); \}/)
   assert.match(hospital, /directory-detail directory-detail--hospital/)
   assert.match(styles, /\.directory-detail dt,\.directory-detail dd\s*\{[^}]*line-height:1\.35;/s)
   assert.doesNotMatch(styles, /\.directory-detail dl div\s*\{[^}]*min-height:/s)
@@ -149,7 +154,6 @@ test('两个目录的展开详情共用带单元格边界的字段栅格', async
   assert.match(styles, /\.directory-detail\s*\{[^}]*width:100%;[^}]*grid-template-columns:minmax\(0,1\.15fr\) minmax\(0,\.85fr\);/s)
   assert.match(styles, /\.directory-detail dl\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/s)
   assert.match(styles, /\.directory-detail dd\s*\{[^}]*overflow-wrap:anywhere/s)
-  assert.match(styles, /\.directory-detail section:last-child dl\s*\{ grid-template-columns:max-content; \}/)
   assert.match(styles, /@media\s*\(max-width:1100px\)\s*\{[^}]*\.directory-detail\s*\{[^}]*grid-template-columns:minmax\(0,1fr\); \}/s)
   assert.match(styles, /@media\s*\(max-width:1100px\)\s*\{[^}]*\.directory-detail\s*\{ width:min\(100%,calc\(100vw - 64px\)\); grid-template-columns:minmax\(0,1fr\); \}/s)
   assert.match(styles, /@media\s*\(max-width:1100px\)[\s\S]*?\.directory-detail\.directory-detail--hospital section:first-child dl,[\s\S]*?\.directory-detail section:last-child dl \{ grid-template-columns:minmax\(0,1fr\); \}/)
@@ -164,6 +168,14 @@ test('数据目录页头和页签去除通用导航内边距造成的多余留�
   assert.match(shellStyles, /\.prototype-main\.directory-page \.prototype-breadcrumb\s*\{[^}]*padding:\s*0;/s)
   assert.match(shellStyles, /\.prototype-main\.directory-page \.prototype-content\s*\{[^}]*padding:\s*8px 20px 28px;/s)
   assert.match(tabs, /\.dataset-nav\s*\{[^}]*padding:\s*0;/s)
+})
+
+test('ICD-10目录卡片标题作为共享页头的二级标题', async () => {
+  const page = await readFile(new URL('Icd10DirectoryView.vue', directory), 'utf8')
+  assert.match(page, /<h2>平台公共 ICD-10 诊断目录<\/h2>/)
+  assert.doesNotMatch(page, /<h1>/)
+  assert.match(page, /\.icd10-context h2 \{[^}]*font-size:18px;/)
+  assert.match(page, /@media \(max-width:520px\) \{ \.icd10-context h2 \{ font-size:16px;/)
 })
 
 test('类型页签已说明目录种类，结果数不在查询区重复展示；刷新仍在查询区可用', async t => {

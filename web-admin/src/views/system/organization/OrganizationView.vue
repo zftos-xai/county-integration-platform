@@ -355,7 +355,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="content organization-page">
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
-    <div v-if="error && !isLoading" class="feedback danger" role="alert">
+    <div v-if="error && !isLoading && organizations.length > 0" class="feedback danger" role="alert">
       <AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span>
       <button class="text-button" type="button" :disabled="isRefreshing" @click="loadOrganizations(true)"><RefreshCw :size="15" />重试</button>
     </div>
@@ -372,6 +372,10 @@ onBeforeUnmount(() => {
     <section class="organization-panel prototype-section work-table-section">
 
       <PageState v-if="isLoading" kind="loading" title="正在加载机构数据" description="请稍候" />
+      <PageState v-else-if="error && organizations.length === 0" kind="error" title="无法读取机构列表" :description="error.message" compact>
+        <template #icon><AlertCircle :size="26" /></template>
+        <template #actions><button class="work-quiet-button" type="button" @click="loadOrganizations()"><RefreshCw :size="15" />重试</button></template>
+      </PageState>
       <PageState v-else-if="!error && organizations.length === 0" kind="empty" title="当前账号可访问的机构中没有机构" :description="canWrite ? '可新增下级机构，或请管理员确认您的机构访问权限。' : '请联系管理员确认您的机构访问权限。'">
         <template #icon><Building2 :size="30" /></template>
       </PageState>

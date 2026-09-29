@@ -273,13 +273,17 @@ onBeforeUnmount(() => { mounted = false; controller?.abort() })
 <template>
   <section class="content parameter-page">
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
-    <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}</span><button class="prototype-text-button" type="button" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
+    <div v-if="error && !isLoading && definitions.length > 0" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ error.message }}</span><button class="prototype-text-button" type="button" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
     <div class="parameter-summary" aria-label="参数配置概况" :aria-busy="isLoading || isRefreshing"><span><strong>{{ summaryUnavailable ? '—' : definitions.length }}</strong> 个参数</span><span><strong>{{ summaryUnavailable ? '—' : configuredCount }}</strong> 项已启用配置</span><span :class="{ warning: !summaryUnavailable && missingCount > 0 }"><strong>{{ summaryUnavailable ? '—' : missingCount }}</strong> 项尚未配置</span></div>
     <div class="parameter-query-container">
       <ListQueryToolbar filters-layout="search-with-selects" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)"><label class="prototype-search standard-list-filter--search"><Search :size="16" /><input v-model="query" type="search" placeholder="参数名称、键或机构" aria-label="搜索参数" /></label><select class="standard-list-filter--status" v-model="environment" aria-label="运行环境"><option value="all">全部环境</option><option value="DEVELOPMENT">开发环境</option><option value="TEST">测试环境</option><option value="PRODUCTION">生产环境</option></select><select class="standard-list-filter--type" v-model="configurationStatus" aria-label="配置状态"><option value="all">全部配置状态</option><option value="configured">已配置并启用</option><option value="missing">尚未配置</option><option value="disabled">已配置但停用</option></select><template #actions><button v-if="canWrite" class="prototype-button" type="button" :disabled="!newConfigurationScope" :title="newConfigurationScope ? '为尚未配置的环境或机构范围新增参数值' : '所有允许的环境和机构范围都已配置'" @click="openNewConfiguration"><Plus :size="15" />新增配置</button></template></ListQueryToolbar>
     </div>
     <section class="prototype-section work-table-section parameter-panel">
       <PageState v-if="isLoading" kind="loading" title="正在加载参数定义" />
+      <PageState v-else-if="error && definitions.length === 0" kind="error" title="暂时无法读取参数配置" :description="error.message" compact>
+        <template #icon><AlertCircle :size="26" /></template>
+        <template #actions><button class="work-quiet-button" type="button" @click="loadPage()"><RefreshCw :size="15" />重试</button></template>
+      </PageState>
       <PageState v-else-if="!error && definitions.length === 0" kind="empty" title="尚无代码注册参数" description="参数必须先在后端完成定义、约束和代码评审，管理页不会创建任意参数键。">
         <template #icon><Settings2 :size="30" /></template>
       </PageState>
@@ -295,7 +299,7 @@ onBeforeUnmount(() => { mounted = false; controller?.abort() })
 <style scoped>
 .parameter-page { display: grid; gap: 0; }
 .parameter-query-container { min-width: 0; container-type: inline-size; }
-.parameter-summary { width: 100%; max-width: 900px; margin-bottom: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }.parameter-summary span { padding: 8px 11px; border: 1px solid #dce4e6; border-radius: 5px; background: white; color: #62717a; font-size: 11px; }.parameter-summary strong { margin-right: 3px; color: #263b42; font-size: 15px; }.parameter-summary .warning { border-color: #e6cf9d; background: #fff9e9; color: #7b5c1f; }
+.parameter-summary { width: 100%; margin-bottom: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }.parameter-summary span { padding: 8px 11px; border: 1px solid #dce4e6; border-radius: 5px; background: white; color: #62717a; font-size: 11px; }.parameter-summary strong { margin-right: 3px; color: #263b42; font-size: 15px; }.parameter-summary .warning { border-color: #e6cf9d; background: #fff9e9; color: #7b5c1f; }
 .parameter-panel { --action-column-width: 156px; }
 .parameter-table { min-width: 1080px; }.parameter-table td small { display: block; margin-top: 3px; color: #78868e; font-size: 10px; }
 .parameter-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }

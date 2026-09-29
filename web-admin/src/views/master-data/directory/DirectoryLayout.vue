@@ -214,6 +214,6 @@ onBeforeUnmount(() => request.abort())
 .directory-state span { font-size:12px; }
 button:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 @media(max-width:1100px) { .directory-layout { grid-template-columns:220px minmax(0,1fr); } .directory-context { flex-wrap:wrap; } }
-@media(max-width:780px) { .directory-layout { grid-template-columns:minmax(0,1fr); } .organization-rail { position:static; } .organization-list { max-height:210px; } }
-@media(max-width:520px) { .directory-context { display:grid; } .directory-tabs { gap:20px; } }
+@media(max-width:780px) { .directory-layout { grid-template-columns:minmax(0,1fr); } .organization-rail { position:static; } .organization-list { max-height:210px; } .directory-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 12px; overflow:visible; padding-block:6px; } .directory-tabs button { width:100%; min-width:0; height:40px; text-align:left; } }
+@media(max-width:520px) { .directory-context { display:grid; } }
 </style>

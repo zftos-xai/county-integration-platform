@@ -6,7 +6,7 @@ import PageState from '@/components/PageState.vue'
 
 <template>
   <section class="content">
-    <PageState class="placeholder-page-state" kind="info" title="当前功能暂未开放。">
+    <PageState class="placeholder-page-state" kind="info" title="当前功能暂未开放。" compact>
       <template #icon><FileClock :size="34" /></template>
     </PageState>
   </section>

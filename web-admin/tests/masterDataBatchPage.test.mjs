@@ -42,7 +42,7 @@ const layoutPath = new URL('../src/layout/AppLayout.vue', import.meta.url);
 const layoutStylePath = new URL('../src/assets/styles/prototype.css', import.meta.url);
 const detailGridStylePath = new URL('../src/views/master-data/batch/batch-detail-grid.css', import.meta.url);
 
-test('批次详情入口已从正式导航流程移除，旧地址回到批次列表', async () => {
+test('批次独立详情路由回到列表，列表提供只读结果抽屉入口', async () => {
   const [layout, router, list] = await Promise.all([
     readFile(layoutPath, 'utf8'),
     readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'),
@@ -50,7 +50,9 @@ test('批次详情入口已从正式导航流程移除，旧地址回到批次�
   ]);
   assert.match(router, /path: 'master-data\/batches\/:id',[\s\S]*?redirect: '\/master-data\/batches'/);
   assert.doesNotMatch(layout, /MasterDataBatchDetailView|batch-detail-page/);
-  assert.doesNotMatch(list, /<button[^>]*>[^<]*详情|openReview/);
+  assert.match(list, /@click="openDetail\(item\)"/);
+  assert.match(list, /查看详情/);
+  assert.doesNotMatch(list, /openReview/);
 });
 
 test('批次字段表使用独立的虚线栅格，不继承全局详情表留白', async () => {
@@ -177,21 +179,22 @@ test('同步批次正式页面只使用真实API并在结果未知时重新读�
   );
 });
 
-test('同步批次列表保持单行省略并使用服务端分页', async () => {
+test('同步批次列表可只读打开结果抽屉，并保留创建态取消操作和服务端分页', async () => {
   const source = await readFile(pagePath, 'utf8');
 
   assert.match(source, /<AdminPagination/);
   assert.match(source, /text-overflow: ellipsis/);
   assert.match(source, /white-space: nowrap/);
   assert.match(source, /changePageSize/);
-  assert.match(source, /const hasBatchRowActions = computed\([\s\S]*?batches\.value\.some\(\(item\) => item\.status === 'CREATED'\)/);
+  assert.match(source, /const hasBatchRowActions = computed\([\s\S]*?batches\.value\.length > 0/);
   assert.match(source, /<th>批次号 \/ 开始时间<\/th>[\s\S]*?<th>同步对象<\/th>[\s\S]*?<th>取得结果<\/th>[\s\S]*?<th>处理结果<\/th>[\s\S]*?<th v-if="hasBatchRowActions">操作<\/th>/);
-  assert.match(source, /<td v-if="hasBatchRowActions">\s*<ListRowActions label="同步批次操作">/);
+  assert.match(source, /<td v-if="hasBatchRowActions">\s*<ListRowActions label="同步批次操作">\s*<button[\s\S]*?查看批次 \$\{item\.batchNo\} 详情[\s\S]*?@click="openDetail\(item\)"[\s\S]*?查看详情/);
   assert.match(source, /item\.startedAt \? `开始 \$\{formatTime\(item\.startedAt\)\}` : '尚未开始'/);
   assert.match(source, /<strong>\{\{ resultCountLabel\(item\) \}\}<\/strong>/);
   assert.match(source, /<ListRowActions label="同步批次操作">/);
+  assert.match(source, /@click="openDetail\(item\)"/);
   assert.match(source, /<AdminTableFrame[^>]*label="同步批次列表"[^>]*:has-actions="hasBatchRowActions"/);
-  assert.match(source, /<PageState v-else-if="!error && total === 0" kind="empty"[^>]*compact/);
+  assert.match(source, /<PageState v-else-if="total === 0" kind="empty"[^>]*compact/);
   assert.match(source, /\.batch-table-section\s*\{\s*min-height:\s*0;/);
   assert.doesNotMatch(source, /由系统自动校验；未完成类型不改变当前数据/);
 });
@@ -215,6 +218,24 @@ test('统一同步入口明确当前业务对象和直接对账边界', async ()
   assert.doesNotMatch(source, /当前阶段|保存后的结果|确认机构无误/);
   assert.match(source, /canRecoverResult/);
   assert.match(source, /读取现有批次/);
+});
+
+test('待执行批次入口只创建记录而不运行HIS，立即同步入口仍保留原流程', async () => {
+  const [drawer, page] = await Promise.all([
+    readFile(drawerPath, 'utf8'),
+    readFile(pagePath, 'utf8'),
+  ]);
+  const createOnlyFlow = page
+    .split('async function createPendingBatch()')[1]
+    ?.split('/** 创建当前选择业务批次并立即完成自动取得')[0];
+
+  assert.ok(createOnlyFlow, '待执行批次路径应保持独立');
+  assert.match(drawer, /此操作不会访问 HIS/);
+  assert.match(drawer, /emit\('createPending'\)/);
+  assert.match(page, /@create-pending="createPendingBatch"/);
+  assert.match(createOnlyFlow, /startMasterDataBatch\(input\)/);
+  assert.doesNotMatch(createOnlyFlow, /runMasterDataBatch/);
+  assert.match(page, /created = await startMasterDataBatch\(input\);\s*const updated = await runMasterDataBatch\(created\.id, created\.version\)/);
 });
 
 test('统一入口保留全量选择，并只读预览服务端将冻结的时间范围', async () => {
@@ -263,7 +284,7 @@ test('接口尚未就绪时不隐藏同步入口，并提供唯一配置入口',
   assert.match(drawer, /emit\('configure'\)/);
 });
 
-test('同步来源读取失败不伪装成无可用机构，批次读取失败不显示零条或旧列表', async () => {
+test('同步来源读取失败不伪装成无可用机构，批次初次失败显示共享状态且刷新失败保留列表', async () => {
   const [page, drawer] = await Promise.all([
     readFile(pagePath, 'utf8'),
     readFile(drawerPath, 'utf8'),
@@ -276,7 +297,9 @@ test('同步来源读取失败不伪装成无可用机构，批次读取失败�
   assert.match(page, /hasLoadedSyncSources && hasSyncSource && !hasSyncOption/);
   assert.match(page, /canStart && !error && !isSyncSourceLoading && syncSourceError/);
   assert.doesNotMatch(page, /:summary=/);
-  assert.match(page, /v-else-if="!error && batches\.length"/);
+  assert.match(page, /v-else-if="error && batches\.length === 0" kind="error"/);
+  assert.match(page, /error && !isLoading && batches\.length > 0/);
+  assert.match(page, /v-else-if="batches\.length"/);
   assert.match(page, /同步批次读取失败/);
   assert.match(drawer, /v-else-if="sourceError"/);
   assert.match(drawer, /emit\('retrySources'\)/);

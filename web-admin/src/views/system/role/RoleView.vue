@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="content role-page">
     <AuditAwareSuccess v-if="notice" :message="notice" :target-type="auditTarget?.targetType" :target-id="auditTarget?.targetId" @close="notice = ''; auditTarget = null" />
-    <div v-if="error && !isLoading" class="feedback danger" role="alert"><AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
+    <div v-if="error && !isLoading && roles.length > 0" class="feedback danger" role="alert"><AlertCircle :size="19" /><span><strong>{{ error.message }}</strong><small v-if="error.requestId">请求编号：{{ error.requestId }}</small></span><button class="prototype-text-button" type="button" :disabled="isRefreshing" @click="loadPage(true)"><RefreshCw :size="15" />重试</button></div>
 
     <ListQueryToolbar class="role-toolbar" filters-layout="search-with-three-selects" :refreshing="isRefreshing" @query="applyListFilters" @reset="resetListFilters" @refresh="loadPage(true)">
       <label class="prototype-search standard-list-filter--search"><Search :size="16" /><input v-model="query" type="search" placeholder="角色名称或代码" aria-label="搜索角色" /></label>
@@ -351,6 +351,10 @@ onBeforeUnmount(() => {
 
     <section class="prototype-section work-table-section role-panel">
       <PageState v-if="isLoading" kind="loading" title="正在加载角色权限" />
+      <PageState v-else-if="error && roles.length === 0" kind="error" title="暂时无法读取角色权限" :description="error.message" compact>
+        <template #icon><AlertCircle :size="26" /></template>
+        <template #actions><button class="work-quiet-button" type="button" @click="loadPage()"><RefreshCw :size="15" />重试</button></template>
+      </PageState>
       <PageState v-else-if="!error && roles.length === 0" kind="empty" title="平台暂无角色">
         <template #icon><KeyRound :size="30" /></template>
       </PageState>

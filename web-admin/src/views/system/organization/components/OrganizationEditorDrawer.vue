@@ -1,5 +1,6 @@
 <!-- 机构侧边编辑窗口：负责表单展示、焦点管理和编辑器事件，不执行远程请求。 -->
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import { AlertCircle, LoaderCircle } from 'lucide-vue-next'
 import DrawerFrame from '@/components/DrawerFrame.vue'
 import { isWriteResultUncertain } from '@/utils/request'
@@ -26,13 +27,19 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: []; submit: []; reload: []; edit: [] }>()
 const form = defineModel<OrganizationForm>('form', { required: true })
+const formElement = ref<HTMLFormElement | null>(null)
+
+watch(() => props.mode, async () => {
+  await nextTick()
+  formElement.value?.parentElement?.scrollTo({ top: 0 })
+})
 </script>
 
 <template>
   <DrawerFrame panel-class="organization-drawer" panel-width="min(560px, 100vw)" body-class="organization-frame-body" body-padding="0" labelled-by="organization-editor-title" @close="emit('close')">
       <template #title><div><span>{{ mode === 'create' ? '新增下级机构' : mode === 'edit' ? '编辑机构' : '机构详情' }}</span><h2 id="organization-editor-title">{{ mode === 'create' ? '建立机构档案' : selected?.organizationName }}</h2></div></template>
       <template #subheader><div v-if="isDetailLoading" class="drawer-loading"><LoaderCircle class="spinning" :size="22" />正在读取最新版本…</div></template>
-      <form id="organization-form" class="organization-form" @submit.prevent="emit('submit')">
+      <form id="organization-form" ref="formElement" class="organization-form" @submit.prevent="emit('submit')">
         <div v-if="mode === 'create'" class="scope-change-note"><strong>保存后需要重新登录</strong><span>新增机构会改变当前账号可访问的机构范围。系统保存成功后将退出当前登录，以便重新读取最新范围。</span></div>
         <div v-if="operationError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span><strong>{{ operationError.message }}</strong><small v-if="operationError.status === 409">当前表单仍保留，请刷新最新版本后再修改。</small><small v-if="operationError.requestId">请求编号：{{ operationError.requestId }}</small></span><button v-if="selected || isWriteResultUncertain(operationError)" class="text-button" type="button" @click="emit('reload')">重新读取</button></div>
         <div v-if="formError" class="feedback danger" role="alert"><AlertCircle :size="18" /><span>{{ formError }}</span></div>
