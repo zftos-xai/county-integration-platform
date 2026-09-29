@@ -1,0 +1,237 @@
+{
+  "schema": "vista-web-contract-1.0",
+  "task_id": "county-platform-primary-his-endpoint-verification-20260929",
+  "mode": "acceptance-and-authorized-fixes",
+  "authority": {
+    "user_request": "用户明确要求对外部系统连接校验和 HIS 同步自动验收；操作限制为本地开发库与页面当前可见的 TEST 环境，具体外部请求及目录写入在动作前展示精确目标和影响。",
+    "project_rules": [
+      {
+        "source": "AGENTS.md",
+        "version": "workspace rules",
+        "verified_at": "2026-09-29T09:00:00Z"
+      },
+      {
+        "source": "vista-web-acceptance/SKILL.md",
+        "version": "local skill",
+        "verified_at": "2026-09-29T09:00:00Z"
+      }
+    ]
+  },
+  "baseline": {
+    "revision": "0abccb14951b176686f779686082fc4e7b4409f6",
+    "workspace_state": "工作区存在用户已有未提交修改；本专项不改应用代码、不覆盖修改。",
+    "allowed_files": [
+      "docs/verification/county-platform-primary-his-endpoint-verification-20260929.json",
+      "docs/verification/county-platform-primary-his-endpoint-verification-20260929-报告.json",
+      "docs/verification/county-platform-primary-his-endpoint-verification-20260929-证据.md"
+    ],
+    "must_preserve": [
+      "不触及生产端点或生产目录",
+      "不打印、保存或记录HIS凭证/完整SOAP报文",
+      "不执行合同列明范围以外的系统、机构或目录类别"
+    ],
+    "stop_conditions": [
+      "在发出认证请求前必须确认目的主机、请求字段类别和可能使可用端点变为失败/未知的影响。",
+      "若出现未知响应，只读查询记录，不自动重试。"
+    ]
+  },
+  "target": {
+    "origin": "http://127.0.0.1:5173",
+    "route": "/external-systems",
+    "page_name": "外部系统",
+    "user_role": "本地开发库 admin",
+    "page_purpose": "核验现存PRIMARY_HIS TEST端点的外部请求、结果回写和审计。"
+  },
+  "project_adapter": {
+    "service_entry": "tools/run-backend-dev.sh; web-admin Vite",
+    "session_setup": "当前浏览器使用既有本地 admin 会话，不记录凭证或令牌。",
+    "design_authorities": [
+      "AGENTS.md",
+      "web-admin/src/components",
+      "web-admin/src/layout/AppLayout.vue"
+    ],
+    "component_authorities": [
+      "web-admin/src/layout/AppLayout.vue",
+      "外部系统"
+    ],
+    "api_sources": [
+      "backend/src/main/java/cn/zqkj/platform/system/configuration/controller/ConfigurationController.java",
+      "backend/src/main/java/cn/zqkj/platform/system/configuration/service/impl/ConfigurationServiceImpl.java",
+      "backend/src/main/java/cn/zqkj/platform/his/service/impl/PhisEndpointVerificationServiceImpl.java",
+      "web-admin/src/views/configuration/external-system/ExternalSystemView.vue"
+    ],
+    "evidence_root": "/Users/vliudbe/Projects/county-integration-platform/docs/verification",
+    "git_policy": "不提交、不推送、不部署。"
+  },
+  "write_authorization": {
+    "allowed": true,
+    "environment": "仅本地 web-admin 和已确认的 SQL Server 开发库 county_integration；外部调用只允许现有 PRIMARY_HIS TEST 端点。",
+    "record_scope": "只针对已配置机构青神县汉阳镇中心卫生院、TEST环境、端点ID 1；当前实际地址为 http://223.85.21.172:6007/WebService.asmx?op=PHIS_Interface。请求将包含医院查询名、平台机构编码及端点已保存的认证凭证。",
+    "reversibility": "verify 会产生外网请求和状态/审计写入；如果请求失败或结果未知，会把已可同步端点转为失败/未知，影响随后同步。可重新校验恢复，但需新增真实HIS请求。",
+    "cleanup": "只读刷新校验最终状态和调用摘要；不改端点地址、凭证或启用状态。"
+  },
+  "environments": [
+    {
+      "id": "desktop",
+      "mode": "real-window",
+      "viewport": {
+        "width": 1445,
+        "height": 780
+      },
+      "basis": "Chrome 实测视口 1445×780 CSS px，DPR=2。"
+    }
+  ],
+  "visible_areas": [
+    {
+      "id": "content-root",
+      "name": "共享管理框架",
+      "presence": "always",
+      "trigger": "访问外部系统页并完整读取",
+      "owner": "AppLayout.vue",
+      "environment_expectations": {
+        "desktop": "确认导航、内容区和页面末端。"
+      }
+    },
+    {
+      "id": "primary-content",
+      "name": "外部系统端点矩阵",
+      "presence": "always",
+      "trigger": "查看PRIMARY_HIS系统",
+      "owner": "ExternalSystemView.vue",
+      "environment_expectations": {
+        "desktop": "读取TEST端点所属机构、当前状态及地址范围。"
+      }
+    },
+    {
+      "id": "verification-result",
+      "name": "端点验证及调用记录",
+      "presence": "conditional",
+      "trigger": "动作确认后发起100-008/100-003验证",
+      "owner": "ExternalSystemView.vue与Exchange页面",
+      "environment_expectations": {
+        "desktop": "核验结果回写、调用摘要和审计；不展示凭证。"
+      }
+    },
+    {
+      "id": "surface-end",
+      "name": "动作确认与反馈浮层",
+      "presence": "conditional",
+      "trigger": "需要用户确认后才会发出认证请求",
+      "owner": "ExternalSystemView.vue及共享确认弹窗",
+      "environment_expectations": {
+        "desktop": "核对最终确认目标、风险说明和成功/失败反馈。"
+      }
+    }
+  ],
+  "requirements": [
+    {
+      "id": "primary-his-test-endpoint-verification",
+      "module": "api-data-integrity",
+      "environment": "desktop",
+      "required": true,
+      "expected": "针对当前配置的 PRIMARY_HIS TEST 端点执行一次 verify；服务端依次真实调用 HIS 100-008 和 100-003，并回写验证状态/审计；刷新后核对状态与调用记录。",
+      "evidence_types": [
+        "screenshot",
+        "tool-log",
+        "network-log",
+        "data-receipt",
+        "source-trace"
+      ]
+    },
+    {
+      "id": "component-consumption",
+      "module": "component-consumption",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "theme",
+      "module": "theme",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "layout",
+      "module": "layout",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "iconography",
+      "module": "iconography",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "content",
+      "module": "content",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "page-end",
+      "module": "page-end",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "api-data-integrity",
+      "module": "api-data-integrity",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "business-validity",
+      "module": "business-validity",
+      "environment": "desktop",
+      "required": false,
+      "expected": "专项只验收已获批准的数据闭环；不会替代业务所有者确认源数据正确性。",
+      "evidence_types": [
+        "tool-log",
+        "engineering"
+      ]
+    }
+  ],
+  "exclusions": [
+    "生产环境和生产端点",
+    "轮换/显示任何凭证",
+    "修改现有端点",
+    "重试未知结果",
+    "其他外部系统"
+  ]
+}

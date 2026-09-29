@@ -1,0 +1,232 @@
+{
+  "schema": "vista-web-contract-1.0",
+  "task_id": "county-platform-role-zero-permission-write-20260929",
+  "mode": "acceptance-and-authorized-fixes",
+  "authority": {
+    "user_request": "用户继续要求完成先前定义的三项验收阶段目标；仅使用本地开发库。针对角色写入仅允许创建一条唯一VISTA验收自定义角色，保持权限集合为空、无用户引用，创建后停用并刷新回读；不授予权限、不分配用户、不删除。",
+    "project_rules": [
+      {
+        "source": "AGENTS.md",
+        "version": "workspace rules",
+        "verified_at": "2026-09-29T08:40:00Z"
+      },
+      {
+        "source": "vista-web-acceptance/SKILL.md",
+        "version": "local skill",
+        "verified_at": "2026-09-29T08:40:00Z"
+      }
+    ]
+  },
+  "baseline": {
+    "revision": "0abccb1",
+    "workspace_state": "浏览器会话重新建立；本地后端由 run-backend-dev.sh 启动并通过 SQL Server 2012/兼容级别110只读门禁。角色页基线仅显示 PLATFORM_ADMIN 系统保护角色、12项权限、1名用户。",
+    "allowed_files": [],
+    "must_preserve": [
+      "已有管理页面和权限不修改",
+      "仅PC与响应式范围；本轮仅验证角色写入，既有布局证据不重复",
+      "仅开发库，不提交、不推送、不部署"
+    ],
+    "stop_conditions": [
+      "只创建 roleCode=VISTA_ACCEPTANCE_20260929，角色名 VISTA验收角色-20260929。",
+      "创建后检查权限0项和用户0人，紧接着用角色编辑界面停用，并刷新列表和详情回读。",
+      "不得授予/替换任何功能权限，不得把角色分配给用户，不得删除角色。"
+    ]
+  },
+  "target": {
+    "origin": "http://127.0.0.1:5173",
+    "route": "/roles",
+    "page_name": "角色权限",
+    "user_role": "开发库 admin",
+    "page_purpose": "验证自定义角色零权限创建、停用和刷新读回。"
+  },
+  "project_adapter": {
+    "service_entry": "tools/run-backend-dev.sh; web-admin Vite",
+    "session_setup": "已用用户提供的本地开发账号建立admin会话；不记录口令或令牌。",
+    "design_authorities": [
+      "用户提供的页面规范及AGENTS.md"
+    ],
+    "component_authorities": [
+      "web-admin/src/components",
+      "web-admin/src/layout/AppLayout.vue"
+    ],
+    "api_sources": [
+      "web-admin/src/api/system/role.ts",
+      "web-admin/src/views/system/role/RoleView.vue",
+      "backend/src/main/java/cn/zqkj/platform/system/identity"
+    ],
+    "evidence_root": "/Users/vliudbe/Projects/county-integration-platform/docs/verification",
+    "git_policy": "不提交、不推送、不部署。"
+  },
+  "write_authorization": {
+    "allowed": true,
+    "environment": "仅 http://127.0.0.1:5173 + 已确认的 SQL Server 开发库 county_integration；仅新建唯一VISTA测试角色",
+    "record_scope": "只创建 VISTA_ACCEPTANCE_20260929 零权限角色，确认0项权限/0用户后停用并刷新回读",
+    "reversibility": "零权限、未分配用户的角色经产品停用，不授予访问；验收记录保留，不物理删除。",
+    "cleanup": "刷新列表/详情确认角色停用、0项权限、0个用户。"
+  },
+  "environments": [
+    {
+      "id": "desktop",
+      "mode": "real-window",
+      "viewport": {
+        "width": 1445,
+        "height": 780
+      },
+      "basis": "真实Chrome实测 window.innerWidth/innerHeight 为1445×780；页面文档宽度1430，无横向溢出。"
+    }
+  ],
+  "visible_areas": [
+    {
+      "id": "content-root",
+      "name": "共享管理框架",
+      "presence": "always",
+      "trigger": "访问角色页并滚动检查",
+      "owner": "web-admin/src/layout/AppLayout.vue",
+      "environment_expectations": {
+        "desktop": "逐屏读取主要页面区域、滚动末端和条件抽屉。"
+      }
+    },
+    {
+      "id": "primary-content",
+      "name": "角色权限主内容",
+      "presence": "always",
+      "trigger": "访问角色页",
+      "owner": "web-admin/src/views/system/role/RoleView.vue",
+      "environment_expectations": {
+        "desktop": "逐屏读取主要页面区域、滚动末端和条件抽屉。"
+      }
+    },
+    {
+      "id": "surface-end",
+      "name": "角色页末端与浮层",
+      "presence": "always",
+      "trigger": "滚动到角色页末端及打开条件抽屉",
+      "owner": "RoleView.vue及DrawerFrame",
+      "environment_expectations": {
+        "desktop": "逐屏读取主要页面区域、滚动末端和条件抽屉。"
+      }
+    },
+    {
+      "id": "role-list",
+      "name": "角色列表与新增入口",
+      "presence": "always",
+      "trigger": "访问/roles并读列表",
+      "owner": "web-admin/src/views/system/role/RoleView.vue",
+      "environment_expectations": {
+        "desktop": "读到现存角色和新增入口。"
+      }
+    },
+    {
+      "id": "role-editor",
+      "name": "角色创建/编辑条件抽屉",
+      "presence": "conditional",
+      "trigger": "打开唯一测试角色编辑器",
+      "owner": "web-admin/src/views/system/role/components/RoleEditorDrawer.vue",
+      "environment_expectations": {
+        "desktop": "检查角色代码、名称、状态及空权限集合。"
+      }
+    },
+    {
+      "id": "role-readback",
+      "name": "角色列表刷新与详情读回",
+      "presence": "conditional",
+      "trigger": "刷新列表并打开验收角色",
+      "owner": "web-admin/src/views/system/role/RoleView.vue",
+      "environment_expectations": {
+        "desktop": "确认停用、0权限、0用户。"
+      }
+    }
+  ],
+  "requirements": [
+    {
+      "id": "role-create-zero-permission",
+      "module": "business-validity",
+      "environment": "desktop",
+      "required": true,
+      "expected": "创建一条独立自定义角色；权限集合为空且未分配用户。",
+      "evidence_types": [
+        "screenshot",
+        "tool-log",
+        "engineering"
+      ]
+    },
+    {
+      "id": "role-disable-readback",
+      "module": "api-data-integrity",
+      "environment": "desktop",
+      "required": true,
+      "expected": "停用后刷新列表/详情，确认disabled、0权限和0个用户。",
+      "evidence_types": [
+        "screenshot",
+        "tool-log",
+        "engineering"
+      ]
+    },
+    {
+      "id": "component-consumption",
+      "module": "component-consumption",
+      "environment": "desktop",
+      "required": false,
+      "expected": "该项已有先前全页阶段证据，本专项聚焦角色写入闭环，不重复布局验收。",
+      "evidence_types": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "theme",
+      "module": "theme",
+      "environment": "desktop",
+      "required": false,
+      "expected": "该项已有先前全页阶段证据，本专项聚焦角色写入闭环，不重复布局验收。",
+      "evidence_types": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "layout",
+      "module": "layout",
+      "environment": "desktop",
+      "required": false,
+      "expected": "该项已有先前全页阶段证据，本专项聚焦角色写入闭环，不重复布局验收。",
+      "evidence_types": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "iconography",
+      "module": "iconography",
+      "environment": "desktop",
+      "required": false,
+      "expected": "该项已有先前全页阶段证据，本专项聚焦角色写入闭环，不重复布局验收。",
+      "evidence_types": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "content",
+      "module": "content",
+      "environment": "desktop",
+      "required": false,
+      "expected": "该项已有先前全页阶段证据，本专项聚焦角色写入闭环，不重复布局验收。",
+      "evidence_types": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "page-end",
+      "module": "page-end",
+      "environment": "desktop",
+      "required": false,
+      "expected": "该项已有先前全页阶段证据，本专项聚焦角色写入闭环，不重复布局验收。",
+      "evidence_types": [
+        "engineering"
+      ]
+    }
+  ],
+  "exclusions": [
+    "权限授予或权限集合替换",
+    "用户创建或角色分配",
+    "删除角色",
+    "生产环境或外部系统操作"
+  ]
+}

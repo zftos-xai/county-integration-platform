@@ -1,0 +1,239 @@
+{
+  "schema": "vista-web-contract-1.0",
+  "task_id": "county-platform-dictionary-item-lifecycle-20260929",
+  "mode": "acceptance-and-authorized-fixes",
+  "authority": {
+    "user_request": "用户明确要求自动验收字典条目删除；仅在本地开发库使用既有专用VISTA验收字典类型创建唯一测试条目，验证编辑、停用、删除和刷新回读。",
+    "project_rules": [
+      {
+        "source": "AGENTS.md",
+        "version": "workspace rules",
+        "verified_at": "2026-09-29T09:00:00Z"
+      },
+      {
+        "source": "vista-web-acceptance/SKILL.md",
+        "version": "local skill",
+        "verified_at": "2026-09-29T09:00:00Z"
+      }
+    ]
+  },
+  "baseline": {
+    "revision": "0abccb14951b176686f779686082fc4e7b4409f6",
+    "workspace_state": "工作区含用户既有未提交修改；本专项只新增验收证据，不覆盖或重置现有修改。",
+    "allowed_files": [
+      "docs/verification/2026-09-29-字典条目自动验收合同.json",
+      "docs/verification/2026-09-29-字典条目自动验收报告.json",
+      "docs/verification/2026-09-29-字典条目自动验收证据.md"
+    ],
+    "must_preserve": [
+      "除VISTA专用字典类型外不修改其他字典/业务数据",
+      "不执行类型删除、不直接写SQL、不触及生产环境"
+    ],
+    "stop_conditions": [
+      "仅允许在类型 VISTA_ACCEPTANCE_20260929 下操作唯一测试条目 VISTA_ACCEPTANCE_ITEM_20260929。",
+      "创建前再次读回目标类型并确认无条目；删除前通过产品界面校验引用数为0。",
+      "若引用数非0、目标类型不是既有验收类型、出现非预期请求或基线变化，停止该项。",
+      "删除只限用户授权的该唯一测试条目，并核对最终确认框后执行。"
+    ]
+  },
+  "target": {
+    "origin": "http://127.0.0.1:5173",
+    "route": "/dictionaries",
+    "page_name": "数据字典",
+    "user_role": "本地开发库 admin",
+    "page_purpose": "验收专用空类型中的测试字典项创建、编辑、停用、删除及刷新读回。"
+  },
+  "project_adapter": {
+    "service_entry": "tools/run-backend-dev.sh; web-admin Vite",
+    "session_setup": "当前浏览器复用已登录本地开发库 admin 会话；不记录凭证或令牌。",
+    "design_authorities": [
+      "AGENTS.md",
+      "web-admin/src/components",
+      "web-admin/src/layout/AppLayout.vue"
+    ],
+    "component_authorities": [
+      "ListQueryToolbar",
+      "AdminTableFrame",
+      "AdminPagination",
+      "web-admin/src/views/configuration/dictionary/DictionaryView.vue"
+    ],
+    "api_sources": [
+      "web-admin/src/api/system/configuration.ts",
+      "backend/src/main/java/cn/zqkj/platform/system/configuration/controller/ConfigurationController.java",
+      "backend/src/main/java/cn/zqkj/platform/system/configuration/service/impl/ConfigurationServiceImpl.java",
+      "backend/src/main/resources/mapper/system/configuration/ConfigurationMapper.xml"
+    ],
+    "evidence_root": "/Users/vliudbe/Projects/county-integration-platform/docs/verification",
+    "git_policy": "不提交、不推送、不部署。"
+  },
+  "write_authorization": {
+    "allowed": true,
+    "environment": "仅 http://127.0.0.1:5173 + 已确认的本地 SQL Server 开发库 county_integration",
+    "record_scope": "既有专用类型 VISTA_ACCEPTANCE_20260929；唯一条目 VISTA_ACCEPTANCE_ITEM_20260929。创建、更新标签/排序、停用、检查0引用后按产品流程删除。",
+    "reversibility": "创建、编辑和停用可通过产品恢复；条目删除不可恢复，用户已明确授权删除本轮创建的唯一测试条目。",
+    "cleanup": "删除唯一测试条目后刷新列表确认条目消失；验收类型最终保持已停用且0个条目。"
+  },
+  "environments": [
+    {
+      "id": "desktop",
+      "mode": "real-window",
+      "viewport": {
+        "width": 1445,
+        "height": 780
+      },
+      "basis": "本地Chrome实测 window.innerWidth/innerHeight=1445×780 CSS px，DPR=2。"
+    }
+  ],
+  "visible_areas": [
+    {
+      "id": "content-root",
+      "name": "共享管理框架",
+      "presence": "always",
+      "trigger": "访问数据字典页并完整滚动",
+      "owner": "web-admin/src/layout/AppLayout.vue",
+      "environment_expectations": {
+        "desktop": "确认导航、主内容、页面末端与无覆盖。"
+      }
+    },
+    {
+      "id": "primary-content",
+      "name": "字典类型与条目区域",
+      "presence": "always",
+      "trigger": "访问/dictionaries并选择既有VISTA验收类型",
+      "owner": "web-admin/src/views/configuration/dictionary/DictionaryView.vue",
+      "environment_expectations": {
+        "desktop": "读取类型基线及条目列表。"
+      }
+    },
+    {
+      "id": "surface-end",
+      "name": "条目编辑抽屉及确认弹窗",
+      "presence": "conditional",
+      "trigger": "创建/编辑条目并触发删除确认",
+      "owner": "DictionaryView.vue及共享抽屉/确认弹窗",
+      "environment_expectations": {
+        "desktop": "确认表单、提交反馈和删除确认内容。"
+      }
+    },
+    {
+      "id": "type-list",
+      "name": "字典类型列表",
+      "presence": "always",
+      "trigger": "访问/dictionaries",
+      "owner": "DictionaryView.vue",
+      "environment_expectations": {
+        "desktop": "确认专用验收类型、状态和分页。"
+      }
+    },
+    {
+      "id": "item-list",
+      "name": "选中类型的条目列表",
+      "presence": "conditional",
+      "trigger": "选择VISTA验收类型",
+      "owner": "DictionaryView.vue",
+      "environment_expectations": {
+        "desktop": "确认条目创建/编辑/停用/删除及刷新回读。"
+      }
+    }
+  ],
+  "requirements": [
+    {
+      "id": "dictionary-item-lifecycle",
+      "module": "business-validity",
+      "environment": "desktop",
+      "required": true,
+      "expected": "唯一验收条目创建后刷新可见；修改后刷新字段一致；停用后状态正确；确认引用数0后删除，刷新后不存在；验收类型最终停用且空。",
+      "evidence_types": [
+        "screenshot",
+        "tool-log",
+        "data-receipt",
+        "source-trace"
+      ]
+    },
+    {
+      "id": "component-consumption",
+      "module": "component-consumption",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本合同聚焦字典项写入闭环，不以此专项代替全站该项验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "theme",
+      "module": "theme",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本合同聚焦字典项写入闭环，不以此专项代替全站该项验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "layout",
+      "module": "layout",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本合同聚焦字典项写入闭环，不以此专项代替全站该项验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "iconography",
+      "module": "iconography",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本合同聚焦字典项写入闭环，不以此专项代替全站该项验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "content",
+      "module": "content",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本合同聚焦字典项写入闭环，不以此专项代替全站该项验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "page-end",
+      "module": "page-end",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本合同聚焦字典项写入闭环，不以此专项代替全站该项验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "api-data-integrity",
+      "module": "api-data-integrity",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本合同聚焦字典项写入闭环，不以此专项代替全站该项验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    }
+  ],
+  "exclusions": [
+    "其他字典类型和条目",
+    "字典类型删除",
+    "SQL直接写入",
+    "外部系统网络请求",
+    "HIS同步与目录业务数据",
+    "生产环境"
+  ]
+}

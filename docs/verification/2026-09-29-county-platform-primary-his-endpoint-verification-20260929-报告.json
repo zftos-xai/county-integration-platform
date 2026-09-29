@@ -1,0 +1,118 @@
+{
+  "schema": "vista-web-report-1.0",
+  "task_id": "county-platform-primary-his-endpoint-verification-20260929",
+  "started_at": "2026-09-29T09:33:37Z",
+  "finished_at": "2026-09-29T09:42:36Z",
+  "actual_environments": [
+    {
+      "id": "desktop",
+      "origin": "http://127.0.0.1:5173",
+      "route": "/external-systems",
+      "identity": "开发库 admin（凭证未读取或记录）",
+      "viewport": "Chrome 当前桌面窗口；截图在本轮 CUA 输出展示，未落盘",
+      "data_environment": "本地开发库 county_integration；现有 PRIMARY_HIS 测试端点",
+      "observed_at": "2026-09-29T09:42:36Z"
+    }
+  ],
+  "area_inventory": {
+    "methods": [
+      "dom-structure",
+      "full-scroll",
+      "conditional-surfaces",
+      "fixed-and-overlay"
+    ],
+    "complete": true,
+    "scroll_root": "外部系统配置矩阵；编辑接口配置弹窗；验证反馈状态；HIS调用记录和审计列表。",
+    "notes": "限定检查现有 PRIMARY_HIS 测试端点的验证闭环，不覆盖其他系统或全站视觉验收。"
+  },
+  "area_checks": [
+    {
+      "area_id": "content-root",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "本地管理框架会话有效，外部系统页面可访问；测试端点验证后页面保持可用。",
+      "evidence": [
+        "docs/verification/2026-09-29-外部HIS验证自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "primary-content",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "青神县汉阳镇中心卫生院 PRIMARY_HIS 测试接口地址与原配置一致，最终状态仍为“可同步”；生产端点未配置且未触及。",
+      "evidence": [
+        "docs/verification/2026-09-29-外部HIS验证自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "verification-result",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "验证提示确认数据来源；调用记录显示 100-008 返回1条、100-003返回46条，均成功；审计记录有成功验证事件。",
+      "evidence": [
+        "docs/verification/2026-09-29-外部HIS验证自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "surface-end",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "编辑配置弹窗核对目标和环境，保存后显示确认数据来源；审计记录显示配置核验完成。",
+      "evidence": [
+        "docs/verification/2026-09-29-外部HIS验证自动验收证据.md"
+      ]
+    }
+  ],
+  "requirement_results": [
+    {
+      "id": "primary-his-test-endpoint-verification",
+      "status": "passed",
+      "observation": "一次保存原有测试端点配置并触发自动校验；100-008、100-003均成功。端点最后更新时间为2026/09/29 17:33:37，状态仍“可同步”；调用摘要与审计成功记录已回读。地址与已保存接入信息未更改；无凭证/报文被读取或记录。",
+      "evidence": [
+        "docs/verification/2026-09-29-外部HIS验证自动验收证据.md"
+      ]
+    }
+  ],
+  "defects": [],
+  "attempts": [
+    {
+      "id": "primary-his-endpoint-verification-once",
+      "status": "passed",
+      "actions": "在现有 PRIMARY_HIS 端点 TEST 配置上保存原地址/已保存接入信息，触发产品自动验证；随后只读查询对应调用与审计记录。",
+      "recovery": "未更改端点地址、接入信息或启用状态；最后状态为可同步。",
+      "evidence": [
+        "docs/verification/2026-09-29-外部HIS验证自动验收证据.md"
+      ]
+    }
+  ],
+  "evidence_index": [
+    {
+      "path": "docs/verification/2026-09-29-外部HIS验证自动验收证据.md",
+      "sha256": "3639035eea1f7f55a699758c11a10ee8c2022e6d20ef1fcd05e4c2370e5d4a81",
+      "types": [
+        "screenshot",
+        "tool-log",
+        "data-receipt",
+        "source-trace",
+        "interaction-log"
+      ],
+      "captured_at": "2026-09-29T09:42:36Z",
+      "notes": "调用记录与审计由真实开发系统页面读回；Chrome窗口截图已在本轮工具输出展示，截图捕获未生成独立磁盘图像文件。"
+    }
+  ],
+  "scope_result": "passed",
+  "layer_results": {
+    "implementation": "passed",
+    "engineering": "not-run",
+    "local_ui": "passed",
+    "business_flow": "passed",
+    "physical_device_certification": "not-run",
+    "release": "not-run"
+  },
+  "uncovered": [
+    "本轮不验证生产端点、HIS业务数据的权威正确性或其他机构/系统。",
+    "工程测试、响应式验收、发布状态不在此端点交易专项范围内。"
+  ],
+  "summary": "本地开发页对现有基层HIS测试端点完成一次真实自动校验。100-008唯一机构确认与100-003目录查询能力验证均成功，状态保持可同步，相关调用记录及审计成功事件可读回。",
+  "contract_sha256": "3daa6602aa9cd97e44e6884ef06aeb96dfa8dd16af6ca8c96a80250326f8581d"
+}

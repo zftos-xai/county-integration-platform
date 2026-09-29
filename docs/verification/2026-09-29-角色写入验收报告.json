@@ -1,0 +1,117 @@
+{
+  "schema": "vista-web-report-1.0",
+  "task_id": "county-platform-role-zero-permission-write-20260929",
+  "contract_sha256": "8c12bd105c6e2c5fd0a00b455f407737b92a0c6bc39eb09b49d769f522e94707",
+  "started_at": "2026-09-29T08:40:00Z",
+  "finished_at": "2026-09-29T08:55:01Z",
+  "actual_environments": [
+    {
+      "id": "desktop",
+      "origin": "http://127.0.0.1:5173",
+      "route": "/roles",
+      "identity": "开发库 admin；未记录凭证与会话数据",
+      "viewport": "1445×780 CSS px",
+      "data_environment": "本地 SQL Server 开发库 county_integration",
+      "observed_at": "2026-09-29"
+    }
+  ],
+  "area_inventory": {
+    "methods": ["dom-structure", "full-scroll", "conditional-surfaces", "fixed-and-overlay"],
+    "complete": true,
+    "scroll_root": "主内容区与角色详情抽屉内容区",
+    "notes": "本报告只覆盖合同限定的角色零权限创建、停用和回读路径，不覆盖所有管理页或权限授予路径；角色列表、编辑抽屉、详情回读与页面末端均已在真实桌面浏览器检查。"
+  },
+  "area_checks": [
+    {
+      "area_id": "content-root",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "管理框架和角色页容器可见，页面文档宽度1430px，小于1445px视口宽度，无横向溢出。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    },
+    {
+      "area_id": "primary-content",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "角色列表基线、创建后状态与停用后状态均在真实页面读取；系统保护角色未修改。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    },
+    {
+      "area_id": "surface-end",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "角色编辑/详情条件抽屉已打开并检查权限复选框与用户数量；抽屉关闭后列表刷新并完成最终回读。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    },
+    {
+      "area_id": "role-list",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "列表显示唯一新角色为自定义角色，创建后已启用、0项权限、0名用户；停用并刷新后状态为已停用、0项权限、0名用户，操作为启用。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    },
+    {
+      "area_id": "role-editor",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "唯一角色代码为 VISTA_ACCEPTANCE_20260929；所有权限复选框均未勾选，未进行权限保存或用户分配。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    },
+    {
+      "area_id": "role-readback",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "停用操作后刷新列表并再次读取角色详情，已停用、权限0项、用户0人；没有执行删除。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    }
+  ],
+  "requirement_results": [
+    {
+      "id": "role-create-zero-permission",
+      "status": "passed",
+      "observation": "开发库中创建了唯一自定义角色；创建后的列表和详情均显示权限集合为空、用户数为0。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    },
+    {
+      "id": "role-disable-readback",
+      "status": "passed",
+      "observation": "通过产品界面停用角色并刷新读回，最终状态已停用，权限0项、用户0人。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    }
+  ],
+  "defects": [],
+  "attempts": [
+    {
+      "id": "role-zero-permission-create-disable-readback",
+      "status": "passed",
+      "actions": "创建唯一VISTA验收角色；检查空权限及零用户；使用产品停用流程；刷新列表及详情回读。",
+      "recovery": "测试角色保持停用作为验收记录；未删除、未分配用户、未增加权限。",
+      "evidence": ["docs/verification/2026-09-29-角色写入验收证据.md"]
+    }
+  ],
+  "evidence_index": [
+    {
+      "path": "docs/verification/2026-09-29-角色写入验收证据.md",
+      "sha256": "e65678b36301acbf1536056149f15a018c73f65f2dd920d74dbadb08da257fa0",
+      "types": ["tool-log", "data-receipt", "source-trace", "interaction-log"],
+      "captured_at": "2026-09-29T08:55:01Z",
+      "notes": "记录真实页面状态和刷新读回；浏览器图像只作为本会话即时目视证据，未另存截图文件。"
+    }
+  ],
+  "scope_result": "passed",
+  "layer_results": {
+    "implementation": "passed",
+    "engineering": "not-run",
+    "local_ui": "passed",
+    "business_flow": "passed",
+    "physical_device_certification": "not-run",
+    "release": "not-run"
+  },
+  "uncovered": [
+    "该通过结论仅适用于合同内角色创建、停用与刷新回读；不代表其余页面或所有角色写操作均已验收。",
+    "角色权限集合替换、用户创建/登录凭证、角色分配、删除角色均未执行。",
+    "本地浏览器视口不代表真机或固定设备认证；本轮只声明桌面浏览器结果。",
+    "更大范围开发库写入、外部请求、HIS同步和数据库结构操作不在本合同范围。"
+  ],
+  "summary": "角色零权限创建、停用、刷新与详情回读的限定闭环通过。此结果不提升三项遗留阶段目标的总体结论；阶段目标4仍为partial，所有页面布局和全量写入也未因此获验收。"
+}

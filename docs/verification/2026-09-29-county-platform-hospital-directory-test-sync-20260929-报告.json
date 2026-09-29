@@ -1,0 +1,119 @@
+{
+  "schema": "vista-web-report-1.0",
+  "task_id": "county-platform-hospital-directory-test-sync-20260929",
+  "started_at": "2026-09-29T09:34:46Z",
+  "finished_at": "2026-09-29T09:42:36Z",
+  "actual_environments": [
+    {
+      "id": "desktop",
+      "origin": "http://127.0.0.1:5173",
+      "route": "/master-data/batches",
+      "identity": "开发库 admin（凭证未读取或记录）",
+      "viewport": "Chrome 当前桌面窗口；截图在本轮 CUA 输出展示，未落盘",
+      "data_environment": "本地开发库 county_integration；青神县汉阳镇中心卫生院 HIS 测试环境",
+      "observed_at": "2026-09-29T09:42:36Z"
+    }
+  ],
+  "area_inventory": {
+    "methods": [
+      "dom-structure",
+      "full-scroll",
+      "conditional-surfaces",
+      "fixed-and-overlay"
+    ],
+    "complete": true,
+    "scroll_root": "同步批次列表、发起同步弹窗、同步结果抽屉、医院综合目录当前数据页。",
+    "notes": "仅核对单机构、测试环境、医院综合目录的一个批次；不覆盖其他同步类别或机构。"
+  },
+  "area_checks": [
+    {
+      "area_id": "content-root",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "管理员会话正常；同步批次页与数据目录页可读取。",
+      "evidence": [
+        "docs/verification/2026-09-29-HIS目录同步自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "primary-content",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "发起页所选机构为青神县汉阳镇中心卫生院，环境为测试环境，类别为医院综合目录，交易码100-003。",
+      "evidence": [
+        "docs/verification/2026-09-29-HIS目录同步自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "sync-readback",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "批次BD-123639313B8A489183F1已完成；4类数据取得370条，新增/更新0/0、标记无效0、校验问题0、当前有效183。重开目录页后科室列表共46条，最新批次指向本次批次。",
+      "evidence": [
+        "docs/verification/2026-09-29-HIS目录同步自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "surface-end",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "结果抽屉呈现床位67、科室46、医生245、病区12条HIS返回及各类本地对账结果；操作未触及生产环境。",
+      "evidence": [
+        "docs/verification/2026-09-29-HIS目录同步自动验收证据.md"
+      ]
+    }
+  ],
+  "requirement_results": [
+    {
+      "id": "hospital-directory-test-sync-readback",
+      "status": "passed",
+      "observation": "批次BD-123639313B8A489183F1于2026/09/29 17:34:46开始、17:34:51结束，状态已完成、耗时4秒。HIS返回床位67/科室46/医生245/病区12，共370；新增0、更新0、标记无效0、当前有效183、校验问题0。目录页回读科室46条且记录显示本次批次。审计页出现发起、开始、结束三条成功审计。",
+      "evidence": [
+        "docs/verification/2026-09-29-HIS目录同步自动验收证据.md"
+      ]
+    }
+  ],
+  "defects": [],
+  "attempts": [
+    {
+      "id": "hospital-comprehensive-directory-test-sync-once",
+      "status": "passed",
+      "actions": "只对指定机构的测试环境医院综合目录发起一次100-003同步；检查结果抽屉、同步批次列表、审计记录及当前目录页。",
+      "recovery": "本次业务目录对账无新增、更新或失效记录；没有执行数据库手工回滚或重复同步。",
+      "evidence": [
+        "docs/verification/2026-09-29-HIS目录同步自动验收证据.md"
+      ]
+    }
+  ],
+  "evidence_index": [
+    {
+      "path": "docs/verification/2026-09-29-HIS目录同步自动验收证据.md",
+      "sha256": "5eae89ee29ea40e2059eb41dd85773b8ffef325694c04b9f70c454c1646af5d6",
+      "types": [
+        "screenshot",
+        "tool-log",
+        "data-receipt",
+        "source-trace",
+        "interaction-log"
+      ],
+      "captured_at": "2026-09-29T09:42:36Z",
+      "notes": "同步结果抽屉、审计记录、当前目录共46条的页面读回已核验；Chrome窗口截图已在本轮工具输出展示，截图捕获未生成独立磁盘图像文件。"
+    }
+  ],
+  "scope_result": "passed",
+  "layer_results": {
+    "implementation": "passed",
+    "engineering": "not-run",
+    "local_ui": "passed",
+    "business_flow": "passed",
+    "physical_device_certification": "not-run",
+    "release": "not-run"
+  },
+  "uncovered": [
+    "本轮未对上游HIS数据业务正确性作所有者确认，也不覆盖生产环境或其他目录类别。",
+    "产品无快照恢复流程；本次读回显示目录记录无新增/更新/失效。",
+    "工程测试、响应式验收与发布状态不在此同步闭环专项范围内。"
+  ],
+  "summary": "指定机构测试环境医院综合目录同步闭环通过。HIS返回370条，平台当前目录183条；本次无新增、更新、失效或校验问题。",
+  "contract_sha256": "48fc40247b610f808c4efa8f77feb07d55fddbbb4ca15cf752c9cdb02bd7b393"
+}

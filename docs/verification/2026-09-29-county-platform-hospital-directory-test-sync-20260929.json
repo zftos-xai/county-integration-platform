@@ -1,0 +1,239 @@
+{
+  "schema": "vista-web-contract-1.0",
+  "task_id": "county-platform-hospital-directory-test-sync-20260929",
+  "mode": "acceptance-and-authorized-fixes",
+  "authority": {
+    "user_request": "用户明确要求对外部系统连接校验和 HIS 同步自动验收；操作限制为本地开发库与页面当前可见的 TEST 环境，具体外部请求及目录写入在动作前展示精确目标和影响。",
+    "project_rules": [
+      {
+        "source": "AGENTS.md",
+        "version": "workspace rules",
+        "verified_at": "2026-09-29T09:00:00Z"
+      },
+      {
+        "source": "vista-web-acceptance/SKILL.md",
+        "version": "local skill",
+        "verified_at": "2026-09-29T09:00:00Z"
+      }
+    ]
+  },
+  "baseline": {
+    "revision": "0abccb14951b176686f779686082fc4e7b4409f6",
+    "workspace_state": "工作区存在用户已有未提交修改；本专项不改应用代码、不覆盖修改。",
+    "allowed_files": [
+      "docs/verification/county-platform-hospital-directory-test-sync-20260929.json",
+      "docs/verification/county-platform-hospital-directory-test-sync-20260929-报告.json",
+      "docs/verification/county-platform-hospital-directory-test-sync-20260929-证据.md"
+    ],
+    "must_preserve": [
+      "不触及生产端点或生产目录",
+      "不打印、保存或记录HIS凭证/完整SOAP报文",
+      "不执行合同列明范围以外的系统、机构或目录类别"
+    ],
+    "stop_conditions": [
+      "只允许当前草稿所示单机构、TEST、医院综合目录。",
+      "执行前必须确认目标端点、机构、将写入/失效目录记录的机制和无产品回滚能力。",
+      "结果为未知、部分失败或超时后只读检查，不直接重试。"
+    ]
+  },
+  "target": {
+    "origin": "http://127.0.0.1:5173",
+    "route": "/master-data/batches",
+    "page_name": "同步批次",
+    "user_role": "本地开发库 admin",
+    "page_purpose": "验收 TEST 环境医院综合目录同步及其分项、本地数据回写。"
+  },
+  "project_adapter": {
+    "service_entry": "tools/run-backend-dev.sh; web-admin Vite",
+    "session_setup": "当前浏览器使用既有本地 admin 会话，不记录凭证或令牌。",
+    "design_authorities": [
+      "AGENTS.md",
+      "web-admin/src/components",
+      "web-admin/src/layout/AppLayout.vue"
+    ],
+    "component_authorities": [
+      "web-admin/src/layout/AppLayout.vue",
+      "同步批次"
+    ],
+    "api_sources": [
+      "backend/src/main/java/cn/zqkj/platform/masterdata/controller/batch/MasterDataBatchController.java",
+      "backend/src/main/java/cn/zqkj/platform/masterdata/service/batch/impl/MasterDataBatchServiceImpl.java",
+      "backend/src/main/java/cn/zqkj/platform/masterdata/service/hospitaldirectory/impl/HospitalDirectorySyncServiceImpl.java",
+      "backend/src/main/java/cn/zqkj/platform/his/service/impl/PhisEndpointVerificationServiceImpl.java",
+      "web-admin/src/views/master-data/batch/MasterDataBatchView.vue",
+      "web-admin/src/views/master-data/batch/components/StartBatchDrawer.vue"
+    ],
+    "evidence_root": "/Users/vliudbe/Projects/county-integration-platform/docs/verification",
+    "git_policy": "不提交、不推送、不部署。"
+  },
+  "write_authorization": {
+    "allowed": true,
+    "environment": "仅本地 web-admin 和已确认的 SQL Server 开发库 county_integration；外部调用只允许现有 PRIMARY_HIS TEST 端点。",
+    "record_scope": "仅当前UI默认的机构青神县汉阳镇中心卫生院（8BCDCA4E11A44A9D888D7E70DD4FF44F）、TEST环境、医院综合目录；端点目标为已配置PRIMARY_HIS测试地址 http://223.85.21.172:6007/WebService.asmx?op=PHIS_Interface。同步将发送平台机构编码和已保存凭证，依序读取科室、病区、床位、医生目录。",
+    "reversibility": "批次执行会把成功返回写入本地目录、使源端未返回的现有记录失效，并替换完整关系；本地产品没有撤销/恢复目录快照的流程。过去同目标完整测试批次读取370条，但本次返回量会变化。",
+    "cleanup": "不清理有效目录结果；读取批次和目录最终态，作为TEST环境本次同步结果保留。失败或未知批次不自动重试。"
+  },
+  "environments": [
+    {
+      "id": "desktop",
+      "mode": "real-window",
+      "viewport": {
+        "width": 1445,
+        "height": 780
+      },
+      "basis": "Chrome 实测视口 1445×780 CSS px，DPR=2。"
+    }
+  ],
+  "visible_areas": [
+    {
+      "id": "content-root",
+      "name": "共享管理框架",
+      "presence": "always",
+      "trigger": "访问批次列表并检查页面末端",
+      "owner": "AppLayout.vue",
+      "environment_expectations": {
+        "desktop": "确认导航、列表和页面末端。"
+      }
+    },
+    {
+      "id": "primary-content",
+      "name": "同步批次列表与发起抽屉",
+      "presence": "always",
+      "trigger": "打开发起同步抽屉并核对选项",
+      "owner": "MasterDataBatchView.vue及StartBatchDrawer.vue",
+      "environment_expectations": {
+        "desktop": "确认仅选定一个机构、TEST环境、医院综合目录。"
+      }
+    },
+    {
+      "id": "sync-readback",
+      "name": "批次详情及分项结果",
+      "presence": "conditional",
+      "trigger": "执行后打开新批次详情",
+      "owner": "MasterDataBatchView.vue及批次详情组件",
+      "environment_expectations": {
+        "desktop": "读回批次终态、分项取得/校验/插入/更新/失效数量。"
+      }
+    },
+    {
+      "id": "surface-end",
+      "name": "动作确认与反馈浮层",
+      "presence": "conditional",
+      "trigger": "需要用户确认后才会启动同步",
+      "owner": "MasterDataBatchView.vue及StartBatchDrawer.vue",
+      "environment_expectations": {
+        "desktop": "核对最终确认目标、风险说明和成功/失败反馈。"
+      }
+    }
+  ],
+  "requirements": [
+    {
+      "id": "hospital-directory-test-sync-readback",
+      "module": "api-data-integrity",
+      "environment": "desktop",
+      "required": true,
+      "expected": "对青神县汉阳镇中心卫生院TEST环境执行一次医院综合目录(100-003)同步；验证调用四类目录、批次终态及每类本地对账计数，并重新查询现行目录。",
+      "evidence_types": [
+        "screenshot",
+        "tool-log",
+        "network-log",
+        "data-receipt",
+        "source-trace"
+      ]
+    },
+    {
+      "id": "component-consumption",
+      "module": "component-consumption",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "theme",
+      "module": "theme",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "layout",
+      "module": "layout",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "iconography",
+      "module": "iconography",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "content",
+      "module": "content",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "page-end",
+      "module": "page-end",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "api-data-integrity",
+      "module": "api-data-integrity",
+      "environment": "desktop",
+      "required": false,
+      "expected": "本专项仅覆盖目标写入闭环，不代表全站布局验收。",
+      "evidence_types": [
+        "screenshot",
+        "engineering"
+      ]
+    },
+    {
+      "id": "business-validity",
+      "module": "business-validity",
+      "environment": "desktop",
+      "required": false,
+      "expected": "专项只验收已获批准的数据闭环；不会替代业务所有者确认源数据正确性。",
+      "evidence_types": [
+        "tool-log",
+        "engineering"
+      ]
+    }
+  ],
+  "exclusions": [
+    "生产环境或其他HIS端点",
+    "其他机构、环境、分类或同步范围",
+    "数据库直接修复/回滚",
+    "对结果未知批次自动重试"
+  ]
+}

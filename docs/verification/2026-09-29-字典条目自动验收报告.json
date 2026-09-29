@@ -1,0 +1,128 @@
+{
+  "schema": "vista-web-report-1.0",
+  "task_id": "county-platform-dictionary-item-lifecycle-20260929",
+  "contract_sha256": "736c6a3a286c0283049047b28d5de12dd2d43d1269e3fa462b0ce576289fb07f",
+  "started_at": "2026-09-29T09:14:00Z",
+  "finished_at": "2026-09-29T09:22:43Z",
+  "actual_environments": [
+    {
+      "id": "desktop",
+      "origin": "http://127.0.0.1:5173",
+      "route": "/dictionaries",
+      "identity": "开发库 admin（不记录凭证）",
+      "viewport": "1445×780 CSS px; DPR 2",
+      "data_environment": "本地 SQL Server 开发库 county_integration",
+      "observed_at": "2026-09-29T09:22:43Z"
+    }
+  ],
+  "area_inventory": {
+    "methods": [
+      "dom-structure",
+      "full-scroll",
+      "conditional-surfaces",
+      "fixed-and-overlay"
+    ],
+    "complete": true,
+    "scroll_root": "main 字典内容区；编辑抽屉和确认弹窗为模态层",
+    "notes": "只对合同限定的验收类型/条目生命周期进行区域完整盘点；未将结果扩展到其他字典或全站布局。"
+  },
+  "area_checks": [
+    {
+      "area_id": "content-root",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "管理框架、会话及主内容可见；当前页面无横向溢出。",
+      "evidence": [
+        "docs/verification/2026-09-29-字典条目自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "primary-content",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "验收类型在最终状态显示停用、0/0字典项，其他可见类型未改。",
+      "evidence": [
+        "docs/verification/2026-09-29-字典条目自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "surface-end",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "创建/编辑抽屉与停用/删除确认浮层均实际触发；最终回到空类型状态。",
+      "evidence": [
+        "docs/verification/2026-09-29-字典条目自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "type-list",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "刷新后验收类型仍停用；分页显示4个类型，未新增类型。",
+      "evidence": [
+        "docs/verification/2026-09-29-字典条目自动验收证据.md"
+      ]
+    },
+    {
+      "area_id": "item-list",
+      "environment": "desktop",
+      "status": "passed",
+      "observation": "唯一测试条目经历创建、修改、停用、删除；最终空态和0/0汇总与读回一致。",
+      "evidence": [
+        "docs/verification/2026-09-29-字典条目自动验收证据.md"
+      ]
+    }
+  ],
+  "requirement_results": [
+    {
+      "id": "dictionary-item-lifecycle",
+      "status": "passed",
+      "observation": "唯一测试条目创建、修改后刷新一致，停用后刷新仍停用；产品提示未被业务数据使用并已删除；再次刷新确认类型停用且0项。",
+      "evidence": [
+        "docs/verification/2026-09-29-字典条目自动验收证据.md"
+      ]
+    }
+  ],
+  "defects": [],
+  "attempts": [
+    {
+      "id": "dictionary-item-vista-lifecycle",
+      "status": "passed",
+      "actions": "临时启用既有专用验收类型；创建唯一测试项；修改展示文本/排序；刷新读回；停用；删除；恢复类型停用并刷新。",
+      "recovery": "唯一条目已删除；验收类型恢复停用；其余类型未改。",
+      "evidence": [
+        "docs/verification/2026-09-29-字典条目自动验收证据.md"
+      ]
+    }
+  ],
+  "evidence_index": [
+    {
+      "path": "docs/verification/2026-09-29-字典条目自动验收证据.md",
+      "sha256": "c8e4519fd6512dea08db0fb7ffe135e0918de86d8537fe89c3a8a67ef0bd8ad1",
+      "types": [
+        "screenshot",
+        "tool-log",
+        "data-receipt",
+        "source-trace",
+        "interaction-log"
+      ],
+      "captured_at": "2026-09-29T09:22:43Z",
+      "notes": "最终真实浏览器截图已在本轮工具输出展示；本文件包含脱敏状态和写前/写后读回摘要。"
+    }
+  ],
+  "scope_result": "passed",
+  "layer_results": {
+    "implementation": "passed",
+    "engineering": "not-run",
+    "local_ui": "passed",
+    "business_flow": "passed",
+    "physical_device_certification": "not-run",
+    "release": "not-run"
+  },
+  "uncovered": [
+    "只验了专用 VISTA 类型，不覆盖其他业务字典项或类型的引用场景。",
+    "浏览器为桌面视口；本专项没有做响应式版式验收。",
+    "未执行外部系统认证请求或 HIS 同步。"
+  ],
+  "summary": "本地开发库专用测试字典项的新增、编辑、停用、引用保护删除及刷新回读闭环通过。验收类型恢复停用且为空；此结果不代表外部系统/HIS写入验收通过。"
+}
