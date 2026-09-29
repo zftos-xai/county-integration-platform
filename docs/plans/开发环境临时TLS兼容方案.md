@@ -3,29 +3,33 @@
 | 项目 | 当前约定 |
 | --- | --- |
 | 适用阶段 | 本项目开发与本机联调阶段 |
-| 数据库入口 | `127.0.0.1:14330`，由 FRP 转发到独立内网环境 |
+| 数据库入口 | `192.168.110.150:1433`，仅限本机开发环境 |
 | 数据库版本 | SQL Server 2012 SP4，兼容级别 110 |
 | Java | Java 17 |
-| 临时协议 | TLS 1.0 |
-| 退出条件 | 目标服务器能够与 Java 17 协商 TLS 1.2 |
+| 当前证书处理 | `encrypt=true`、`trustServerCertificate=false`；使用本机 PKCS12 信任库验证服务器证书链和主机名 |
+| 退出条件 | 开发实例证书链由本机受信任的 CA 签发后，移除开发机专用信任库并保持证书校验 |
 | 禁止范围 | 测试验收、预生产和生产环境 |
 
 ## 1. 决策
 
-开发阶段统一通过 `tools/run-backend-dev.sh` 启动后端。启动器只对当前工程进程追加 Java 安全策略，不修改 JDK 全局配置、macOS 系统 TLS 配置、FRP 配置或 SQL Server 实例配置。
+开发阶段统一通过 `tools/run-backend-dev.sh` 启动后端。启动器只允许已核验的开发数据库地址，不修改 JDK 全局配置、macOS 系统 TLS 配置或 SQL Server 实例配置。对于旧的本地转发入口，启动器单独保留仅限开发的 TLS 1.0 兼容分支；当前 `192.168.110.150:1433` 开发实例不启用该分支。
 
-开发 JDBC 参数固定为：
+当前开发 JDBC 参数固定为：
 
 ```text
-jdbc:sqlserver://127.0.0.1:14330;
+jdbc:sqlserver://192.168.110.150:1433;
 databaseName=county_integration;
 encrypt=true;
-trustServerCertificate=true;
-sslProtocol=TLSv1;
+trustServerCertificate=false;
+sslProtocol=TLSv1.2;
+hostNameInCertificate=WIN-U6PMQ99S3FI;
+trustStore=<本机 SQL Server 信任库绝对路径>;
+trustStorePassword=<本机信任库密码>;
+trustStoreType=PKCS12;
 loginTimeout=5
 ```
 
-该方式仍加密 JDBC 会话，但使用已经淘汰的 TLS 1.0，并跳过服务器证书身份校验，只能作为当前开发阻塞的临时兼容措施。
+此配置保持 JDBC TLS 加密，并通过本机信任库校验证书链与 `WIN-U6PMQ99S3FI` 主机名。信任库文件仅保存在开发机，不提交到仓库。旧本地转发入口的 TLS 1.0 分支仅用于兼容已确认的历史环境；当前开发数据库不得启用该分支。不得在测试验收、预生产或生产环境使用开发信任库。
 
 ## 2. 首次配置
 
@@ -38,7 +42,7 @@ chmod 600 deploy/.env.dev.local
 
 通过安全渠道填写：
 
-- `PLATFORM_DB_PASSWORD`：`platform_app` 的开发环境密码。
+- `PLATFORM_DB_PASSWORD`：开发环境运行账号密码。
 - `PLATFORM_DB_MIGRATION_PASSWORD`：`platform_migration` 的开发环境密码。
 - `PLATFORM_BOOTSTRAP_SECRET`：仅空库首次初始化时设置；初始化完成后清空。
 
@@ -70,7 +74,7 @@ VITE_BACKEND_TARGET=http://127.0.0.1:18080 npm run dev --workspace web-admin
 
 ## 5. IDEA 启动约定
 
-直接从 IDEA 启动 `PlatformApplication` 时，必须与脚本保持相同配置：
+直接从 IDEA 启动 `PlatformApplication` 时，必须使用本机开发环境变量和与脚本相同的 JDBC 地址及 TLS 参数。当前数据库地址无需添加旧隧道专用 Java 安全策略；只有使用 `127.0.0.1:14330` 旧入口时，才添加：
 
 ```text
 -Djava.security.properties=<项目绝对路径>/deploy/dev/sqlserver2012-legacy-tls.java.security
@@ -85,8 +89,9 @@ VITE_BACKEND_TARGET=http://127.0.0.1:18080 npm run dev --workspace web-admin
 
 - `PLATFORM_ENVIRONMENT` 不是 `development`。
 - Spring profile 包含 `prod` 或 `production`。
-- JDBC 地址不是 `127.0.0.1:14330`。
-- 未显式设置 `encrypt=true`、`trustServerCertificate=true` 和 `sslProtocol=TLSv1`。
+- JDBC 地址不在启动器的开发数据库允许列表中。
+- 当前开发地址没有启用加密、证书校验，或缺少可读的本机信任库。
+- 使用旧 `127.0.0.1:14330` 入口却未显式设置 `sslProtocol=TLSv1`。
 - 运行账号密码缺失或仍为模板占位值。
 
 生产环境继续遵守《生产部署与实施方案》：使用 TLS 1.2、正式 DNS、受信任服务器证书和 `trustServerCertificate=false`。本方案不得反向修改生产基线。
@@ -100,4 +105,4 @@ VITE_BACKEND_TARGET=http://127.0.0.1:18080 npm run dev --workspace web-admin
 3. `flyway_schema_history` 全部记录成功且版本符合当前代码。
 4. 当前应用会话 `encrypt_option=TRUE`。
 5. 管理端能够获取 CSRF、登录并读取当前会话。
-6. 日志中只允许出现已知的 TLS 1.0 临时风险警告，不得出现密码、Token 或患者数据。
+6. 日志不得出现密码、Token 或患者数据；仅旧转发入口允许出现 TLS 1.0 临时风险警告。

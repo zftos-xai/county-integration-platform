@@ -133,7 +133,7 @@ npm install
 ./tools/verify.sh
 ```
 
-当前开发阶段统一使用 FRP 暴露的 SQL Server 2012 开发实例和临时 TLS 1.0 兼容启动器。先从模板创建只保存在本机的环境文件，并通过安全渠道填写平台账号密码：
+当前开发阶段连接开发 SQL Server 实例。先从模板创建只保存在本机的环境文件，并通过安全渠道填写平台账号密码：
 
 ```bash
 cp deploy/.env.dev.example deploy/.env.dev.local
@@ -141,7 +141,7 @@ chmod 600 deploy/.env.dev.local
 ./tools/run-backend-dev.sh
 ```
 
-启动器只对当前开发进程追加 Java 17 兼容策略，并强制检查开发标识、`127.0.0.1:14330` 和 TLS 参数；生产环境会被拒绝。具体边界、IDEA 配置和退出条件见[开发环境临时 TLS 兼容方案](docs/plans/开发环境临时TLS兼容方案.md)。
+启动器按开发数据库地址白名单连接，并拒绝生产 profile。当前开发实例使用 TLS 1.2 加密，并通过本机 PKCS12 信任库校验 SQL Server 证书链和主机名（`trustServerCertificate=false`）；不得通过跳过证书校验来绕过连接错误。信任库只保存在开发机。具体边界和退出条件见[开发环境临时 TLS 兼容方案](docs/plans/开发环境临时TLS兼容方案.md)。
 
 后台应用在Flyway完成数据库迁移后、开始接收请求前，会检查数据库实际结构是否与迁移脚本、MyBatis映射和Java数据模型一致。检查器读取SQL Server实际结构，核对SQL Server 2012主版本、数据库兼容级别110，以及业务字段的类型、字符或二进制长度、数值精度、小数位、是否允许空值、自增和计算属性。发现差异时应用启动失败；日志会列出错误码、对象、预期值、实际值，以及应修改数据库还是Mapper/模型。`PLATFORM_DATABASE_CONTRACT_ENABLED`默认开启，正式环境必须设为`true`；关闭后只能用于受控故障排查，不能作为数据库结构兼容性检查记录。
 

@@ -12,11 +12,6 @@ if [ ! -f "$environment_file" ]; then
     exit 1
 fi
 
-if [ ! -f "$security_file" ]; then
-    echo "缺少开发专用 Java TLS 安全策略：$security_file" >&2
-    exit 1
-fi
-
 bootstrap_secret_override=${PLATFORM_BOOTSTRAP_SECRET:-}
 server_port_override=${PLATFORM_SERVER_PORT:-}
 
@@ -41,25 +36,57 @@ if [ "${PLATFORM_DEV_RUN_MIGRATIONS:-false}" = "true" ]; then
 fi
 
 if [ "${PLATFORM_ENVIRONMENT:-}" != "development" ]; then
-    echo "临时 TLS 兼容启动器只允许 PLATFORM_ENVIRONMENT=development。" >&2
+    echo "开发数据库启动器只允许 PLATFORM_ENVIRONMENT=development。" >&2
     exit 1
 fi
 
 case ",${SPRING_PROFILES_ACTIVE:-}," in
     *,prod,*|*,production,*)
-        echo "临时 TLS 兼容启动器拒绝生产 profile。" >&2
+        echo "开发数据库启动器拒绝生产 profile。" >&2
         exit 1
         ;;
 esac
 
 case "${PLATFORM_DB_URL:-}" in
     *"127.0.0.1:14330"*"encrypt=true"*"trustServerCertificate=true"*"sslProtocol=TLSv1"*)
+        database_transport=legacy-tls
+        ;;
+    jdbc:sqlserver://192.168.110.150:1433\;databaseName=county_integration\;encrypt=true\;trustServerCertificate=false\;sslProtocol=TLSv1.2\;hostNameInCertificate=WIN-U6PMQ99S3FI\;trustStore=*\;trustStorePassword=?*\;trustStoreType=PKCS12\;loginTimeout=5)
+        database_transport=development-verified-certificate
         ;;
     *)
-        echo "开发 JDBC 地址必须指向 127.0.0.1:14330，并显式使用临时 TLSv1 兼容参数。" >&2
+        echo "开发 JDBC 地址不在允许列表中。当前 192.168.110.150:1433 必须使用本机信任库校验证书。" >&2
         exit 1
         ;;
 esac
+
+if [ "$database_transport" = "legacy-tls" ]; then
+    if [ ! -f "$security_file" ]; then
+        echo "缺少开发专用 Java TLS 安全策略：$security_file" >&2
+        exit 1
+    fi
+
+    legacy_tls_options="-Djava.security.properties=$security_file -Djdk.tls.client.protocols=TLSv1"
+    if [ -n "${JAVA_TOOL_OPTIONS:-}" ]; then
+        JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTIONS $legacy_tls_options"
+    else
+        JAVA_TOOL_OPTIONS="$legacy_tls_options"
+    fi
+    export JAVA_TOOL_OPTIONS
+    echo "警告：正在使用仅限开发环境的 SQL Server TLS 1.0 兼容模式。" >&2
+else
+    echo "数据库连接使用标准 TLS；不启用旧开发隧道的 TLS 1.0 兼容设置。" >&2
+fi
+
+if [ "$database_transport" = "development-verified-certificate" ]; then
+    trust_store=${PLATFORM_DB_URL#*trustStore=}
+    trust_store=${trust_store%%;*}
+    if [ ! -r "$trust_store" ]; then
+        echo "开发 SQL Server 信任库不存在或不可读：$trust_store" >&2
+        exit 1
+    fi
+    echo "开发数据库将校验证书链与主机名，并保持 TLS 加密。" >&2
+fi
 
 for required_name in PLATFORM_DB_USERNAME PLATFORM_DB_PASSWORD; do
     eval "required_value=\${$required_name:-}"
@@ -99,16 +126,7 @@ if [ ! -x "$maven_command" ]; then
     exit 1
 fi
 
-legacy_tls_options="-Djava.security.properties=$security_file -Djdk.tls.client.protocols=TLSv1"
-if [ -n "${JAVA_TOOL_OPTIONS:-}" ]; then
-    JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTIONS $legacy_tls_options"
-else
-    JAVA_TOOL_OPTIONS="$legacy_tls_options"
-fi
-export JAVA_TOOL_OPTIONS
-
-echo "警告：正在使用仅限开发环境的 SQL Server TLS 1.0 兼容模式。" >&2
-echo "数据库入口：127.0.0.1:14330；生产环境不得使用本启动器。" >&2
+echo "开发数据库入口已通过允许列表；生产环境不得使用本启动器。" >&2
 
 exec "$maven_command" \
     -f "$project_root/backend/pom.xml" \

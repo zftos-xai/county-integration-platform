@@ -14,7 +14,7 @@ SQL Server 2012 不支持 Microsoft SQL Server Linux 容器。`docker-compose.ym
 2. 按[`sqlserver/README.md`](sqlserver/README.md)创建独立的 `county_integration` 数据库，将兼容级别设置为 110；不得在 HIS 业务库中创建平台表。
 3. 创建独立登录名和数据库用户，通过安全渠道交付凭证。应用账号只能访问平台数据库，结构迁移权限与日常运行权限应按医院制度审批。
 4. 启用 TCP/IP，固定监听端口，并仅向获批的平台服务器开放网络访问。
-5. 配置 SQL Server 2012 所在 Windows Server 是否支持 TLS 1.2，并配置证书。联调可以临时使用 `trustServerCertificate=true`，生产环境应使用医院信任的证书并改为 `trustServerCertificate=false`。
+5. 配置 SQL Server 2012 所在 Windows Server 支持 TLS 1.2，并为 SQL Server 配置有效证书。开发、联调和生产连接都必须使用受信任的证书链与匹配的主机名，并设置 `trustServerCertificate=false`；不得通过 `trustServerCertificate=true` 绕过证书校验。开发机可将批准的 SQL Server 根/中间 CA 证书导入本机 PKCS12 信任库，再通过 JDBC `trustStore` 配置使用。
 6. 建立独立备份、完整性检查、容量监控和恢复演练计划。
 7. 为县医院HIS读取平台库中的基层基础数据创建独立只读登录名和用户，仅授予已批准平台库视图的`SELECT`权限；不得复用平台应用读写账号，也不得授予平台基础表写权限。
 8. 与县医院HIS厂商确认每个视图的用途、字段、过滤范围、查询频率、单次上限、允许时段、版本兼容和性能边界，并验证查询负载不影响平台同步与HIS主业务。
